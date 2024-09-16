@@ -9,6 +9,7 @@ A little project of mine for learning Rust, React, database management, and web 
 - To be determined :3 (Too early in development, am just running src code in env, but want to make application standalone first)
 
 ## Immediate TODO:
+- Rename origin -> main
 - Setup custom_errors
 - Figure out chromedriver executable running
 - Separate functions into separate files based on domain?

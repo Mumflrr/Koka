@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod custom_errors;
-use custom_errors::GetElementError;
+//use custom_errors::GetElementError;
 use thirtyfour::prelude::*;
 use std::env;
 use std::path::PathBuf;
@@ -12,8 +12,8 @@ use std::io::copy;
 use reqwest::blocking::get;
 use std::io::BufReader;
 use zip::ZipArchive;
-use tauri::async_runtime;
-use rusqlite::{Connection, Result};
+//use tauri::async_runtime;
+//use rusqlite::{Connection, Result};
 
 // Define the ChromeDriver version and URL
 const CHROMEDRIVER_URL: &str = "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip";
@@ -126,15 +126,15 @@ fn main() {
         Err(err) => println!("{}", err),
     };
 
-    tauri::async_runtime::block_on(async {
-        println!("Test: {}", check_scrape().await);
-        println!("Complete!");
-    });
-    println!("Complete pt 2");
+    //tauri::async_runtime::block_on(async {
+    //    println!("Test: {}", check_scrape().await);
+    //    println!("Complete!");
+    //});
+    //println!("Complete pt 2");
 
-/*     tauri::Builder::default()
+    tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, check_scrape])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-     */
+    
 }
