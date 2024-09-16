@@ -1,7 +1,18 @@
-# Tauri + React
+# Plover
+A little project of mine for learning Rust, React, database management, and web scraping
 
-This template should help get you started developing with Tauri and React in Vite.
+## Requirements
+- Chrome
+- Functioning computer
 
-## Recommended IDE Setup
+## How to operate
+- To be determined :3 (Too early in development, am just running src code in env, but want to make application standalone first)
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Immediate TODO:
+- Setup custom_errors
+- Figure out chromedriver executable running
+- Separate functions into separate files based on domain?
+- Start tying in certain things like installing chrome driver into front end on bootup
+
+### Questions
+If you want to contact me please don't I already have too much to think about T_T
