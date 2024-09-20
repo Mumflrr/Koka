@@ -5,7 +5,6 @@ mod custom_errors;
 use thirtyfour::common::capabilities::chrome;
 //use custom_errors::GetElementError;
 use thirtyfour::prelude::*;
-use core::error;
 use std::env;
 use std::process::Command;
 use std::fs::File;
@@ -16,9 +15,10 @@ use zip::ZipArchive;
 use std::panic;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::io;
 //use tauri::async_runtime;
 //use rusqlite::{Connection, Result};
+
+use std::net::TcpStream;
 
 
 // Define the ChromeDriver version and URL
@@ -249,8 +249,6 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
                                 "https://dining.ncsu.edu/location/one-earth/"];
      */
 
-    // Start ChromeDriver
-    let _chromedriver = Command::new(get_chromedriver_path()).arg("--port=9515").spawn().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     // Set up WebDriver
     let mut caps = DesiredCapabilities::chrome();
@@ -271,9 +269,6 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
     }
     pathBuf.push(&name);
 
-
-    println!("{}", pathBuf.display());
-
     // There should be only one folder in this folder, so get it
     let paths = fs::read_dir(&pathBuf).unwrap();
     for path in paths {
@@ -283,8 +278,32 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
     pathBuf.push("Google Chrome for Testing.app");
 
     let path = format!("{}", pathBuf.display());
-    println!("{}", path);
+
     caps.set_binary(&path)?;
+
+    // Start ChromeDriver
+    let _chromedriver = Command::new(get_chromedriver_path()).arg("--port=9515").spawn().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+    let _chromedriver = Command::new(get_chromedriver_path())
+    .arg("--port=9515")
+    .spawn()
+    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+    // Wait for ChromeDriver to start and be accessible
+    let max_retries = 5;
+    for _ in 0..max_retries {
+        if TcpStream::connect("localhost:9515").is_ok() {
+            println!("ChromeDriver is running on port 9515");
+            break;
+        } else {
+            println!("Waiting for ChromeDriver to start...");
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        }
+    }
+
+
+
+
 
     let driver = WebDriver::new("http://localhost:9515", caps).await
         .map_err(|e| {
