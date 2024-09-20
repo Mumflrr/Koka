@@ -2,42 +2,143 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod custom_errors;
+use thirtyfour::common::capabilities::chrome;
 //use custom_errors::GetElementError;
 use thirtyfour::prelude::*;
+use core::error;
 use std::env;
-use std::path::PathBuf;
 use std::process::Command;
 use std::fs::File;
 use std::io::copy;
 use reqwest::blocking::get;
 use std::io::BufReader;
 use zip::ZipArchive;
+use std::panic;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::io;
 //use tauri::async_runtime;
 //use rusqlite::{Connection, Result};
 
+
 // Define the ChromeDriver version and URL
-enum URLS {
-    ChromedriverUrl,
-    LinuxUrl,
-    MacOSUrl,
-    WindowsUrl,
+struct URLS {
+    chromedriver_url: String,
+    os_url: String,
+    version: String,
 }
 
-impl URLS {
-    fn as_str(&self) -> &'static str {
-        match self {
-            URLS::ChromedriverUrl => "https://chromedriver.storage.googleapis.com/",
-            URLS::LinuxUrl => "/chromedriver_linux64.zip",
-            URLS::WindowsUrl => "/chromedriver_win32.zip",
-            URLS::MacOSUrl => if cfg!(target_arch = "aarch64") {
-                                "/chromedriver_mac_arm64.zip"
-                            }
-                            else {
-                                "/chromedriver_mac64.zip"
-                            },
+#[cfg(target_os = "macos")]
+fn os_setup() -> URLS {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = if cfg!(target_arch = "aarch64") {String::from("/chromedriver_mac_arm64.zip")} 
+                                else {String::from("/chromedriver_mac64.zip")};
+
+    return url_struct
+}
+
+#[cfg(target_os = "windows")]
+fn os_setup() -> URLS {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = String::from("/chromedriver_win32.zip");
+
+    return url_struct
+}
+
+#[cfg(target_os = "linux")]
+fn os_setup() -> URLS {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = String::from("/chromedriver_linux64.zip");
+
+    return url_struct
+}
+
+#[cfg(target_os = "windows")]
+fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("tasklist")
+        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
+        .output()?;
+
+    let output_str = String::from_utf8(output.stdout)?;
+    
+    if output_str.contains("chromedriver.exe") {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("taskkill")
+            .args(&["/F", "/IM", "chromedriver.exe"])
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
         }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("pgrep")
+        .arg("chromedriver")
+        .output()?;
+
+    if !output.stdout.is_empty() {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("pkill")
+            .arg("chromedriver")
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
+        }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("pgrep")
+        .arg("chromedriver")
+        .output()?;
+
+    if !output.stdout.is_empty() {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("pkill")
+            .arg("chromedriver")
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
+        }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
+
+
+fn setup_struct() -> URLS {
+    URLS {
+        chromedriver_url : String::from("https://chromedriver.storage.googleapis.com/"),
+        os_url : String::from(""),
+        version : String::from(""),
     }
 }
+
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command 
 #[tauri::command]
@@ -55,21 +156,18 @@ fn get_chromedriver_path() -> PathBuf {
     path
 }
 
-fn get_chromeiumbinary_path(version: String) -> PathBuf {
-    let mut path = std::env::current_dir().expect("Failed to get current directory");
-    path.push("resources");
-    path.push("chrome");
-    if cfg!(target_os = "windows") {
-        path.set_extension("exe");
-    }
-    path
+fn get_version(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::Error>> {
+    let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
+    let client = reqwest::blocking::Client::new();
+
+    url_struct.version = client.get(url).send()?.text()?;
+
+    Ok(())
 }
 
-
-fn chromedriver_setup() -> Result<(String), Box<dyn std::error::Error>> {
+fn chromedriver_setup(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::Error>> {
     // Get chrome driver path (if exists)
     let chromedriver_path = get_chromedriver_path();
-    let mut version = String::from("");
 
     // Check if ChromeDriver is installed
     if !chromedriver_path.exists() {
@@ -77,18 +175,12 @@ fn chromedriver_setup() -> Result<(String), Box<dyn std::error::Error>> {
         let resources_path = chromedriver_path.parent().unwrap().to_path_buf();
 
         // Get latest chrome driver version
-        let url = format!("{}LATEST_RELEASE", URLS::ChromedriverUrl.as_str());
+        let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
         let client = reqwest::blocking::Client::new();
-        version = client.get(url).send()?.text()?;
 
-        // Download ChromeDriver for macOS ARM64
-        let os = format!("{}", env::consts::OS);
-        let download_url = match os.as_str() {
-            "linux" => format!("{}{}{}", URLS::ChromedriverUrl.as_str(), version, URLS::LinuxUrl.as_str()),
-            "macos" => format!("{}{}{}", URLS::ChromedriverUrl.as_str(), version, URLS::MacOSUrl.as_str()),
-            "windows" => format!("{}{}{}", URLS::ChromedriverUrl.as_str(), version, URLS::WindowsUrl.as_str()),
-            _ => panic!("UNSUPPORTED OS"),
-        };
+        url_struct.version = client.get(url).send()?.text()?;
+
+        let download_url = format!("{}{}{}", url_struct.chromedriver_url.as_str(), url_struct.version, url_struct.os_url.as_str());
 
         let response = get(download_url)?;
         let mut file = File::create(resources_path.join("chromedriver.zip"))?;
@@ -120,7 +212,7 @@ fn chromedriver_setup() -> Result<(String), Box<dyn std::error::Error>> {
                 "dlx",
                 "@puppeteer/browsers",
                 "install",
-                format!("chrome@{}", version).as_str(),
+                format!("chrome@{}", url_struct.version).as_str(),
                 "--path",
                 chrome_path.into_os_string().into_string().unwrap().as_str(),
             ])
@@ -132,22 +224,26 @@ fn chromedriver_setup() -> Result<(String), Box<dyn std::error::Error>> {
         println!("Chrome for Testing installed successfully");
 
     } else {
-        println!("ChromeDriver and Chromeium are already installed.");
+        match get_version(url_struct) {
+            Ok(()) => println!("ChromeDriver and Chromeium are already installed."),
+            Err(_err) => panic!("Unable to setup ChromeDriver and Chromium"),
+        };
     }
 
-    Ok(version)
+    Ok(())
 }
 
+
 #[tauri::command]
-async fn check_scrape(version: String) -> String {
-    match perform_scrape(version).await {
-        Ok(()) => String::from("Success!"),
-        Err(error) => format!("{}", error),
+async fn check_scrape(url_struct: &URLS) -> Result<String, String> {
+    match perform_scrape(&url_struct).await {
+        Ok(()) => Ok(String::from("Success!")),
+        Err(error) => Err(format!("{}", error)),
     }
 }
 
 /// Performs the backend scraping
-async fn perform_scrape(version: String) -> Result<(), /* GetElementError */Box<dyn std::error::Error>> {
+async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Box<dyn std::error::Error>> {
     /* let website_urls : [&str; 5] = ["https://dining.ncsu.edu/location/clark/", "https://dining.ncsu.edu/location/fountain/",
                                 "https://dining.ncsu.edu/location/case/", "https://dining.ncsu.edu/location/university-towers/",
                                 "https://dining.ncsu.edu/location/one-earth/"];
@@ -157,13 +253,38 @@ async fn perform_scrape(version: String) -> Result<(), /* GetElementError */Box<
     let _chromedriver = Command::new(get_chromedriver_path()).arg("--port=9515").spawn().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     // Set up WebDriver
-    let caps = DesiredCapabilities::chrome();
+    let mut caps = DesiredCapabilities::chrome();
 
     // Set the path to your custom Chrome binary
-    let path = get_chromeiumbinary_path(version: String);
-    caps.set_binary(path);
+    let mut pathBuf = std::env::current_dir().expect("Failed to get current directory");
+    pathBuf.push("resources");
+    pathBuf.push("chrome");
+
+    // Find chromium binary folder
+    let paths = fs::read_dir(&pathBuf).unwrap();
+    let mut name = String::from("");
+    for path in paths {
+        name = format!("{}", path.unwrap().path().display());
+        if name.contains(&url_struct.version) {
+            break;
+        }
+    }
+    pathBuf.push(&name);
 
 
+    println!("{}", pathBuf.display());
+
+    // There should be only one folder in this folder, so get it
+    let paths = fs::read_dir(&pathBuf).unwrap();
+    for path in paths {
+        name = format!("{}", path.unwrap().path().display());
+    }
+    pathBuf.push(&name);
+    pathBuf.push("Google Chrome for Testing.app");
+
+    let path = format!("{}", pathBuf.display());
+    println!("{}", path);
+    caps.set_binary(&path)?;
 
     let driver = WebDriver::new("http://localhost:9515", caps).await
         .map_err(|e| {
@@ -197,22 +318,26 @@ async fn perform_scrape(version: String) -> Result<(), /* GetElementError */Box<
 
 
 fn main() {
+    let _ = quit_chromedriver();
     // Enable backtracing
     env::set_var("RUST_BACKTRACE", "1");
+    let mut url_struct = os_setup();
 
     // May move chrome driver install into a method called by front end so it can be monitored
     // by front end for update/install/setup tracking and progress bar, but for now it will be here
     // since I have no front end (that I understand well enough to use)
-    let version = match chromedriver_setup() {
-        Ok(string) => format!("{}", string),
-        Err(err) => format!("{}", err),
+    match chromedriver_setup(&mut url_struct) {
+        Ok(()) => format!("{}", "Chromium / WebDriver setup!"),
+        Err(_err) => panic!("Unable to setup Chromeium / WebDriver!"),
     };
 
     tauri::async_runtime::block_on(async {
-        println!("Test: {}", check_scrape(version).await);
-        println!("Complete!");
+        println!("{}", 
+                                match check_scrape(&url_struct).await {
+                                    Ok(msg) => msg,
+                                    Err(msg) => msg,
+                                });
     });
-    println!("Complete pt 2");
 
 /*     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, check_scrape])
