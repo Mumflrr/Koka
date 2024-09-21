@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod custom_errors;
-use thirtyfour::common::capabilities::chrome;
+use serde::{Serialize, Deserialize};
 //use custom_errors::GetElementError;
 use thirtyfour::prelude::*;
 use std::env;
@@ -14,16 +14,15 @@ use std::io::BufReader;
 use zip::ZipArchive;
 use std::panic;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
-use std::io::{self, ErrorKind};
-//use tauri::async_runtime;
 //use rusqlite::{Connection, Result};
 
 use std::net::TcpStream;
 
 
 // Define the ChromeDriver version and URL
+#[derive(Debug, Serialize, Deserialize)]
 struct URLS {
     chromedriver_url: String,
     os_url: String,
@@ -237,7 +236,7 @@ fn chromedriver_setup(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::E
 
 
 #[tauri::command]
-async fn check_scrape(url_struct: &URLS) -> Result<String, String> {
+async fn check_scrape(url_struct: URLS) -> Result<String, String> {
     match perform_scrape(&url_struct).await {
         Ok(()) => Ok(String::from("Success!")),
         Err(error) => Err(format!("{}", error)),
@@ -256,12 +255,12 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
     let mut caps = DesiredCapabilities::chrome();
 
     // Set the path to your custom Chrome binary
-    let mut pathBuf = std::env::current_dir().expect("Failed to get current directory");
-    pathBuf.push("resources");
-    pathBuf.push("chrome");
+    let mut path_buf = std::env::current_dir().expect("Failed to get current directory");
+    path_buf.push("resources");
+    path_buf.push("chrome");
 
     // Find chromium binary folder
-    let paths = fs::read_dir(&pathBuf).unwrap();
+    let paths = fs::read_dir(&path_buf).unwrap();
     let mut name = String::from("");
     for path in paths {
         name = format!("{}", path.unwrap().path().display());
@@ -269,21 +268,21 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
             break;
         }
     }
-    pathBuf.push(&name);
+    path_buf.push(&name);
 
     // There should be only one folder in this folder, so get it
-    let paths = fs::read_dir(&pathBuf).unwrap();
+    let paths = fs::read_dir(&path_buf).unwrap();
     for path in paths {
         name = format!("{}", path.unwrap().path().display());
     }
-    pathBuf.push(&name);
-    pathBuf.push("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
+    path_buf.push(&name);
 
-    let path = format!("{}", pathBuf.display());
-
+    // TODO: Cross platform compatability
+    path_buf.push("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
+    let path = format!("{}", path_buf.display());
 
     // Get the current file metadata
-    let metadata = fs::metadata(&pathBuf)?;
+    let metadata = fs::metadata(&path_buf)?;
     
     // Get the current permissions
     let mut permissions = metadata.permissions();
@@ -293,12 +292,7 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
     permissions.set_mode(0o755);
     
     // Apply the new permissions to the file or directory
-    fs::set_permissions(&pathBuf, permissions)?;
-
-
-
-
-
+    fs::set_permissions(&path_buf, permissions)?;
 
     caps.set_binary(&path)?;
 
@@ -321,9 +315,6 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
     }
-
-
-
 
 
     let driver = WebDriver::new("http://localhost:9515", caps).await
@@ -373,15 +364,14 @@ fn main() {
 
     tauri::async_runtime::block_on(async {
         println!("{}", 
-                                match check_scrape(&url_struct).await {
-                                    Ok(msg) => msg,
-                                    Err(msg) => msg,
-                                });
+                        match check_scrape(url_struct).await {
+                            Ok(msg) => msg,
+                            Err(msg) => msg,
+                        });
     });
 
-/*     tauri::Builder::default()
+    tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, check_scrape])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-     */
 }
