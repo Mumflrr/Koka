@@ -15,6 +15,8 @@ use zip::ZipArchive;
 use std::panic;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::os::unix::fs::PermissionsExt;
+use std::io::{self, ErrorKind};
 //use tauri::async_runtime;
 //use rusqlite::{Connection, Result};
 
@@ -275,17 +277,36 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
         name = format!("{}", path.unwrap().path().display());
     }
     pathBuf.push(&name);
-    pathBuf.push("Google Chrome for Testing.app");
+    pathBuf.push("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
 
     let path = format!("{}", pathBuf.display());
+
+
+    // Get the current file metadata
+    let metadata = fs::metadata(&pathBuf)?;
+    
+    // Get the current permissions
+    let mut permissions = metadata.permissions();
+    
+    // Set the permission to be executable by the owner (u+x)
+    // This sets the permission bits to 0o755 (read, write, and execute for the owner, and read+execute for others)
+    permissions.set_mode(0o755);
+    
+    // Apply the new permissions to the file or directory
+    fs::set_permissions(&pathBuf, permissions)?;
+
+
+
+
+
 
     caps.set_binary(&path)?;
 
     // Start ChromeDriver
-    let _chromedriver = Command::new(get_chromedriver_path()).arg("--port=9515").spawn().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-
     let _chromedriver = Command::new(get_chromedriver_path())
     .arg("--port=9515")
+    .arg("--verbose")
+    .arg("--log-path=chromedriver.log")
     .spawn()
     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
