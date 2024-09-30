@@ -1,4 +1,8 @@
-use std::{env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
+use std::{env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command};
+
+#[cfg(not(target_os = "windows"))] 
+    use std::os::unix::fs::PermissionsExt;
+
 use reqwest::blocking::get;
 use thirtyfour::{ChromiumLikeCapabilities, DesiredCapabilities, WebDriver};
 use zip::ZipArchive;
@@ -58,14 +62,15 @@ pub fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::
     // Get the current permissions
     let mut permissions = metadata.permissions();
 
-    // Set the permission to be executable by the owner (u+x)
-    // This sets the permission bits to 0o755 (read, write, and execute for the owner, and read+execute for others)
-    permissions.set_mode(0o755);
+    #[cfg(unix)] {
+        // Set the permission to be executable by the owner (u+x)
+        // This sets the permission bits to 0o755 (read, write, and execute for the owner, and read+execute for others)
+        permissions.set_mode(0o755);
 
-    // Apply the new permissions to the file or directory
-    fs::set_permissions(&path_buf, permissions)?;
+        // Apply the new permissions to the file or directory
+        fs::set_permissions(&path_buf, permissions)?;
+    }
 
-    
     Ok(())
 }
 
