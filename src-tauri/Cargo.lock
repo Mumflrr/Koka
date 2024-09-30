@@ -2367,6 +2367,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "thirtyfour",
+ "thiserror",
  "tokio",
  "zip",
 ]

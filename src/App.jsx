@@ -1,15 +1,44 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/tauri";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 function App() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
+  const [scrapeStatus, setScrapeStatus] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = listen("scrape_result", (event) => {
+      const result = event.payload;
+      if (result === null) {
+        setScrapeStatus("Scrape completed successfully!");
+      } else {
+        setScrapeStatus(`Error during scrape: ${result}`);
+      }
+      setIsScraping(false);
+    });
+
+    return () => {
+      unsubscribe.then(f => f());
+    };
+  }, []);
 
   async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
     setGreetMsg(await invoke("greet", { name }));
+  }
+
+  async function startScrape() {
+    setIsScraping(true);
+    setScrapeStatus("Scraping in progress...");
+    try {
+      await invoke("start_scrape");
+    } catch (error) {
+      setScrapeStatus(`Error starting scrape: ${error}`);
+      setIsScraping(false);
+    }
   }
 
   return (
@@ -46,6 +75,14 @@ function App() {
       </form>
 
       <p>{greetMsg}</p>
+
+      <div className="row">
+        <button onClick={startScrape} disabled={isScraping}>
+          {isScraping ? "Scraping..." : "Start Scrape"}
+        </button>
+      </div>
+
+      <p>{scrapeStatus}</p>
     </div>
   );
 }
