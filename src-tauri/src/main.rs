@@ -1,7 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod custom_errors;
+mod program_setup;
+
 use serde::{Serialize, Deserialize};
 //use custom_errors::GetElementError;
 use thirtyfour::prelude::*;
@@ -16,6 +17,8 @@ use std::panic;
 use std::fs;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
+use anyhow::{Context, Result};
+use std::any::type_name;
 //use rusqlite::{Connection, Result};
 
 use std::net::TcpStream;
@@ -23,14 +26,14 @@ use std::net::TcpStream;
 
 // Define the ChromeDriver version and URL
 #[derive(Debug, Serialize, Deserialize)]
-struct URLS {
+struct CONNECTINFO {
     chromedriver_url: String,
     os_url: String,
     version: String,
 }
 
 #[cfg(target_os = "macos")]
-fn os_setup() -> URLS {
+fn os_setup() -> CONNECTINFO {
     let mut url_struct = setup_struct();
     url_struct.os_url = if cfg!(target_arch = "aarch64") {String::from("/chromedriver_mac_arm64.zip")} 
                                 else {String::from("/chromedriver_mac64.zip")};
@@ -39,7 +42,7 @@ fn os_setup() -> URLS {
 }
 
 #[cfg(target_os = "windows")]
-fn os_setup() -> URLS {
+fn os_setup() -> CONNECTINFO {
     let mut url_struct = setup_struct();
     url_struct.os_url = String::from("/chromedriver_win32.zip");
 
@@ -47,11 +50,35 @@ fn os_setup() -> URLS {
 }
 
 #[cfg(target_os = "linux")]
-fn os_setup() -> URLS {
+fn os_setup() -> CONNECTINFO {
     let mut url_struct = setup_struct();
     url_struct.os_url = String::from("/chromedriver_linux64.zip");
 
     return url_struct
+}
+
+// Helper function to get the calling function name
+fn get_calling_function_name() -> String {
+    let mut name = type_name::<fn()>().to_string();
+    if let Some(index) = name.rfind("::") {
+        name = name[index + 2..].to_string();
+    }
+    if let Some(index) = name.find('{') {
+        name = name[..index].to_string();
+    }
+    name
+}
+
+macro_rules! context_error {
+    ($result:expr) => {{
+        // This allows any type of `Result<T, E>` where E is convertible to `anyhow::Error`.
+        let res = $result.map_err(|e| anyhow::Error::new(e)); 
+        res.with_context(|| format!("Error in {}", get_calling_function_name()))
+    }};
+    ($result:expr, $msg:expr) => {{
+        let res = $result.map_err(|e| anyhow::Error::new(e)); 
+        res.with_context(|| format!("Error in {} => {}", get_calling_function_name(), $msg))
+    }};
 }
 
 #[cfg(target_os = "windows")]
@@ -132,8 +159,8 @@ fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 
-fn setup_struct() -> URLS {
-    URLS {
+fn setup_struct() -> CONNECTINFO {
+    CONNECTINFO {
         chromedriver_url : String::from("https://chromedriver.storage.googleapis.com/"),
         os_url : String::from(""),
         version : String::from(""),
@@ -157,16 +184,42 @@ fn get_chromedriver_path() -> PathBuf {
     path
 }
 
-fn get_version(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::Error>> {
+fn get_version(url_struct: &mut CONNECTINFO) -> Result<(), anyhow::Error> {
     let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
     let client = reqwest::blocking::Client::new();
 
+    //context_error!(url_struct.version = client.get(url).send().text(), "get_version")?;
     url_struct.version = client.get(url).send()?.text()?;
 
     Ok(())
 }
 
-fn chromedriver_setup(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::Error>> {
+fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::Error>> {
+    Command::new("pnpm")
+    .args(&["add", "-g", "@puppeteer/browsers@2.4.0"])
+    .output()?;
+
+    println!("@puppeteer/browsers@2.4.0 installed successfully");
+
+    let mut chrome_path = std::env::current_dir().expect("Failed to get current directory");
+    chrome_path.push("resources");
+
+    // Install Chrome to the specified path
+    Command::new("pnpm")
+        .args(&[
+            "dlx",
+            "@puppeteer/browsers",
+            "install",
+            format!("chrome@{}", url_struct.version).as_str(),
+            "--path",
+            chrome_path.into_os_string().into_string().unwrap().as_str(),
+        ])
+        .output()?;
+
+    Ok(())
+}
+
+fn chromedriver_setup(url_struct: &mut CONNECTINFO) -> Result<bool, anyhow::Error> {
     // Get chrome driver path (if exists)
     let chromedriver_path = get_chromedriver_path();
 
@@ -176,10 +229,7 @@ fn chromedriver_setup(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::E
         let resources_path = chromedriver_path.parent().unwrap().to_path_buf();
 
         // Get latest chrome driver version
-        let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
-        let client = reqwest::blocking::Client::new();
-
-        url_struct.version = client.get(url).send()?.text()?;
+        get_version(url_struct)?;
 
         let download_url = format!("{}{}{}", url_struct.chromedriver_url.as_str(), url_struct.version, url_struct.os_url.as_str());
 
@@ -193,50 +243,21 @@ fn chromedriver_setup(url_struct: &mut URLS) -> Result<(), Box<dyn std::error::E
 
         archive.extract(resources_path)?;
 
-        let output = Command::new("pnpm")
-        .args(&["add", "-g", "@puppeteer/browsers@2.4.0"])
-        .output()?;
-
-        if !output.status.success() {
-            return Err(format!("Command failed: {:?}", String::from_utf8_lossy(&output.stderr)).into());
-        }
-
-        println!("@puppeteer/browsers@2.4.0 installed successfully");
-
-        let mut chrome_path = std::env::current_dir().expect("Failed to get current directory");
-        chrome_path.push("resources");
-
-
-        // Install Chrome to the specified path
-        let chrome_output = Command::new("pnpm")
-            .args(&[
-                "dlx",
-                "@puppeteer/browsers",
-                "install",
-                format!("chrome@{}", url_struct.version).as_str(),
-                "--path",
-                chrome_path.into_os_string().into_string().unwrap().as_str(),
-            ])
-            .output()?;
-
-        if !chrome_output.status.success() {
-            return Err(format!("Command failed: {:?}", String::from_utf8_lossy(&output.stderr)).into());
-        }
-        println!("Chrome for Testing installed successfully");
+        Ok(false)
 
     } else {
         match get_version(url_struct) {
             Ok(()) => println!("ChromeDriver and Chromeium are already installed."),
             Err(_err) => panic!("Unable to setup ChromeDriver and Chromium"),
         };
+        Ok(true)
     }
 
-    Ok(())
 }
 
 
 #[tauri::command]
-async fn check_scrape(url_struct: URLS) -> Result<String, String> {
+async fn check_scrape(url_struct: CONNECTINFO) -> Result<String, String> {
     match perform_scrape(&url_struct).await {
         Ok(()) => Ok(String::from("Success!")),
         Err(error) => Err(format!("{}", error)),
@@ -244,8 +265,8 @@ async fn check_scrape(url_struct: URLS) -> Result<String, String> {
 }
 
 /// Performs the backend scraping
-async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Box<dyn std::error::Error>> {
-    /* let website_urls : [&str; 5] = ["https://dining.ncsu.edu/location/clark/", "https://dining.ncsu.edu/location/fountain/",
+async fn perform_scrape(url_struct: &CONNECTINFO) -> Result<(), /* GetElementError */Box<dyn std::error::Error>> {
+    /* let website_CONNECTINFO : [&str; 5] = ["https://dining.ncsu.edu/location/clark/", "https://dining.ncsu.edu/location/fountain/",
                                 "https://dining.ncsu.edu/location/case/", "https://dining.ncsu.edu/location/university-towers/",
                                 "https://dining.ncsu.edu/location/one-earth/"];
      */
@@ -347,24 +368,52 @@ async fn perform_scrape(url_struct: &URLS) -> Result<(), /* GetElementError */Bo
     Ok(())
 }
 
+fn setup_program() -> Result<CONNECTINFO, String> {
+
+    // Install node.js
+    // Install pnpm
+
+    let mut connectinfo_struct = os_setup();
+
+    match chromedriver_setup(&mut connectinfo_struct) {
+        Ok(previously_setup) => {
+                                    if previously_setup {
+                                        println!("{}", "Chromium already setup!");
+                                    } else {
+                                        println!("{}", "Chromium setup!");
+                                        
+                                        match chrome_setup(&connectinfo_struct) {
+                                            Ok(()) => println!("Chrome for Testing installed successfully"),
+                                            Err(err) => println!("{}", err),
+                                        };
+                                    }
+                                },
+        _ => panic!("Unable to setup Chromium!"),
+    };
+
+
+    Ok(connectinfo_struct)
+}
+
 
 fn main() {
+
+    // Ensure chrome driver is, in fact, not running when the file is run
     let _ = quit_chromedriver();
     // Enable backtracing
     env::set_var("RUST_BACKTRACE", "1");
-    let mut url_struct = os_setup();
 
-    // May move chrome driver install into a method called by front end so it can be monitored
-    // by front end for update/install/setup tracking and progress bar, but for now it will be here
-    // since I have no front end (that I understand well enough to use)
-    match chromedriver_setup(&mut url_struct) {
-        Ok(()) => format!("{}", "Chromium / WebDriver setup!"),
-        Err(_err) => panic!("Unable to setup Chromeium / WebDriver!"),
+    // Setup the struct for downloading and installing chromedriver and chrome
+    let connection_struct = match setup_program() {
+        Ok(setup_struct) => setup_struct,
+        Err(err) => {println!("Error: {}", err);
+                        panic!()},
     };
-
+    
+    println!("Program setup!");
     tauri::async_runtime::block_on(async {
         println!("{}", 
-                        match check_scrape(url_struct).await {
+                        match check_scrape(connection_struct).await {
                             Ok(msg) => msg,
                             Err(msg) => msg,
                         });
