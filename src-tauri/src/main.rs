@@ -2,12 +2,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod program_setup;
-mod tauri_commands;
-mod helper_functions;
+mod tauri_command_backends;
+mod macros;
+mod chrome_functions;
 
 use program_setup::*;
 use tauri::Manager;
-use tauri_commands::*;
+use tauri_command_backends::*;
+use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
 use std::env;
