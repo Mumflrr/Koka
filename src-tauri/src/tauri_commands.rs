@@ -4,7 +4,16 @@ use crate::{get_chromedriver_path, helper_functions::get_chrome_binary_path, CON
 
 
 
-pub async fn start_chromedriver(url_struct: &CONNECTINFO) -> Result<WebDriver, Box<dyn std::error::Error>> {
+// Does error processing from performing the scraping
+pub async fn scrape_schedule(url_struct: &CONNECTINFO) -> Option<String> {
+
+    match perform_scrape_schedule(url_struct).await {
+        Ok(()) => return None,
+        Err(err) => return Some(format!("{}", err)),
+    };
+}
+
+async fn start_chromedriver(url_struct: &CONNECTINFO) -> Result<WebDriver, Box<dyn std::error::Error>> {
     // Set up WebDriver
     let mut caps = DesiredCapabilities::chrome();
     let path_buf = get_chrome_binary_path(url_struct);
@@ -41,16 +50,6 @@ pub async fn start_chromedriver(url_struct: &CONNECTINFO) -> Result<WebDriver, B
     match driver {
         Ok(_) => return Ok(driver.unwrap()),
         Err(err) => panic!("Error: {}", err),
-    };
-}
-
-
-// Does error processing from performing the scraping
-pub async fn scrape_schedule(url_struct: &CONNECTINFO) -> Option<String> {
-
-    match perform_scrape_schedule(url_struct).await {
-        Ok(()) => return None,
-        Err(err) => return Some(format!("{}", err)),
     };
 }
 

@@ -1,12 +1,120 @@
 use std::{fs::{self, File}, io::{copy, BufReader}, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
 
+use anyhow::Context;
 use reqwest::blocking::get;
 use zip::ZipArchive;
 
-use crate::{helper_functions::get_chrome_binary_path, os_setup, CONNECTINFO};
+use crate::{context_error, helper_functions::get_chrome_binary_path, CONNECTINFO};
+
+#[cfg(target_os = "macos")]
+fn os_setup() -> CONNECTINFO {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = if cfg!(target_arch = "aarch64") {
+        String::from("/chromedriver_mac_arm64.zip")
+    } else {
+        String::from("/chromedriver_mac64.zip")
+    };
+    //check_and_install_dependencies();
+    url_struct
+}
+
+#[cfg(target_os = "windows")]
+fn os_setup() -> CONNECTINFO {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = String::from("/chromedriver_win32.zip");
+    //check_and_install_dependencies();
+    url_struct
+}
+
+#[cfg(target_os = "linux")]
+fn os_setup() -> CONNECTINFO {
+    let mut url_struct = setup_struct();
+    url_struct.os_url = String::from("/chromedriver_linux64.zip");
+    //check_and_install_dependencies();
+    url_struct
+}
+
+fn check_and_install_dependencies() {
+    if !Command::new("node").arg("-v").status().is_ok() {
+        install_node();
+    }
+    if !Command::new("pnpm").arg("-v").status().is_ok() {
+        install_pnpm();
+    }
+}
+
+fn install_node() {
+    // Installation commands will vary based on the operating system
+    #[cfg(target_os = "macos")] {
+        Command::new("brew").args(&["install", "node"]).status().expect("Failed to install Node.js");
+    }
+    #[cfg(target_os = "linux")] {
+        Command::new("sudo").args(&["apt", "install", "-y", "nodejs"]).status().expect("Failed to install Node.js");
+    }
+    #[cfg(target_os = "windows")] {
+        // For Windows, you might need to use a package manager like Chocolatey or download the installer manually
+        println!("Please install Node.js manually from https://nodejs.org/");
+    }
+}
+
+fn install_pnpm() {
+    Command::new("npm").args(&["install", "-g", "pnpm"]).status().expect("Failed to install pnpm");
+}
+
+#[cfg(target_os = "windows")]
+pub fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("tasklist")
+        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
+        .output()?;
+
+    let output_str = String::from_utf8(output.stdout)?;
+    
+    if output_str.contains("chromedriver.exe") {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("taskkill")
+            .args(&["/F", "/IM", "chromedriver.exe"])
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
+        }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("pgrep")
+        .arg("chromedriver")
+        .output()?;
+
+    if !output.stdout.is_empty() {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("pkill")
+            .arg("chromedriver")
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
+        }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
 
 
-pub fn setup_struct() -> CONNECTINFO {
+fn setup_struct() -> CONNECTINFO {
     CONNECTINFO {
         chromedriver_url : String::from("https://chromedriver.storage.googleapis.com/"),
         os_url : String::from(""),
@@ -15,9 +123,6 @@ pub fn setup_struct() -> CONNECTINFO {
 }
 
 pub fn setup_program() -> Result<CONNECTINFO, String> {
-
-    // Install node.js
-    // Install pnpm
     let mut connectinfo_struct = os_setup();
 
     match chromedriver_setup(&mut connectinfo_struct) {
@@ -51,20 +156,24 @@ pub fn get_chromedriver_path() -> PathBuf {
     path
 }
 
-pub fn get_version(url_struct: &mut CONNECTINFO) -> Result<(), anyhow::Error> {
+fn get_version(url_struct: &mut CONNECTINFO) -> Result<(), anyhow::Error> {
     let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
     let client = reqwest::blocking::Client::new();
 
-    //context_error!(url_struct.version = client.get(url).send().text(), "get_version")?;
-    url_struct.version = client.get(url).send()?.text()?;
+    url_struct.version =  context_error!(client.get(url).send()?.text(), "test")?;
+
+    //url_struct.version =  client.get(url).send()?.text().context("Error: file-{}, function-{}, line-{} | {}", get_file(), get_function(), getLine(), "custom text") ?;
 
     Ok(())
 }
 
 fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::Error>> {
-    Command::new("pnpm")
-    .args(&["add", "-g", "@puppeteer/browsers@2.4.0"])
-    .output()?;
+    // Install @puppeteer/browsers
+    let pnpm_command = if cfg!(target_os = "windows") { "pnpm.cmd" } else { "pnpm" };
+    
+    Command::new(pnpm_command)
+        .args(&["add", "-g", "@puppeteer/browsers@2.4.0"])
+        .output()?;
 
     println!("@puppeteer/browsers@2.4.0 installed successfully");
 
@@ -72,14 +181,14 @@ fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::Erro
     chrome_path.push("resources");
 
     // Install Chrome to the specified path
-    Command::new("pnpm")
+    Command::new(pnpm_command)
         .args(&[
             "dlx",
             "@puppeteer/browsers",
             "install",
-            format!("chrome@{}", url_struct.version).as_str(),
+            &format!("chrome@{}", url_struct.version),
             "--path",
-            chrome_path.into_os_string().into_string().unwrap().as_str(),
+            chrome_path.to_str().unwrap(),
         ])
         .output()?;
 

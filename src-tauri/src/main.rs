@@ -3,16 +3,15 @@
 
 mod program_setup;
 mod tauri_commands;
+
 mod helper_functions;
 
 use program_setup::*;
 use tauri_commands::*;
 
 use serde::{Serialize, Deserialize};
-use tokio::runtime::Runtime;
 use std::process::Command;
 use std::env;
-use std::panic;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -31,108 +30,6 @@ struct CONNECTINFO {
     chromedriver_url: String,
     os_url: String,
     version: String,
-}
-
-#[cfg(target_os = "macos")]
-fn os_setup() -> CONNECTINFO {
-    let mut url_struct = setup_struct();
-    url_struct.os_url = if cfg!(target_arch = "aarch64") {String::from("/chromedriver_mac_arm64.zip")} 
-                                else {String::from("/chromedriver_mac64.zip")};
-
-    return url_struct
-}
-
-#[cfg(target_os = "windows")]
-fn os_setup() -> CONNECTINFO {
-    let mut url_struct = setup_struct();
-    url_struct.os_url = String::from("/chromedriver_win32.zip");
-
-    return url_struct
-}
-
-#[cfg(target_os = "linux")]
-fn os_setup() -> CONNECTINFO {
-    let mut url_struct = setup_struct();
-    url_struct.os_url = String::from("/chromedriver_linux64.zip");
-
-    return url_struct
-}
-
-#[cfg(target_os = "windows")]
-fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("tasklist")
-        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
-        .output()?;
-
-    let output_str = String::from_utf8(output.stdout)?;
-    
-    if output_str.contains("chromedriver.exe") {
-        println!("Chromedriver processes found. Terminating...");
-        let kill_output = Command::new("taskkill")
-            .args(&["/F", "/IM", "chromedriver.exe"])
-            .output()?;
-
-        if kill_output.status.success() {
-            println!("All chromedriver processes have been terminated.");
-        } else {
-            let error_message = String::from_utf8(kill_output.stderr)?;
-            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
-        }
-    } else {
-        println!("No chromedriver processes found.");
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("pgrep")
-        .arg("chromedriver")
-        .output()?;
-
-    if !output.stdout.is_empty() {
-        println!("Chromedriver processes found. Terminating...");
-        let kill_output = Command::new("pkill")
-            .arg("chromedriver")
-            .output()?;
-
-        if kill_output.status.success() {
-            println!("All chromedriver processes have been terminated.");
-        } else {
-            let error_message = String::from_utf8(kill_output.stderr)?;
-            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
-        }
-    } else {
-        println!("No chromedriver processes found.");
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("pgrep")
-        .arg("chromedriver")
-        .output()?;
-
-    if !output.stdout.is_empty() {
-        println!("Chromedriver processes found. Terminating...");
-        let kill_output = Command::new("pkill")
-            .arg("chromedriver")
-            .output()?;
-
-        if kill_output.status.success() {
-            println!("All chromedriver processes have been terminated.");
-        } else {
-            let error_message = String::from_utf8(kill_output.stderr)?;
-            return Err(format!("Failed to terminate chromedriver: {}", error_message).into());
-        }
-    } else {
-        println!("No chromedriver processes found.");
-    }
-
-    Ok(())
 }
 
 

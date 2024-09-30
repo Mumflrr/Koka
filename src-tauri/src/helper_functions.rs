@@ -35,26 +35,20 @@ pub fn get_chrome_binary_path(url_struct: &CONNECTINFO) -> PathBuf {
     path_buf
 }
 
-// Helper function to get the calling function name
-fn get_calling_function_name() -> String {
-    let mut name = type_name::<fn()>().to_string();
-    if let Some(index) = name.rfind("::") {
-        name = name[index + 2..].to_string();
-    }
-    if let Some(index) = name.find('{') {
-        name = name[..index].to_string();
-    }
-    name
-}
 
+#[macro_export]
 macro_rules! context_error {
-    ($result:expr) => {{
-        // This allows any type of `Result<T, E>` where E is convertible to `anyhow::Error`.
-        let res = $result.map_err(|e| anyhow::Error::new(e)); 
-        res.with_context(|| format!("Error in {}", get_calling_function_name()))
-    }};
-    ($result:expr, $msg:expr) => {{
-        let res = $result.map_err(|e| anyhow::Error::new(e)); 
-        res.with_context(|| format!("Error in {} => {}", get_calling_function_name(), $msg))
+    ($result:expr) => {
+        context_error!($result, "")
+    };
+    ($result:expr, $custom_text:expr) => {{
+        use anyhow::Context;
+        $result.with_context(|| format!(
+            "Error: file-{}, function-{}, line-{} | {}",
+            file!(),
+            stringify!(#[function_name]),
+            line!(),
+            $custom_text
+        ))
     }};
 }
