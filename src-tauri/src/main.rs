@@ -3,19 +3,18 @@
 
 mod program_setup;
 mod tauri_commands;
-
 mod helper_functions;
 
 use program_setup::*;
+use tauri::Manager;
 use tauri_commands::*;
 
 use serde::{Serialize, Deserialize};
-use std::process::Command;
 use std::env;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use anyhow::{Context, Result};
+use anyhow::Result;
 //use rusqlite::{Connection, Result};
 
 
@@ -68,32 +67,28 @@ fn start_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Res
 }
 
 
-fn main() {
+fn main() -> Result<()> {
     // Ensure chrome driver is, in fact, not running when the file is run
     let _ = quit_chromedriver();
     // Enable backtracing
-    env::set_var("RUST_BACKTRACE", "1");
-
-    // Setup the struct for downloading and installing chromedriver and chrome
-    let connection_struct = match setup_program() {
-        Ok(setup_struct) => setup_struct,
-        Err(err) => {
-            eprintln!("Error during program setup: {}", err);
-            std::process::exit(1);
-        },
-    };
-    
-    println!("Program setup complete!");
+    std::env::set_var("RUST_BACKTRACE", "1");
 
     tauri::Builder::default()
         .setup(|app| {
-            // Perform any additional setup here if needed
+            // Perform the setup within the Tauri setup closure
+            let connection_struct = setup_program()?;
+            
+            println!("Program setup complete!");
+
+            // Store the connection_struct in the app's managed state
+            app.manage(AppState {
+                connect_info: Arc::new(Mutex::new(connection_struct)),
+            });
+
             Ok(())
         })
-        .manage(AppState {
-            connect_info: Arc::new(Mutex::new(connection_struct)),
-        })
         .invoke_handler(tauri::generate_handler![greet, start_scrape])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!())?;
+
+    Ok(())
 }

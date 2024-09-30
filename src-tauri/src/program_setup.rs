@@ -1,6 +1,5 @@
 use std::{fs::{self, File}, io::{copy, BufReader}, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
 
-use anyhow::Context;
 use reqwest::blocking::get;
 use zip::ZipArchive;
 
@@ -161,8 +160,6 @@ fn get_version(url_struct: &mut CONNECTINFO) -> Result<(), anyhow::Error> {
     let client = reqwest::blocking::Client::new();
 
     url_struct.version =  context_error!(client.get(url).send()?.text(), "test")?;
-
-    //url_struct.version =  client.get(url).send()?.text().context("Error: file-{}, function-{}, line-{} | {}", get_file(), get_function(), getLine(), "custom text") ?;
 
     Ok(())
 }
