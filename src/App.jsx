@@ -30,11 +30,11 @@ function App() {
     setGreetMsg(await invoke("greet", { name }));
   }
 
-  async function startScrape() {
+  async function schedulerScrape() {
     setIsScraping(true);
     setScrapeStatus("Scraping in progress...");
     try {
-      await invoke("start_scrape");
+      await invoke("scheduler_scrape");
     } catch (error) {
       setScrapeStatus(`Error starting scrape: ${error}`);
       setIsScraping(false);
@@ -77,7 +77,7 @@ function App() {
       <p>{greetMsg}</p>
 
       <div className="row">
-        <button onClick={startScrape} disabled={isScraping}>
+        <button onClick={schedulerScrape} disabled={isScraping}>
           {isScraping ? "Scraping..." : "Start Scrape"}
         </button>
       </div>

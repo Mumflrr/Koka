@@ -1,26 +1,22 @@
 use thirtyfour::prelude::*;
-use crate::{start_chromedriver, CONNECTINFO};
+use crate::{start_chromedriver, ConnectInfo};
 
+// Checks parameters relating to scraping the schedule
+pub async fn check_schedule_scrape(connect_info: &ConnectInfo) -> Option<String> {
 
-
-// Does error processing from performing the scraping
-pub async fn scrape_schedule(url_struct: &CONNECTINFO) -> Option<String> {
-
-    match perform_scrape_schedule(url_struct).await {
+    // Do the actual scrape
+    match perform_schedule_scrape(connect_info).await {
         Ok(()) => return None,
         Err(err) => return Some(format!("{}", err)),
     };
 }
 
-/// Performs the backend scraping
-async fn perform_scrape_schedule(url_struct: &CONNECTINFO) -> Result<(), WebDriverError> {
-    /* let website_CONNECTINFO : [&str; 5] = ["https://dining.ncsu.edu/location/clark/", "https://dining.ncsu.edu/location/fountain/",
-                                "https://dining.ncsu.edu/location/case/", "https://dining.ncsu.edu/location/university-towers/",
-                                "https://dining.ncsu.edu/location/one-earth/"];
-     */
+// Performs the scraping
+async fn perform_schedule_scrape(connect_info: &ConnectInfo) -> Result<(), WebDriverError> {
+    // Website to scrape scheduler
+    // let websites = "https://portalsp.acs.ncsu.edu/"
 
-    
-    let driver = match start_chromedriver(url_struct).await {
+    let driver = match start_chromedriver(connect_info).await {
         Ok(webdriver) => webdriver,
         Err(err) => {
             println!("{}", err);

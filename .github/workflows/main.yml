@@ -50,8 +50,45 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: 'Plover v__VERSION__'
+          releaseBody: |
+            # Plover v__VERSION__ Release
+
+            PRE-ALPHA WE AINT EVEN GOT ANY FEATURES IN HERE YET IT BARELY GETS OFF THE GROUND
+
+            ## What's New
+            - IT RUNS HALLELUJIAHAH
+
+            ## Installation Instructions
+
+            ### Windows
+            - Download the `.exe` file
+            - Run the installer and follow the on-screen instructions (if there are any?? I didn't make any...)
+
+            ### macOS
+            - Download the appropriate `.dmg` file for your Mac (Intel or Apple Silicon)
+            - Open the DMG file and drag the Plover app to your Applications folder
+
+            ### Linux
+            - For Ubuntu and Debian-based distributions: Download and install the `.deb` file
+            - For other distributions: Use the `.AppImage` file (make it executable with `chmod +x`)
+
+            ## Additional Information
+            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/plover)
+            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/plover/issues)
+
+            Thank you for using Plover! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-artifacts
+          path: |
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.tar.gz
+          if-no-files-found: error

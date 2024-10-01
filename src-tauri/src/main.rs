@@ -3,7 +3,6 @@
 
 mod program_setup;
 mod tauri_command_backends;
-mod macros;
 mod chrome_functions;
 
 use program_setup::*;
@@ -20,20 +19,26 @@ use anyhow::Result;
 //use rusqlite::{Connection, Result};
 
 
-// Assuming CONNECTINFO is defined elsewhere
+// AppState to allow for this struct to be passed into functions via Tauri without needing 
+// Global variable. Arc makes it read-only across threads, and mutex makes it writeable on
+// one thread at a time. Acts like a singleton
 struct AppState {
-    connect_info: Arc<Mutex<CONNECTINFO>>,
+    connect_info: Arc<Mutex<ConnectInfo>>,
 }
 
-// Define the ChromeDriver version and URL
+// ConnectInfo struct (only one should ever be instantiated)
 #[derive(Debug, Serialize, Deserialize)]
-struct CONNECTINFO {
+struct ConnectInfo {
+    // Base URL body
     chromedriver_url: String,
+    // Naviagtes to specific chromedriver version depending on the os
     os_url: String,
+    // Version of chromedriver installed
     version: String,
 }
 
 
+// TODO: Remove
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -42,15 +47,16 @@ fn greet(name: &str) -> String {
 
 
 #[tauri::command]
-fn start_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
-    // Clone the Arc<Mutex<ConnectInfo>> instead of the ConnectInfo itself
+fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+    // Clone the Arc<Mutex<ConnectInfo>> since that is what we want to use
     let connect_info = Arc::clone(&state.connect_info);
     
+    // Create new thread so this can run async
     thread::spawn(move || {
-        // Create a new runtime for this thread
+        // Runtime will allow an async function to run in a sync context
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
-        // Use the runtime to run our async function
+        // Run async function to completion since we cannot return a Future object
         let result = rt.block_on(async {
             // Acquire the lock inside the async block
             let connect_info = match connect_info.lock() {
@@ -58,38 +64,37 @@ fn start_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Res
                 Err(e) => return Some(format!("Failed to acquire lock: {}", e)),
             };
             
-            scrape_schedule(&connect_info).await
+            // Check if schedule can and should be scraped, and if so do it
+            check_schedule_scrape(&connect_info).await
         });
 
-        // Send the result back to the main thread
+        // Send the result back to listener on the main thread in App.jsx
         let _ = window.emit("scrape_result", &result);
     });
 
     Ok(())
 }
 
-
 fn main() -> Result<()> {
     // Ensure chrome driver is, in fact, not running when the file is run
     let _ = quit_chromedriver();
+
     // Enable backtracing
     std::env::set_var("RUST_BACKTRACE", "1");
 
+    // Run Tauri application
     tauri::Builder::default()
         .setup(|app| {
-            // Perform the setup within the Tauri setup closure
+            // Setup the program
             let connection_struct = setup_program()?;
-            
-            println!("Program setup complete!");
-
-            // Store the connection_struct in the app's managed state
+            // Store the connection_struct in the app's managed state as Arc and Mutex
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(connection_struct)),
             });
-
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, start_scrape])
+        // Load functions for Tauri to have access to
+        .invoke_handler(tauri::generate_handler![greet, scheduler_scrape])
         .run(tauri::generate_context!())?;
 
     Ok(())
