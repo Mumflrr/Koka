@@ -21,6 +21,11 @@ jobs:
             args: ''
     runs-on: ${{ matrix.platform }}
     steps:
+    
+      - name: List build directory
+        run: ls -R src-tauri/target/release/bundle
+
+  
       - uses: actions/checkout@v4
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
