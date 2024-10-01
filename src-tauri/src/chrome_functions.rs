@@ -1,14 +1,14 @@
-use std::{env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command};
-
+// Dependency is only able to be loaded on unix systems
 #[cfg(not(target_os = "windows"))] 
     use std::os::unix::fs::PermissionsExt;
-
+use std::{env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command};
 use reqwest::blocking::get;
 use thirtyfour::{ChromiumLikeCapabilities, DesiredCapabilities, WebDriver};
 use zip::ZipArchive;
 
-use crate::{context_error, CONNECTINFO};
+use crate::ConnectInfo;
 
+// Get path of chromedriver
 pub fn get_chromedriver_path() -> PathBuf {
     let mut path = std::env::current_dir().expect("Failed to get current directory");
     path.push("resources");
@@ -19,16 +19,19 @@ pub fn get_chromedriver_path() -> PathBuf {
     path
 }
 
-fn get_version(url_struct: &mut CONNECTINFO) -> Result<(), anyhow::Error> {
-    let url = format!("{}LATEST_RELEASE", url_struct.chromedriver_url.as_str());
+// Get version of chromedriver/chrome to use from the lastest version of chromedriver available
+// since that is the limting factor between the two
+fn get_version(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
+    let url = format!("{}LATEST_RELEASE", connect_info.chromedriver_url.as_str());
     let client = reqwest::blocking::Client::new();
 
-    url_struct.version =  context_error!(client.get(url).send()?.text(), "test")?;
+    connect_info.version =  client.get(url).send()?.text()?;
 
     Ok(())
 }
 
-pub fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::Error>> {
+// Setup chrome binary
+fn chrome_binary_setup(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
     // Install @puppeteer/browsers
     let pnpm_command = if cfg!(target_os = "windows") { "pnpm.cmd" } else { "pnpm" };
     
@@ -47,22 +50,22 @@ pub fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::
             "dlx",
             "@puppeteer/browsers",
             "install",
-            &format!("chrome@{}", url_struct.version),
+            &format!("chrome@{}", connect_info.version),
             "--path",
             chrome_path.to_str().unwrap(),
         ])
         .output()?;
 
 
-    let path_buf = get_chrome_binary_path(url_struct);
-
-    // Get the current file metadata
-    let metadata = fs::metadata(&path_buf)?;
-
-    // Get the current permissions
-    let mut permissions = metadata.permissions();
-
     #[cfg(unix)] {
+        let path_buf = get_chrome_binary_path(connect_info);
+
+        // Get the current file metadata
+        let metadata = fs::metadata(&path_buf)?;
+    
+        // Get the current permissions
+        let mut permissions = metadata.permissions();
+
         // Set the permission to be executable by the owner (u+x)
         // This sets the permission bits to 0o755 (read, write, and execute for the owner, and read+execute for others)
         permissions.set_mode(0o755);
@@ -74,7 +77,8 @@ pub fn chrome_setup(url_struct: &CONNECTINFO) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-pub fn chromedriver_setup(url_struct: &mut CONNECTINFO) -> Result<bool, anyhow::Error> {
+// Setup chromedriver
+pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
     // Get chrome driver path (if exists)
     let chromedriver_path = get_chromedriver_path();
 
@@ -84,9 +88,9 @@ pub fn chromedriver_setup(url_struct: &mut CONNECTINFO) -> Result<bool, anyhow::
         let resources_path = chromedriver_path.parent().unwrap().to_path_buf();
 
         // Get latest chrome driver version
-        get_version(url_struct)?;
+        get_version(connect_info)?;
 
-        let download_url = format!("{}{}{}", url_struct.chromedriver_url.as_str(), url_struct.version, url_struct.os_url.as_str());
+        let download_url = format!("{}{}{}", connect_info.chromedriver_url.as_str(), connect_info.version, connect_info.os_url.as_str());
 
         let response = get(download_url)?;
         let mut file = File::create(resources_path.join("chromedriver.zip"))?;
@@ -98,23 +102,25 @@ pub fn chromedriver_setup(url_struct: &mut CONNECTINFO) -> Result<bool, anyhow::
 
         archive.extract(resources_path)?;
 
-        Ok(false)
+        chrome_binary_setup(connect_info)?;
+
+        println!("Chromium setup!");
+
+        Ok(())
 
     } else {
-        match get_version(url_struct) {
-            Ok(()) => println!("ChromeDriver and Chromeium are already installed."),
-            Err(_err) => panic!("Unable to setup ChromeDriver and Chromium"),
-        };
-        Ok(true)
+        println!("Chromium already setup!");
+        get_version(connect_info)?;
+        Ok(())
     }
 
 }
 
 
-pub async fn start_chromedriver(url_struct: &CONNECTINFO) -> Result<WebDriver, Box<dyn std::error::Error>> {
+pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, Box<dyn std::error::Error>> {
     // Set up WebDriver
     let mut caps = DesiredCapabilities::chrome();
-    let path_buf = get_chrome_binary_path(url_struct);
+    let path_buf = get_chrome_binary_path(connect_info);
     let path = format!("{}", path_buf.display());
 
     caps.set_binary(&path)?;
@@ -151,7 +157,7 @@ pub async fn start_chromedriver(url_struct: &CONNECTINFO) -> Result<WebDriver, B
     };
 }
 
-pub fn get_chrome_binary_path(url_struct: &CONNECTINFO) -> PathBuf {
+pub fn get_chrome_binary_path(connect_info: &ConnectInfo) -> PathBuf {
     // Set the path to your custom Chrome binary
     let mut path_buf = std::env::current_dir().expect("Failed to get current directory");
     path_buf.push("resources");
@@ -162,7 +168,7 @@ pub fn get_chrome_binary_path(url_struct: &CONNECTINFO) -> PathBuf {
     let mut name = String::from("");
     for path in paths {
         name = format!("{}", path.unwrap().path().display());
-        if name.contains(&url_struct.version) {
+        if name.contains(&connect_info.version) {
             break;
         }
     }
