@@ -21,11 +21,6 @@ jobs:
             args: ''
     runs-on: ${{ matrix.platform }}
     steps:
-    
-      - name: List build directory
-        run: ls -R src-tauri/target/release/bundle
-
-  
       - uses: actions/checkout@v4
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
@@ -86,14 +81,3 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: release-artifacts
-          path: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.tar.gz
-          if-no-files-found: error
