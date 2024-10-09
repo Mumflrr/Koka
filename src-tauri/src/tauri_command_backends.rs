@@ -12,9 +12,9 @@ pub async fn check_schedule_scrape(connect_info: &ConnectInfo) -> Option<String>
 }
 
 // Performs the scraping
-async fn perform_schedule_scrape(connect_info: &ConnectInfo) -> Result<(), WebDriverError> {
+async fn perform_schedule_scrape(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
     // Website to scrape scheduler
-    // let websites = "https://portalsp.acs.ncsu.edu/"
+    //let websites = "https://portalsp.acs.ncsu.edu/"
 
     let driver = match start_chromedriver(connect_info).await {
         Ok(webdriver) => webdriver,

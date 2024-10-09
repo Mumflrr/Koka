@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use anyhow::Result;
-//use rusqlite::{Connection, Result};
 
 
 // AppState to allow for this struct to be passed into functions via Tauri without needing 
@@ -29,10 +28,8 @@ struct AppState {
 // ConnectInfo struct (only one should ever be instantiated)
 #[derive(Debug, Serialize, Deserialize)]
 struct ConnectInfo {
-    // Base URL body
-    chromedriver_url: String,
     // Naviagtes to specific chromedriver version depending on the os
-    os_url: String,
+    os: String,
     // Version of chromedriver installed
     version: String,
 }
@@ -76,9 +73,6 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 }
 
 fn main() -> Result<()> {
-    // Ensure chrome driver is, in fact, not running when the file is run
-    let _ = quit_chromedriver();
-
     // Enable backtracing
     std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -86,11 +80,54 @@ fn main() -> Result<()> {
     tauri::Builder::default()
         .setup(|app| {
             // Setup the program
-            let connection_struct = setup_program()?;
+            let connection_struct = setup_program().unwrap();
             // Store the connection_struct in the app's managed state as Arc and Mutex
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(connection_struct)),
             });
+
+
+            /*
+ ____    ___                                   
+/\  _`\ /\_ \                                  
+\ \ \L\ \//\ \     ___   __  __     __   _ __  
+ \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
+  \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
+   \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
+    \/_/   \/____/\/___/  \/__/   \/____/ \/_/  
+  */
+
+
+ /*
+           _____                    _____           _______                   _____                    _____                    _____          
+         /\    \                  /\    \         /::\    \                 /\    \                  /\    \                  /\    \         
+        /::\    \                /::\____\       /::::\    \               /::\____\                /::\    \                /::\    \        
+       /::::\    \              /:::/    /      /::::::\    \             /:::/    /               /::::\    \              /::::\    \       
+      /::::::\    \            /:::/    /      /::::::::\    \           /:::/    /               /::::::\    \            /::::::\    \      
+     /:::/\:::\    \          /:::/    /      /:::/~~\:::\    \         /:::/    /               /:::/\:::\    \          /:::/\:::\    \     
+    /:::/__\:::\    \        /:::/    /      /:::/    \:::\    \       /:::/____/               /:::/__\:::\    \        /:::/__\:::\    \    
+   /::::\   \:::\    \      /:::/    /      /:::/    / \:::\    \      |::|    |               /::::\   \:::\    \      /::::\   \:::\    \   
+  /::::::\   \:::\    \    /:::/    /      /:::/____/   \:::\____\     |::|    |     _____    /::::::\   \:::\    \    /::::::\   \:::\    \  
+ /:::/\:::\   \:::\____\  /:::/    /      |:::|    |     |:::|    |    |::|    |    /\    \  /:::/\:::\   \:::\    \  /:::/\:::\   \:::\____\ 
+/:::/  \:::\   \:::|    |/:::/____/       |:::|____|     |:::|    |    |::|    |   /::\____\/:::/__\:::\   \:::\____\/:::/  \:::\   \:::|    |
+\::/    \:::\  /:::|____|\:::\    \        \:::\    \   /:::/    /     |::|    |  /:::/    /\:::\   \:::\   \::/    /\::/   |::::\  /:::|____|
+ \/_____/\:::\/:::/    /  \:::\    \        \:::\    \ /:::/    /      |::|    | /:::/    /  \:::\   \:::\   \/____/  \/____|:::::\/:::/    / 
+          \::::::/    /    \:::\    \        \:::\    /:::/    /       |::|____|/:::/    /    \:::\   \:::\    \            |:::::::::/    /  
+           \::::/    /      \:::\    \        \:::\__/:::/    /        |:::::::::::/    /      \:::\   \:::\____\           |::|\::::/    /   
+            \::/____/        \:::\    \        \::::::::/    /         \::::::::::/____/        \:::\   \::/    /           |::| \::/____/    
+             ~~               \:::\    \        \::::::/    /           ~~~~~~~~~~               \:::\   \/____/            |::|  ~|          
+                               \:::\    \        \::::/    /                                      \:::\    \                |::|   |          
+                                \:::\____\        \::/____/                                        \:::\____\               \::|   |          
+                                 \::/    /         ~~                                               \::/    /                \:|   |          
+                                  \/____/                                                            \/____/                  \|___|      
+                                   */
+
+
+
+            let ascii = r#""#;
+
+            println!("{ascii}");
+
             Ok(())
         })
         // Load functions for Tauri to have access to

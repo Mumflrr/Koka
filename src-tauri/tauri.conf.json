@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "plover",
+    "productName": "Plover",
     "version": "0.1.0"
   },
   "tauri": {
@@ -19,7 +19,7 @@
     },
     "windows": [
       {
-        "title": "plover",
+        "title": "Plover",
         "width": 800,
         "height": 600
       }

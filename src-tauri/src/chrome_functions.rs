@@ -1,194 +1,63 @@
-// Dependency is only able to be loaded on unix systems
 #[cfg(not(target_os = "windows"))] 
-    use std::os::unix::fs::PermissionsExt;
-use std::{env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command};
-use reqwest::blocking::get;
+use std::os::unix::fs::PermissionsExt;
+use std::{collections::HashMap, env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command};
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use thirtyfour::{ChromiumLikeCapabilities, DesiredCapabilities, WebDriver};
 use zip::ZipArchive;
+use anyhow::Context;
+use rusqlite::{params, Connection, Result};
 
 use crate::ConnectInfo;
 
-// Get path of chromedriver
-pub fn get_chromedriver_path() -> PathBuf {
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LatestVersion {
+    timestamp: String,
+    channels: HashMap<String, Channel>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Channel {
+    channel: String,
+    version: String,
+    revision: String,
+}
+
+pub fn get_version(connect_info: &mut ConnectInfo) -> Result<String, anyhow::Error> {
+    let old_version = connect_info.version.clone();
+    let client = Client::new();
+    let url = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json";
+    
+    let response: LatestVersion = client.get(url)
+        .send().context("Get version: Unable to send request to get version")?
+        .json().context("Get version: Unable to deseralize version response to JSON")?;
+
+    connect_info.version = String::from(response.channels.get("Stable").unwrap().version.clone());
+
+    let conn = Connection::open("programData.db")?;
+    conn.execute("UPDATE data SET version = ?1 WHERE id = 0", params![connect_info.version])?;
+
+    Ok(old_version)
+}
+
+fn get_chromedriver_path(connect_info: &ConnectInfo) -> PathBuf {
     let mut path = std::env::current_dir().expect("Failed to get current directory");
     path.push("resources");
+    path.push(format!("chromedriver-{}", connect_info.os));
     path.push("chromedriver");
     if cfg!(target_os = "windows") {
         path.set_extension("exe");
     }
+
     path
 }
 
-// Get version of chromedriver/chrome to use from the lastest version of chromedriver available
-// since that is the limting factor between the two
-fn get_version(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
-    let url = format!("{}LATEST_RELEASE", connect_info.chromedriver_url.as_str());
-    let client = reqwest::blocking::Client::new();
+fn get_chromebinary_path(connect_info: &ConnectInfo) -> PathBuf {
+    let mut path_buf = std::env::current_dir().expect("Failed to get current directory")
+        .join("resources")
+        .join(format!("chrome-{}", connect_info.os));
 
-    connect_info.version =  client.get(url).send()?.text()?;
-
-    Ok(())
-}
-
-// Setup chrome binary
-fn chrome_binary_setup(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
-    // Install @puppeteer/browsers
-    let pnpm_command = if cfg!(target_os = "windows") { "pnpm.cmd" } else { "pnpm" };
-    Command::new(pnpm_command)
-        .args(&["add", "-g", "@puppeteer/browsers@2.4.0"])
-        .output()?;
-
-    println!("@puppeteer/browsers@2.4.0 installed successfully");
-
-    // Get directory to install chrome
-    let mut chrome_path = std::env::current_dir().expect("Failed to get current directory");
-    chrome_path.push("resources");
-
-    // Install Chrome to the specified path
-    Command::new(pnpm_command)
-        .args(&[
-            "dlx",
-            "@puppeteer/browsers",
-            "install",
-            &format!("chrome@{}", connect_info.version),
-            "--path",
-            chrome_path.to_str().unwrap(),
-        ])
-        .output()?;
-
-
-    // Change permission if on a unix system (may have to revisit for windows)
-    #[cfg(unix)] {
-        let path_buf = get_chrome_binary_path(connect_info);
-
-        // Get the current file metadata
-        let metadata = fs::metadata(&path_buf)?;
-    
-        // Get the current permissions
-        let mut permissions = metadata.permissions();
-
-        // Set the permission to be executable by the owner (u+x)
-        // This sets the permission bits to 0o755 (read, write, and execute for the owner, and read+execute for others)
-        permissions.set_mode(0o755);
-
-        // Apply the new permissions to the file or directory
-        fs::set_permissions(&path_buf, permissions)?;
-    }
-
-    Ok(())
-}
-
-// Setup chromedriver and chrome if needed
-pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
-    // Get chrome driver path (if exists)
-    let chromedriver_path = get_chromedriver_path();
-
-    // Check if ChromeDriver is installed
-    if !chromedriver_path.exists() {
-        println!("ChromeDriver not found. Installing...");
-        let resources_path = chromedriver_path.parent().unwrap().to_path_buf();
-
-        // Get latest chrome driver version
-        get_version(connect_info)?;
-
-        // Make url to download chromedriver
-        let download_url = format!("{}{}{}", connect_info.chromedriver_url.as_str(), connect_info.version, connect_info.os_url.as_str());
-        // Get data
-        let response = get(download_url)?;
-        // Make a file to chromedriver zip
-        let mut file = File::create(resources_path.join("chromedriver.zip"))?;
-        // Copy data from chromedriver as chromedriver zip
-        copy(&mut response.bytes()?.as_ref(), &mut file)?;
-
-        // Extract ChromeDriver
-        let zip_file = File::open(resources_path.join("chromedriver.zip"))?;
-        let mut archive = ZipArchive::new(BufReader::new(zip_file))?;
-        archive.extract(resources_path)?;
-
-        // Since chromedriver had to be setup, also setup chrome
-        chrome_binary_setup(connect_info)?;
-
-        println!("Chromium setup!");
-
-        Ok(())
-
-    } else {
-        println!("Chromium already setup!");
-        get_version(connect_info)?;
-        Ok(())
-    }
-
-}
-
-
-pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, Box<dyn std::error::Error>> {
-    // Set up WebDriver
-    let mut caps = DesiredCapabilities::chrome();
-    let path_buf = get_chrome_binary_path(connect_info);
-    let path = format!("{}", path_buf.display());
-
-    caps.set_binary(&path)?;
-
-    // Start ChromeDriver exe
-    let _chromedriver = Command::new(get_chromedriver_path())
-    .arg("--port=9515")
-    .arg("--verbose")
-    .arg("--log-path=chromedriver.log")
-    .spawn()
-    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>);
-
-    // Wait for ChromeDriver to start and be accessible
-    let max_retries = 5;
-    for _ in 0..max_retries {
-        if TcpStream::connect("localhost:9515").is_ok() {
-            println!("ChromeDriver is running on port 9515");
-            break;
-        } else {
-            println!("Waiting for ChromeDriver to start...");
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        }
-    }
-
-    // Make new webdrier session at localhost:9515
-    let driver = WebDriver::new("http://localhost:9515", caps).await
-        .map_err(|e| {
-            eprintln!("WebDriver error: {:?}", e);
-            e
-    });
-
-    // Error catching
-    match driver {
-        Ok(_) => return Ok(driver.unwrap()),
-        Err(err) => panic!("Error: {}", err),
-    };
-}
-
-// Get the path of the chrome binary
-pub fn get_chrome_binary_path(connect_info: &ConnectInfo) -> PathBuf {
-    // Set the path to chrome folder
-    let mut path_buf = std::env::current_dir().expect("Failed to get current directory");
-    path_buf.push("resources");
-    path_buf.push("chrome");
-
-    // Find chromium binary folder inside of chrome folder for our version
-    let paths = fs::read_dir(&path_buf).unwrap();
-    let mut name = String::from("");
-    for path in paths {
-        name = format!("{}", path.unwrap().path().display());
-        if name.contains(&connect_info.version) {
-            break;
-        }
-    }
-    path_buf.push(&name);
-
-    // There should be only one folder in this folder, so get it too
-    let paths = fs::read_dir(&path_buf).unwrap();
-    for path in paths {
-        name = format!("{}", path.unwrap().path().display());
-    }
-    path_buf.push(&name);
-
-    // Cross-platform compatibility since different os will have different path endings
     match env::consts::OS {
         "macos" => {
             path_buf.push("Google Chrome for Testing.app");
@@ -206,4 +75,179 @@ pub fn get_chrome_binary_path(connect_info: &ConnectInfo) -> PathBuf {
     }
 
     path_buf
+}
+
+
+fn chromebinary_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
+    let client = Client::new();
+
+    // Create resources directory and construct paths
+    let resources_path = std::env::current_dir()
+        .context("CB Setup: Failed to get current directory")?
+        .join("resources");
+
+    // Construct download URL
+    let download_url = format!(
+        "https://storage.googleapis.com/chrome-for-testing-public/{}/{}/chrome-{}.zip",
+        connect_info.version,
+        connect_info.os,
+        connect_info.os
+    );
+    println!("Downloading Chrome from: {}", download_url);
+
+    // Get response from website
+    let response = client.get(&download_url)
+        .send()
+        .context("CB Setup: Failed to download Chrome")?;
+
+    // Construct filename and add it to path to downlaod
+    let filename = format!("chrome-{}.zip", connect_info.os);
+    // Create zip file to save response into
+    let zip_path = resources_path.join(&filename);
+    let mut output_file = File::create(&zip_path)
+        .context("CB Setup: Failed to create output file")?;
+    
+    // Copy response into the output zip file
+    copy(
+        &mut response.bytes().context("Failed to get ChromeBinary response bytes")?.as_ref(),
+        &mut output_file
+    ).context("CB Setup: Failed to write Chrome archive to file")?;
+
+    // Open the zip file
+    let zip_file = File::open(&zip_path)
+        .context("CB Setup: Failed to open ZIP file")?;
+    // Extract the zip file
+    let mut archive = ZipArchive::new(BufReader::new(zip_file))
+        .context("CB Setup: Failed to make ZIP archive")?;
+    archive.extract(&resources_path)
+        .context("CB Setup: Failed to extract Chrome from ZIP archive")?;
+
+    // Clean up the zip file
+    fs::remove_file(zip_path).context("CB Setup: Failed to remove downloaded archive")?;
+    Ok(())
+}
+
+fn chromedriver_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {    
+    let client = Client::new();
+
+    // Create resources directory and construct paths
+    let resources_path = std::env::current_dir()
+        .context("CD Setup: Failed to get current directory")?
+        .join("resources");
+
+    // Construct download URL
+    let download_url = format!(
+        "https://storage.googleapis.com/chrome-for-testing-public/{}/{}/chromedriver-{}.zip",
+        connect_info.version,
+        connect_info.os,
+        connect_info.os
+    );
+    println!("Downloading ChromeDriver from: {}", download_url);
+
+    // Get response from website
+    let response = client.get(&download_url)
+        .send()
+        .context("CD Setup: Failed to download ChromeDriver")?;
+    
+    // Construct filename and add it to path to downlaod
+    let filename = format!("chromedriver-{}.zip", connect_info.os);
+    // Create zip file to save response into
+    let zip_path = resources_path.join(&filename);
+
+    let mut output_file = File::create(&zip_path)
+        .context("CD Setup: Failed to create output file")?;
+    
+    // Copy response into the output zip file
+    copy(
+        &mut response.bytes().context("CD Setup: Failed to get ChromeDriver response bytes")?.as_ref(),
+        &mut output_file
+    ).context("CD Setup: Failed to write ChromeDriver archive to file")?;
+
+    // Open the zip file
+    let zip_file = File::open(&zip_path)
+        .context("CD Setup: Failed to open ZIP file")?;
+    // Extract the zip file
+    let mut archive = ZipArchive::new(BufReader::new(zip_file))
+        .context("CD Setup: Failed to make ZIP archive")?;
+    archive.extract(&resources_path)
+        .context("CD Setup: Failed to extract ChromeDriver from ZIP archive")?;
+
+    // Set executable permissions on Unix systems
+    #[cfg(unix)] {
+        let binary_path = get_chromedriver_path(connect_info);
+        fs::set_permissions(&binary_path, fs::Permissions::from_mode(0o755))
+            .context("CD Setup: Failed to set executable permissions")?;
+    }
+
+    // Clean up the zip file
+    fs::remove_file(zip_path).context("CD Setup: Failed to remove downloaded archive")?;
+
+    Ok(())
+}
+    
+
+pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
+    // Create resources directory and construct paths
+    let file_path = std::env::current_dir()
+        .context("C Setup: Failed to get current directory")?
+        .join("resources");
+
+    // Check directory status and handle accordingly
+    match file_path.try_exists() {
+        Ok(exists) => {
+            if exists {
+                println!("Resources directory already exists");
+                // Optionally verify contents or update as needed (CHECK THROUGH SAVE FILE)
+                if get_version(connect_info).unwrap() != connect_info.version {
+                    println!("Updating existing resources...");
+                    // Remove directory
+                    fs::remove_dir_all(file_path.clone())?;
+                    fs::create_dir_all(file_path)?;
+                    chromedriver_setup(connect_info)?;
+                    chromebinary_setup(connect_info)?;
+                }
+            } else {
+                println!("Creating resources directory...");
+                fs::create_dir_all(&file_path)
+                    .context("Failed to create resources directory")?;
+                
+                chromedriver_setup(connect_info)?;
+                println!("ChromeDriver setup complete");
+                
+                chromebinary_setup(connect_info)?;
+                println!("Chromium setup complete");
+            }
+        },
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to check if resources directory exists: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, anyhow::Error> {
+    let mut caps = DesiredCapabilities::chrome();
+    let path_buf = get_chromebinary_path(connect_info);
+    caps.set_binary(&path_buf.to_string_lossy()).context("Unable to set binary")?;
+
+    let _chromedriver = Command::new(get_chromedriver_path(connect_info))
+        .args(["--port=9515", "--verbose", "--log-path=chromedriver.log"])
+        .spawn()
+        .map_err(|e| anyhow::Error::new(e) as anyhow::Error).context("Unable to start CD")?;
+
+    for _ in 0..5 {
+        if TcpStream::connect("localhost:9515").is_ok() {
+            println!("ChromeDriver is running on port 9515");
+            break;
+        }
+        println!("Waiting for ChromeDriver to start...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    }
+
+    WebDriver::new("http://localhost:9515", caps).await
+        .map_err(|e| {
+            eprintln!("WebDriver error: {:?}", e);
+            anyhow::Error::new(e) as anyhow::Error
+        })
 }

@@ -3,6 +3,21 @@
 version = 3
 
 [[package]]
+name = "Plover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest 0.11.27",
+ "rusqlite",
+ "serde",
+ "tauri",
+ "tauri-build",
+ "thirtyfour",
+ "tokio",
+ "zip",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -414,17 +429,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "cookie"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e859cd57d0710d9e06c381b550c06e76992472a8c6d527aecd2fc673dcc231fb"
-dependencies = [
- "percent-encoding",
- "time 0.3.36",
- "version_check",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -735,28 +739,6 @@ name = "fallible-streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
-
-[[package]]
-name = "fantoccini"
-version = "0.19.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65f0fbe245d714b596ba5802b46f937f5ce68dcae0f32f9a70b5c3b04d3c6f64"
-dependencies = [
- "base64 0.13.1",
- "cookie",
- "futures-core",
- "futures-util",
- "http 0.2.12",
- "hyper 0.14.30",
- "hyper-tls",
- "mime",
- "serde",
- "serde_json",
- "time 0.3.36",
- "tokio",
- "url",
- "webdriver",
-]
 
 [[package]]
 name = "fastrand"
@@ -2352,24 +2334,6 @@ dependencies = [
  "quick-xml",
  "serde",
  "time 0.3.36",
-]
-
-[[package]]
-name = "plover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fantoccini",
- "reqwest 0.11.27",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "thirtyfour",
- "thiserror",
- "tokio",
- "zip",
 ]
 
 [[package]]
@@ -4236,25 +4200,6 @@ checksum = "26fdeaafd9bd129f65e7c031593c24d62186301e0c72c8978fa1678be7d532c0"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webdriver"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9973cb72c8587d5ad5efdb91e663d36177dc37725e6c90ca86c626b0cc45c93f"
-dependencies = [
- "base64 0.13.1",
- "bytes",
- "cookie",
- "http 0.2.12",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
- "time 0.3.36",
- "unicode-segmentation",
- "url",
 ]
 
 [[package]]
