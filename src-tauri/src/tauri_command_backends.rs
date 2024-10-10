@@ -1,28 +1,39 @@
+use std::sync::Arc;
+
 use thirtyfour::prelude::*;
 use crate::{start_chromedriver, ConnectInfo};
 
-// Checks parameters relating to scraping the schedule
-pub async fn check_schedule_scrape(connect_info: &ConnectInfo) -> Option<String> {
+pub async fn check_schedule_scrape(connect_info_mutex: &Arc<std::sync::Mutex<ConnectInfo>>) -> Result<(), String> {
+    // Acquire lock
+    let connect_info = match connect_info_mutex.lock() {
+        Ok(guard) => guard,
+        Err(e) => return Err(format!("Failed to acquire lock: {}", e)),
+    };
+    
+    // Start chromedriver - pass a reference to the ConnectInfo inside the MutexGuard
+    let driver = match start_chromedriver(&*connect_info).await {
+        Ok(webdriver) => {
+            // If successful, drop the lock and return the webdriver
+            drop(connect_info);
+            webdriver
+        },
+        Err(err) => {
+            // Lock automatically released here when connect_info goes out of scope
+            return Err(format!("Failed to start chromedriver: {}", err));
+        }
+    };
 
     // Do the actual scrape
-    match perform_schedule_scrape(connect_info).await {
-        Ok(()) => return None,
-        Err(err) => return Some(format!("{}", err)),
-    };
+    match perform_schedule_scrape(driver).await {
+        Ok(()) => Ok(()),
+        Err(err) => Err(format!("{}", err)),
+    }
 }
 
 // Performs the scraping
-async fn perform_schedule_scrape(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
+async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Error> {
     // Website to scrape scheduler
     //let websites = "https://portalsp.acs.ncsu.edu/"
-
-    let driver = match start_chromedriver(connect_info).await {
-        Ok(webdriver) => webdriver,
-        Err(err) => {
-            println!("{}", err);
-            panic!("Error!");
-        }
-    };
 
     // Navigate to https://wikipedia.org.
     driver.goto("https://wikipedia.org").await?;

@@ -55,12 +55,6 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 
         // Run async function to completion since we cannot return a Future object
         let result = rt.block_on(async {
-            // Acquire the lock inside the async block
-            let connect_info = match connect_info.lock() {
-                Ok(guard) => guard,
-                Err(e) => return Some(format!("Failed to acquire lock: {}", e)),
-            };
-            
             // Check if schedule can and should be scraped, and if so do it
             check_schedule_scrape(&connect_info).await
         });
@@ -79,24 +73,13 @@ fn main() -> Result<()> {
     // Run Tauri application
     tauri::Builder::default()
         .setup(|app| {
-            // Setup the program
-            let connection_struct = setup_program().unwrap();
+            // Setup the program and save resulting struct
+            let connection_struct = setup_program().unwrap_or_else(|err| panic!("Error: '{err}'"));
+
             // Store the connection_struct in the app's managed state as Arc and Mutex
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(connection_struct)),
             });
-
-
-            /*
- ____    ___                                   
-/\  _`\ /\_ \                                  
-\ \ \L\ \//\ \     ___   __  __     __   _ __  
- \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
-  \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
-   \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
-    \/_/   \/____/\/___/  \/__/   \/____/ \/_/  
-  */
-
 
  /*
            _____                    _____           _______                   _____                    _____                    _____          
@@ -124,7 +107,14 @@ fn main() -> Result<()> {
 
 
 
-            let ascii = r#""#;
+            let ascii = r#" 
+   ____    ___                                   
+  /\  _`\ /\_ \                                  
+  \ \ \L\ \//\ \     ___   __  __     __   _ __  
+   \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
+    \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
+     \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
+      \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
 
             println!("{ascii}");
 

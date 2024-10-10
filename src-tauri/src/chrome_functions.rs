@@ -39,7 +39,7 @@ pub fn get_version(connect_info: &mut ConnectInfo) -> Result<String, anyhow::Err
         .json()?;
 
     // Store response in atomic struct
-    connect_info.version = String::from(response.channels.get("Stable").unwrap().version.clone());
+    connect_info.version = response.channels.get("Stable").unwrap().version.clone();
 
     // Update the database with the current version
     let conn = Connection::open("programData.db")?;
