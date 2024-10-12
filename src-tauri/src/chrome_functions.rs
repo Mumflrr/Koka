@@ -10,6 +10,60 @@ use rusqlite::{params, Connection, Result};
 
 use crate::ConnectInfo;
 
+// Make sure chromedriver is not running (for windows machine)
+#[cfg(target_os = "windows")]
+pub fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+    let output = Command::new("tasklist")
+        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
+        .output()?;
+
+    let output_str = String::from_utf8(output.stdout)?;
+    
+    if output_str.contains("chromedriver.exe") {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("taskkill")
+            .args(&["/F", "/IM", "chromedriver.exe"])
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(anyhow::anyhow!("Failed to terminate ChromDriver: {}", error_message));
+        }
+    } else {
+        println!("No chromedriver processes found.");
+    }
+
+    Ok(())
+}
+
+// Make sure chromedriver is not running (for macos and linux machines)
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn quit_chromedriver() -> Result<(), anyhow::Error> {
+    let output = Command::new("pgrep")
+        .arg("chromedriver")
+        .output()?;
+
+    if !output.stdout.is_empty() {
+        println!("Chromedriver processes found. Terminating...");
+        let kill_output = Command::new("pkill")
+            .arg("chromedriver")
+            .output()?;
+
+        if kill_output.status.success() {
+            println!("All chromedriver processes have been terminated.");
+        } else {
+            let error_message = String::from_utf8(kill_output.stderr)?;
+            return Err(anyhow::anyhow!("Failed to terminate ChromDriver: {}", error_message));
+        }
+    } else {
+        println!("No chromedriver processes found to kill.");
+    }
+
+    Ok(())
+}
+
 // Struct to read in the latest version from JSON
 #[derive(Debug, Serialize, Deserialize)]
 struct LatestVersion {
@@ -137,7 +191,7 @@ fn chromebinary_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn chromedriver_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {    
+fn chromedriver_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {   
     let client = Client::new();
 
     // Create resources directory and construct paths
@@ -200,12 +254,13 @@ pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error>
         Ok(exists) => {
             if exists { // If it exists check if versions need to be updated
                 println!("Resources directory already exists");
+                println!("Previous version: {}, new version: {}", get_version(connect_info).unwrap(), connect_info.version);
                 if get_version(connect_info).unwrap() != connect_info.version {
                     // If we need to update then remove directory, create it, and re-setup cd + binary
                     println!("Updating existing resources...");
                     
                     fs::remove_dir_all(file_path.clone())?;
-                    fs::create_dir_all(file_path)?;
+                    fs::create_dir_all(file_path.clone())?;
                     
                     chromedriver_setup(connect_info)?;
                     chromebinary_setup(connect_info)?;
@@ -226,11 +281,28 @@ pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error>
         }
     }
 
+    // Check install was valid
+    let files = fs::read_dir(file_path.clone()).unwrap();
+    for file in files {
+        if file.as_ref().unwrap().path().is_dir() || file.unwrap().path().extension().unwrap().to_str().unwrap() == ".DS_Store" {
+            continue;
+        }
+        fs::remove_dir_all(file_path.clone())?;
+        fs::create_dir_all(file_path.clone())?;
+                    
+        chromedriver_setup(connect_info)?;
+        chromebinary_setup(connect_info)?;
+
+        return Err(anyhow::anyhow!("Unable to setup resources"));
+    }
+
     Ok(())
 }
 
 pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, anyhow::Error> {
     // Get path to chromedriver exe and set path to that binary
+    quit_chromedriver()?;
+    
     let mut caps = DesiredCapabilities::chrome();
     let path_buf = get_chromebinary_path(connect_info);
     caps.set_binary(&path_buf.to_string_lossy()).context("Unable to set binary")?;

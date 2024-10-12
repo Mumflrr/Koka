@@ -13,7 +13,7 @@ use chrome_functions::*;
 use serde::{Serialize, Deserialize};
 use std::env;
 use std::sync::Arc;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use std::thread;
 use anyhow::Result;
 
@@ -53,16 +53,16 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
         // Runtime will allow an async function to run in a sync context
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
-        // Run async function to completion since we cannot return a Future object
-        let result = rt.block_on(async {
-            // Check if schedule can and should be scraped, and if so do it
+        // Run check schedule scrape, if successful return unit type, otherwise return error
+        match rt.block_on(async {
             check_schedule_scrape(&connect_info).await
-        });
-
-        // Send the result back to listener on the main thread in App.jsx
-        let _ = window.emit("scrape_result", &result);
+        }) {
+            Ok(()) => return window.emit("scrape_result", ()),
+            Err(err) => return window.emit("scrape_result", format!("{}", err)),
+        }
     });
 
+    // Put this shere so program doesn't freak out 
     Ok(())
 }
 
