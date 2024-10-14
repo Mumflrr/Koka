@@ -18,6 +18,10 @@ use std::thread;
 use anyhow::Result;
 
 
+//Add splash screene
+//Add custom menu items
+
+
 // AppState to allow for this struct to be passed into functions via Tauri without needing 
 // Global variable. Arc makes it read-only across threads, and mutex makes it writeable on
 // one thread at a time. Acts like a singleton
@@ -58,7 +62,7 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
             check_schedule_scrape(&connect_info).await
         }) {
             Ok(()) => return window.emit("scrape_result", ()),
-            Err(err) => return window.emit("scrape_result", format!("{}", err)),
+            Err(err) => return window.emit("scrape_result", err.to_string()),
         }
     });
 
@@ -66,46 +70,16 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
     Ok(())
 }
 
-fn main() -> Result<()> {
-    // Enable backtracing
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    // Run Tauri application
     tauri::Builder::default()
         .setup(|app| {
-            // Setup the program and save resulting struct
             let connection_struct = setup_program().unwrap_or_else(|err| panic!("Error: '{err}'"));
 
-            // Store the connection_struct in the app's managed state as Arc and Mutex
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(connection_struct)),
             });
-
- /*
-           _____                    _____           _______                   _____                    _____                    _____          
-         /\    \                  /\    \         /::\    \                 /\    \                  /\    \                  /\    \         
-        /::\    \                /::\____\       /::::\    \               /::\____\                /::\    \                /::\    \        
-       /::::\    \              /:::/    /      /::::::\    \             /:::/    /               /::::\    \              /::::\    \       
-      /::::::\    \            /:::/    /      /::::::::\    \           /:::/    /               /::::::\    \            /::::::\    \      
-     /:::/\:::\    \          /:::/    /      /:::/~~\:::\    \         /:::/    /               /:::/\:::\    \          /:::/\:::\    \     
-    /:::/__\:::\    \        /:::/    /      /:::/    \:::\    \       /:::/____/               /:::/__\:::\    \        /:::/__\:::\    \    
-   /::::\   \:::\    \      /:::/    /      /:::/    / \:::\    \      |::|    |               /::::\   \:::\    \      /::::\   \:::\    \   
-  /::::::\   \:::\    \    /:::/    /      /:::/____/   \:::\____\     |::|    |     _____    /::::::\   \:::\    \    /::::::\   \:::\    \  
- /:::/\:::\   \:::\____\  /:::/    /      |:::|    |     |:::|    |    |::|    |    /\    \  /:::/\:::\   \:::\    \  /:::/\:::\   \:::\____\ 
-/:::/  \:::\   \:::|    |/:::/____/       |:::|____|     |:::|    |    |::|    |   /::\____\/:::/__\:::\   \:::\____\/:::/  \:::\   \:::|    |
-\::/    \:::\  /:::|____|\:::\    \        \:::\    \   /:::/    /     |::|    |  /:::/    /\:::\   \:::\   \::/    /\::/   |::::\  /:::|____|
- \/_____/\:::\/:::/    /  \:::\    \        \:::\    \ /:::/    /      |::|    | /:::/    /  \:::\   \:::\   \/____/  \/____|:::::\/:::/    / 
-          \::::::/    /    \:::\    \        \:::\    /:::/    /       |::|____|/:::/    /    \:::\   \:::\    \            |:::::::::/    /  
-           \::::/    /      \:::\    \        \:::\__/:::/    /        |:::::::::::/    /      \:::\   \:::\____\           |::|\::::/    /   
-            \::/____/        \:::\    \        \::::::::/    /         \::::::::::/____/        \:::\   \::/    /           |::| \::/____/    
-             ~~               \:::\    \        \::::::/    /           ~~~~~~~~~~               \:::\   \/____/            |::|  ~|          
-                               \:::\    \        \::::/    /                                      \:::\    \                |::|   |          
-                                \:::\____\        \::/____/                                        \:::\____\               \::|   |          
-                                 \::/    /         ~~                                               \::/    /                \:|   |          
-                                  \/____/                                                            \/____/                  \|___|      
-                                   */
-
-
 
             let ascii = r#" 
    ____    ___                                   
@@ -120,7 +94,6 @@ fn main() -> Result<()> {
 
             Ok(())
         })
-        // Load functions for Tauri to have access to
         .invoke_handler(tauri::generate_handler![greet, scheduler_scrape])
         .run(tauri::generate_context!())?;
 

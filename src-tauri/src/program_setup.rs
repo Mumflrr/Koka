@@ -51,6 +51,16 @@ fn check_and_install_dependencies() {
     if Command::new("node").arg("-v").status().is_err() {
         install_node();
     }
+
+    let output = Command::new("pnpm")
+        .current_dir("../src") // adjust this path as needed
+        .arg("install")
+        .arg("react-router-dom")
+        .output()
+        .expect("Failed to execute pnpm install"); 
+    if !output.status.success() {
+        panic!("pnpm install failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 // Install node if not installed
