@@ -6,15 +6,16 @@ import "../App.css";
 
 function Home() {  // Changed from App to Home
 
+  const[isScraping, setIsScraping] = useState(false);
+  const[scrapeStatus, setScrapeStatus] = useState("");
+
   useEffect(() => {
     // Function to close the splash screen
     const closeSplashscreen = async () => {
       try {
         const response = await invoke("close_splashscreen");
-        setCloseStatus(response);
       } catch (error) {
         console.error("Failed to close splash screen:", error);
-        setCloseStatus(`Error closing splash screen: ${error}`);
       }
     };
 
@@ -35,15 +36,10 @@ function Home() {  // Changed from App to Home
       };
     };
 
-    setupListener();
-
+    //setupListener();
     // Call the function to close the splash screen
     closeSplashscreen();
   }, []);
-
-  async function close_splashscreen() {
-    setCloseStatus(await invoke("close_splashscreen"));
-  }
 
   async function schedulerScrape() {
     setIsScraping(true);
@@ -73,6 +69,14 @@ function Home() {  // Changed from App to Home
       </div>
 
       <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+
+      <div className="row">
+        <button onClick={schedulerScrape} disabled={isScraping}>
+          {isScraping ? "Scraping..." : "Start Scrape"}
+        </button>
+      </div>
+
+      <p>{scrapeStatus}</p>
 
     </div>
   );

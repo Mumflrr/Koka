@@ -2,12 +2,11 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "devPath": "http://localhost:1420"
   },
   "package": {
     "productName": "Plover",
-    "version": "0.1.0"
+    "version": "0.0.2"
   },
   "tauri": {
     "allowlist": {
@@ -24,14 +23,17 @@
         "height": 600,
         "label": "main",
         "url": "index.html",
-        "visible": false
+        "visible": true
       },
       {
+        "minWidth": 800,
+        "minHeight": 200,
         "width": 800,
         "height": 200,
         "decorations": false,
         "url": "splashscreen.html",
-        "label": "splashscreen"
+        "label": "splashscreen",
+        "center": true
         }
     ],
     "security": {
