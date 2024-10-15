@@ -6,17 +6,20 @@ mod tauri_command_backends;
 mod chrome_functions;
 
 use program_setup::*;
-use tauri::Manager;
+use tauri::{Manager, Window};
 use tauri_command_backends::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
 use std::env;
 use std::sync::Arc;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use std::thread;
 use anyhow::Result;
-//use rusqlite::{Connection, Result};
+
+
+//Add splash screene
+//Add custom menu items
 
 
 // AppState to allow for this struct to be passed into functions via Tauri without needing 
@@ -29,22 +32,11 @@ struct AppState {
 // ConnectInfo struct (only one should ever be instantiated)
 #[derive(Debug, Serialize, Deserialize)]
 struct ConnectInfo {
-    // Base URL body
-    chromedriver_url: String,
     // Naviagtes to specific chromedriver version depending on the os
-    os_url: String,
+    os: String,
     // Version of chromedriver installed
     version: String,
 }
-
-
-// TODO: Remove
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 
 #[tauri::command]
 fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
@@ -56,45 +48,52 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
         // Runtime will allow an async function to run in a sync context
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
-        // Run async function to completion since we cannot return a Future object
-        let result = rt.block_on(async {
-            // Acquire the lock inside the async block
-            let connect_info = match connect_info.lock() {
-                Ok(guard) => guard,
-                Err(e) => return Some(format!("Failed to acquire lock: {}", e)),
-            };
-            
-            // Check if schedule can and should be scraped, and if so do it
+        // Run check schedule scrape, if successful return unit type, otherwise return error
+        match rt.block_on(async {
             check_schedule_scrape(&connect_info).await
-        });
-
-        // Send the result back to listener on the main thread in App.jsx
-        let _ = window.emit("scrape_result", &result);
+        }) {
+            Ok(()) => return window.emit("scrape_result", ()),
+            Err(err) => return window.emit("scrape_result", err.to_string()),
+        }
     });
 
+    // Put this shere so program doesn't freak out 
     Ok(())
 }
 
-fn main() -> Result<()> {
-    // Ensure chrome driver is, in fact, not running when the file is run
-    let _ = quit_chromedriver();
+#[tauri::command]
+async fn close_splashscreen(window: Window) {
+  // Close splashscreen
+  window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+  // Show main window
+  window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
+}
 
-    // Enable backtracing
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    // Run Tauri application
     tauri::Builder::default()
         .setup(|app| {
-            // Setup the program
-            let connection_struct = setup_program()?;
-            // Store the connection_struct in the app's managed state as Arc and Mutex
+            let connection_struct = setup_program().unwrap_or_else(|err| panic!("Error: '{err}'"));
+
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(connection_struct)),
             });
+
+            let ascii = r#" 
+   ____    ___                                   
+  /\  _`\ /\_ \                                  
+  \ \ \L\ \//\ \     ___   __  __     __   _ __  
+   \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
+    \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
+     \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
+      \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
+
+            println!("{ascii}");
+
             Ok(())
         })
-        // Load functions for Tauri to have access to
-        .invoke_handler(tauri::generate_handler![greet, scheduler_scrape])
+        .invoke_handler(tauri::generate_handler![scheduler_scrape, close_splashscreen])
         .run(tauri::generate_context!())?;
 
     Ok(())

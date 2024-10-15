@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "plover",
+    "productName": "Plover",
     "version": "0.1.0"
   },
   "tauri": {
@@ -19,10 +19,20 @@
     },
     "windows": [
       {
-        "title": "plover",
+        "title": "Plover",
         "width": 800,
-        "height": 600
-      }
+        "height": 600,
+        "label": "main",
+        "url": "index.html",
+        "visible": false
+      },
+      {
+        "width": 800,
+        "height": 200,
+        "decorations": false,
+        "url": "splashscreen.html",
+        "label": "splashscreen"
+        }
     ],
     "security": {
       "csp": null
