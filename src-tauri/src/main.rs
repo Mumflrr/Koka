@@ -11,6 +11,7 @@ use tauri_command_backends::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
+use tokio::runtime::Runtime;
 use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -30,7 +31,7 @@ struct AppState {
 }
 
 // ConnectInfo struct (only one should ever be instantiated)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct ConnectInfo {
     // Naviagtes to specific chromedriver version depending on the os
     os: String,
@@ -57,16 +58,35 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
         }
     });
 
-    // Put this shere so program doesn't freak out 
+    // Put this here so program doesn't freak out 
     Ok(())
 }
 
 #[tauri::command]
 async fn close_splashscreen(window: Window) {
-  // Close splashscreen
-  window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
-  // Show main window
-  window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
+    window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+    window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
+}
+
+#[tauri::command]
+fn startup_app(state: tauri::State<'_, AppState>, window: Window) -> Result<(), String> {
+    println!("WINDOW NAME: {}", window.label());
+    //window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+    let connection_struct = match setup_program() {
+        Ok(result) => result,
+        Err(err) => return Err(format!("Error: {}", err)),
+    };
+
+    // Create a new runtime
+    let rt = Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
+
+    // Use the runtime to block on the async operation
+    rt.block_on(async {
+        let mut connect_info = state.connect_info.lock().await;
+        *connect_info = connection_struct;
+    });
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,26 +94,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tauri::Builder::default()
         .setup(|app| {
-            let connection_struct = setup_program().unwrap_or_else(|err| panic!("Error: '{err}'"));
-
             app.manage(AppState {
-                connect_info: Arc::new(Mutex::new(connection_struct)),
+                connect_info: Arc::new(Mutex::new(ConnectInfo::default())),
             });
 
             let ascii = r#" 
-   ____    ___                                   
-  /\  _`\ /\_ \                                  
-  \ \ \L\ \//\ \     ___   __  __     __   _ __  
-   \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
-    \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
-     \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
-      \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
+  ____    ___                                   
+ /\  _`\ /\_ \                                  
+ \ \ \L\ \//\ \     ___   __  __     __   _ __  
+  \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
+   \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
+    \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
+     \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
 
             println!("{ascii}");
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![scheduler_scrape, close_splashscreen])
+        .invoke_handler(tauri::generate_handler![scheduler_scrape, close_splashscreen, startup_app])
         .run(tauri::generate_context!())?;
 
     Ok(())

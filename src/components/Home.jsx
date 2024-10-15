@@ -5,81 +5,92 @@ import { listen } from "@tauri-apps/api/event";
 import "../App.css";
 
 function Home() {  // Changed from App to Home
+    const[splashClosed, setSplashClosed] = useState(false);
+    const[isScraping, setIsScraping] = useState(false);
+    const[scrapeStatus, setScrapeStatus] = useState("");
 
-  const[isScraping, setIsScraping] = useState(false);
-  const[scrapeStatus, setScrapeStatus] = useState("");
-
-  useEffect(() => {
-    // Function to close the splash screen
-    const closeSplashscreen = async () => {
-      try {
-        const response = await invoke("close_splashscreen");
-      } catch (error) {
-        console.error("Failed to close splash screen:", error);
-      }
-    };
-
-    // Listen for the scrape_result event
-    const setupListener = async () => {
-      const unsubscribe = await listen("scrape_result", (event) => {
-        const result = event.payload;
-        if (result === null) {
-          setScrapeStatus("Scrape completed successfully!");
-        } else {
-          setScrapeStatus(`Error during scrape: ${result}`);
+    useEffect(() => {
+        const startupApp = () => {
+            try {
+                invoke("startup_app");
+            } catch (error) {
+                console.error("Failed to startup app: ", error);
+            }
         }
+        // Function to close the splash screen
+        const closeSplashscreen = async () => {
+        try {
+            const response = await invoke("close_splashscreen");
+        } catch (error) {
+            console.error("Failed to close splash screen:", error);
+        }
+        };
+
+        // Listen for the scrape_result event
+        const setupListener = async () => {
+            const unsubscribe = await listen("scrape_result", (event) => {
+                const result = event.payload;
+                if (result === null) {
+                    setScrapeStatus("Scrape completed successfully!");
+                } else {
+                    setScrapeStatus(`Error during scrape: ${result}`);
+                }
+                    setIsScraping(false);
+            });
+
+            return () => {
+                unsubscribe.then((f) => f()); // Unsubscribe when component unmounts
+            };
+        };
+
+        startupApp();
+        setupListener();
+        // Call the function to close the splash screen
+        if (!splashClosed) {
+            closeSplashscreen();
+            setSplashClosed(true);
+        }
+    }, []);
+
+    async function schedulerScrape() {
+        setIsScraping(true);
+        setScrapeStatus("Scraping in progress...");
+        try {
+        await invoke("scheduler_scrape");
+        } catch (error) {
+        setScrapeStatus(`Error starting scrape: ${error}`);
         setIsScraping(false);
-      });
-
-      return () => {
-        unsubscribe.then((f) => f()); // Unsubscribe when component unmounts
-      };
-    };
-
-    //setupListener();
-    // Call the function to close the splash screen
-    closeSplashscreen();
-  }, []);
-
-  async function schedulerScrape() {
-    setIsScraping(true);
-    setScrapeStatus("Scraping in progress...");
-    try {
-      await invoke("scheduler_scrape");
-    } catch (error) {
-      setScrapeStatus(`Error starting scrape: ${error}`);
-      setIsScraping(false);
+        }
     }
-  }
 
-  return (
-    <div className="container">
-      <h1>Welcome to Tauri!</h1>
+    return (
+        <div className="container">
+        <h1>Welcome to Tauri!</h1>
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
+        <div className="row">
+            <a href="https://vitejs.dev" target="_blank">
+            <img src="/vite.svg" className="logo vite" alt="Vite logo" />
+            </a>
+            <a href="https://tauri.app" target="_blank">
+            <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
+            </a>
+            <a href="https://reactjs.org" target="_blank">
+            <img src={reactLogo} className="logo react" alt="React logo" />
+            </a>
+        </div>
 
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+        <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <div className="row">
-        <button onClick={schedulerScrape} disabled={isScraping}>
-          {isScraping ? "Scraping..." : "Start Scrape"}
-        </button>
-      </div>
+        <div className="row">
+            <button onClick={schedulerScrape} disabled={isScraping}>
+            {isScraping ? "Scraping..." : "Start Scrape"}
+            </button>
+        </div>
 
-      <p>{scrapeStatus}</p>
+        <p>{scrapeStatus}</p>
 
-    </div>
-  );
-}
+        </div>
+    );
+    }
 
-export default Home;
+    export default Home;
