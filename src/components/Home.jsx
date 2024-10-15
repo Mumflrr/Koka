@@ -5,29 +5,44 @@ import { listen } from "@tauri-apps/api/event";
 import "../App.css";
 
 function Home() {  // Changed from App to Home
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-  const [scrapeStatus, setScrapeStatus] = useState("");
-  const [isScraping, setIsScraping] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = listen("scrape_result", (event) => {
-      const result = event.payload;
-      if (result === null) {
-        setScrapeStatus("Scrape completed successfully!");
-      } else {
-        setScrapeStatus(`Error during scrape: ${result}`);
+    // Function to close the splash screen
+    const closeSplashscreen = async () => {
+      try {
+        const response = await invoke("close_splashscreen");
+        setCloseStatus(response);
+      } catch (error) {
+        console.error("Failed to close splash screen:", error);
+        setCloseStatus(`Error closing splash screen: ${error}`);
       }
-      setIsScraping(false);
-    });
-
-    return () => {
-      unsubscribe.then(f => f());
     };
+
+    // Listen for the scrape_result event
+    const setupListener = async () => {
+      const unsubscribe = await listen("scrape_result", (event) => {
+        const result = event.payload;
+        if (result === null) {
+          setScrapeStatus("Scrape completed successfully!");
+        } else {
+          setScrapeStatus(`Error during scrape: ${result}`);
+        }
+        setIsScraping(false);
+      });
+
+      return () => {
+        unsubscribe.then((f) => f()); // Unsubscribe when component unmounts
+      };
+    };
+
+    setupListener();
+
+    // Call the function to close the splash screen
+    closeSplashscreen();
   }, []);
 
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
+  async function close_splashscreen() {
+    setCloseStatus(await invoke("close_splashscreen"));
   }
 
   async function schedulerScrape() {
@@ -59,32 +74,8 @@ function Home() {  // Changed from App to Home
 
       <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-
-      <p>{greetMsg}</p>
-
-      <div className="row">
-        <button onClick={schedulerScrape} disabled={isScraping}>
-          {isScraping ? "Scraping..." : "Start Scrape"}
-        </button>
-      </div>
-
-      <p>{scrapeStatus}</p>
     </div>
   );
 }
 
-export default Home;  // Changed from App to Home
+export default Home;

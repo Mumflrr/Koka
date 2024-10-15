@@ -6,7 +6,7 @@ mod tauri_command_backends;
 mod chrome_functions;
 
 use program_setup::*;
-use tauri::Manager;
+use tauri::{Manager, Window};
 use tauri_command_backends::*;
 use chrome_functions::*;
 
@@ -38,15 +38,6 @@ struct ConnectInfo {
     version: String,
 }
 
-
-// TODO: Remove
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-
 #[tauri::command]
 fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
     // Clone the Arc<Mutex<ConnectInfo>> since that is what we want to use
@@ -68,6 +59,14 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 
     // Put this shere so program doesn't freak out 
     Ok(())
+}
+
+#[tauri::command]
+async fn close_splashscreen(window: Window) {
+  // Close splashscreen
+  window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+  // Show main window
+  window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, scheduler_scrape])
+        .invoke_handler(tauri::generate_handler![scheduler_scrape, close_splashscreen])
         .run(tauri::generate_context!())?;
 
     Ok(())
