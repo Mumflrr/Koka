@@ -13,13 +13,13 @@ use chrome_functions::*;
 use serde::{Serialize, Deserialize};
 use tokio::runtime::Runtime;
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::thread;
 use anyhow::Result;
 
 
-//Add splash screene
 //Add custom menu items
 
 
@@ -28,6 +28,7 @@ use anyhow::Result;
 // one thread at a time. Acts like a singleton
 struct AppState {
     connect_info: Arc<Mutex<ConnectInfo>>,
+    startup_complete: AtomicBool,
 }
 
 // ConnectInfo struct (only one should ever be instantiated)
@@ -64,14 +65,28 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 
 #[tauri::command]
 async fn close_splashscreen(window: Window) {
-    window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+    // Close splashscreen
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.close().unwrap();
+    }
+    // Show main window
     window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
 }
 
 #[tauri::command]
-fn startup_app(state: tauri::State<'_, AppState>, window: Window) -> Result<(), String> {
-    println!("WINDOW NAME: {}", window.label());
-    //window.get_window("splashscreen").expect("no window labeled 'splashscreen' found").close().unwrap();
+async fn show_splashscreen(window: Window) {
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.show().unwrap();
+    }
+}
+
+#[tauri::command]
+fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if state.startup_complete.load(Ordering::SeqCst) {
+        println!("Startup already completed, skipping...");
+        return Ok(());
+    }
+
     let connection_struct = match setup_program() {
         Ok(result) => result,
         Err(err) => return Err(format!("Error: {}", err)),
@@ -86,16 +101,20 @@ fn startup_app(state: tauri::State<'_, AppState>, window: Window) -> Result<(), 
         *connect_info = connection_struct;
     });
 
+    state.startup_complete.store(true, Ordering::SeqCst);
     Ok(())
 }
+
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
     tauri::Builder::default()
         .setup(|app| {
+
             app.manage(AppState {
                 connect_info: Arc::new(Mutex::new(ConnectInfo::default())),
+                startup_complete: AtomicBool::new(false),
             });
 
             let ascii = r#" 
@@ -111,7 +130,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![scheduler_scrape, close_splashscreen, startup_app])
+        .invoke_handler(tauri::generate_handler![
+            scheduler_scrape,
+            close_splashscreen,
+            startup_app,
+            show_splashscreen,
+        ])
         .run(tauri::generate_context!())?;
 
     Ok(())

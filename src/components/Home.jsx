@@ -1,32 +1,44 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import reactLogo from "../assets/react.svg";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import "../App.css";
 
-function Home() {  // Changed from App to Home
-    const[splashClosed, setSplashClosed] = useState(false);
-    const[isScraping, setIsScraping] = useState(false);
-    const[scrapeStatus, setScrapeStatus] = useState("");
+function Home() {
+    const [isScraping, setIsScraping] = useState(false);
+    const [scrapeStatus, setScrapeStatus] = useState("");
+    const [isStartupComplete, setIsStartupComplete] = useState(false);
 
-    useEffect(() => {
-        const startupApp = () => {
-            try {
-                invoke("startup_app");
-            } catch (error) {
-                console.error("Failed to startup app: ", error);
-            }
-        }
-        // Function to close the splash screen
-        const closeSplashscreen = async () => {
+    const showSplashscreen = useCallback(async () => {
         try {
-            const response = await invoke("close_splashscreen");
+            await invoke("show_splashscreen");
+            console.log("Splash screen shown");
+        } catch (error) {
+            console.error("Failed to show splash screen:", error);
+        }
+    }, []);
+
+    const startupApp = useCallback(async () => {
+        if (isStartupComplete) return; // Prevent duplicate calls
+        try {
+            await invoke("startup_app");
+            console.log("App started successfully");
+            setIsStartupComplete(true);
+        } catch (error) {
+            console.error("Failed to startup app: ", error);
+        }
+    }, [isStartupComplete]);
+
+    const closeSplashscreen = useCallback(async () => {
+        try {
+            await invoke("close_splashscreen");
+            console.log("Splash screen closed");
         } catch (error) {
             console.error("Failed to close splash screen:", error);
         }
-        };
+    }, []);
 
-        // Listen for the scrape_result event
+    useEffect(() => {
         const setupListener = async () => {
             const unsubscribe = await listen("scrape_result", (event) => {
                 const result = event.payload;
@@ -35,7 +47,7 @@ function Home() {  // Changed from App to Home
                 } else {
                     setScrapeStatus(`Error during scrape: ${result}`);
                 }
-                    setIsScraping(false);
+                setIsScraping(false);
             });
 
             return () => {
@@ -43,25 +55,26 @@ function Home() {  // Changed from App to Home
             };
         };
 
-        startupApp();
-        setupListener();
-        // Call the function to close the splash screen
-        if (!splashClosed) {
-            closeSplashscreen();
-            setSplashClosed(true);
-        }
-    }, []);
+        const initializeApp = async () => {
+            await showSplashscreen();
+            await startupApp();
+            await closeSplashscreen();
+            await setupListener();
+        };
 
-    async function schedulerScrape() {
+        initializeApp();
+    }, [showSplashscreen, startupApp, closeSplashscreen]);
+
+    const schedulerScrape = async () => {
         setIsScraping(true);
         setScrapeStatus("Scraping in progress...");
         try {
-        await invoke("scheduler_scrape");
+            await invoke("scheduler_scrape");
         } catch (error) {
-        setScrapeStatus(`Error starting scrape: ${error}`);
-        setIsScraping(false);
+            setScrapeStatus(`Error starting scrape: ${error}`);
+            setIsScraping(false);
         }
-    }
+    };
 
     return (
         <div className="container">
@@ -88,9 +101,8 @@ function Home() {  // Changed from App to Home
         </div>
 
         <p>{scrapeStatus}</p>
-
         </div>
     );
-    }
+}
 
     export default Home;

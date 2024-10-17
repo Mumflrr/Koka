@@ -17,24 +17,24 @@
       }
     },
     "windows": [
-      {
-        "title": "Plover",
-        "width": 900,
-        "height": 600,
-        "minWidth": 700,
-        "minHeight": 450,
-        "label": "main",
-        "url": "index.html",
-        "visible": false
-      },
-      {
-        "width": 900,
-        "height": 200,
-        "decorations": false,
-        "url": "splashscreen.html",
-        "label": "splashscreen",
-        "center": true,
-        "visible": true
+        {
+            "width": 900,
+            "height": 200,
+            "decorations": false,
+            "url": "splashscreen.html",
+            "label": "splashscreen",
+            "center": true,
+            "visible": false
+        },
+        {
+            "title": "Plover",
+            "width": 900,
+            "height": 600,
+            "minWidth": 700,
+            "minHeight": 450,
+            "label": "main",
+            "url": "index.html",
+            "visible": false
         }
     ],
     "security": {
