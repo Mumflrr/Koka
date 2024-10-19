@@ -8,12 +8,9 @@ A little project of mine for learning Rust, React, database management, and web 
 ## How to operate
 - To be determined :3 (Too early in development, am just running src code in env, but want to make application standalone first)
 
-## Immediate TODO:
-- Rename origin -> main
-- Setup custom_errors
-- Figure out chromedriver executable running
-- Separate functions into separate files based on domain?
-- Start tying in certain things like installing chrome driver into front end on bootup
+## Things to keep an eye on:
+- Splashscreen flashing white on loading if the image has not fully loaded before window is shown
+- Security if I want to implement way to store shibboleth credentials
 
 ### Questions
 If you want to contact me please don't I already have too much to think about T_T

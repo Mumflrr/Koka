@@ -287,6 +287,7 @@ pub fn chrome_setup(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error>
         if file.as_ref().unwrap().path().is_dir() || file.unwrap().path().extension().unwrap().to_str().unwrap() == ".DS_Store" {
             continue;
         }
+        println!("Resources are corrupted; attempting reinstall");
         fs::remove_dir_all(file_path.clone())?;
         fs::create_dir_all(file_path.clone())?;
                     
