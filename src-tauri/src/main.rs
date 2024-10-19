@@ -18,6 +18,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::thread;
 use anyhow::Result;
+use std::time::Duration;
 
 
 //Add custom menu items
@@ -64,7 +65,7 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 }
 
 #[tauri::command]
-async fn close_splashscreen(window: Window) {
+fn close_splashscreen(window: Window) {
     // Close splashscreen
     if let Some(splashscreen) = window.get_window("splashscreen") {
         splashscreen.close().unwrap();
@@ -74,7 +75,8 @@ async fn close_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-async fn show_splashscreen(window: Window) {
+fn show_splashscreen(window: Window) {
+    std::thread::sleep(Duration::from_millis(500));
     if let Some(splashscreen) = window.get_window("splashscreen") {
         splashscreen.show().unwrap();
     }

@@ -8,9 +8,9 @@ import './App.css';
 function App() {
     const [isStartupComplete, setIsStartupComplete] = useState(false);
 
-    const showSplashscreen = useCallback(async () => {
+    const showSplashscreen = useCallback( () => {
         try {
-            await invoke("show_splashscreen");
+            invoke("show_splashscreen");
             console.log("Splash screen shown");
         } catch (error) {
             console.error("Failed to show splash screen:", error);
@@ -50,14 +50,10 @@ function App() {
             };
         };
 
-        const initializeApp = async () => {
-            await showSplashscreen();
-            await startupApp();
-            await closeSplashscreen();
-            await setupListener();
-        };
-
-        initializeApp();
+        showSplashscreen();
+        startupApp();
+        closeSplashscreen();
+        setupListener();
     }, [showSplashscreen, startupApp, closeSplashscreen]);
 
     if (!isStartupComplete) {
