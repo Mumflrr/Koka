@@ -12,7 +12,7 @@ use crate::ConnectInfo;
 
 // Make sure chromedriver is not running (for windows machine)
 #[cfg(target_os = "windows")]
-pub fn quit_chromedriver() -> Result<(), Box<dyn std::error::Error>> {
+pub fn quit_chromedriver() -> Result<(), anyhow::Error> {
     let output = Command::new("tasklist")
         .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
         .output()?;

@@ -78,7 +78,7 @@ fn install_node() {
         let version = "22.7.0";
         let output = Command::new("fnm")
         .args(&["install", version])
-        .output()?;
+        .output();
 
         if output.status.success() {
             println!("Node.js {} installed successfully", version);

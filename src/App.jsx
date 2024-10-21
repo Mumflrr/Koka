@@ -3,6 +3,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import Home from './components/Home';
+import Courses from './components/Courses';
+import Calendar from './components/Calendar';
+import Dining from './components/Dining';
+import Organisms from './components/Organisms';
+import Settings from './components/Settings';
 import './App.css';
 
 function App() {
@@ -64,7 +69,11 @@ function App() {
         <BrowserRouter>
             <Routes>
                 <Route path='/' element={<Home />} />
-                {/* Add other routes here */}
+                <Route path='/calendar' element={<Calendar />}/>
+                <Route path='/courses' element={<Courses />}/>
+                <Route path='/dining' element={<Dining />}/>
+                <Route path='/organisms' element={<Organisms />}/>
+                <Route path='/settings' element={<Settings />}/>
             </Routes>
         </BrowserRouter>
     );

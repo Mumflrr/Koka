@@ -4,7 +4,7 @@ import "../App.css";
 import { Sidebar } from "./Sidebar";
 
 
-function Calendar() {
+function Settings() {
 
     return (
         <>
@@ -14,4 +14,4 @@ function Calendar() {
     );
 }
 
-export default Calendar;
+export default Settings;

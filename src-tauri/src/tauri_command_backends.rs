@@ -4,6 +4,9 @@ use thirtyfour::prelude::*;
 use crate::{start_chromedriver, ConnectInfo};
 
 pub async fn check_schedule_scrape(connect_info_mutex: &Arc<tokio::sync::Mutex<ConnectInfo>>) -> Result<(), String> {
+    // Check internet status
+    
+    
     // Acquire lock
     let connect_info = connect_info_mutex.lock().await;
     
