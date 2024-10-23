@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import Home from './components/Home';
-import Courses from './components/Courses';
+import Courses from './components/Courses/Courses';
 import Calendar from './components/Calendar';
 import Dining from './components/Dining';
 import Organisms from './components/Organisms';
