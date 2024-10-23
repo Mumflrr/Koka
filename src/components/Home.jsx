@@ -23,12 +23,6 @@ function Home() {
         <div className='container'>
             <h1>Welcome to Plover!</h1>
 
-            <a href="https://github.com/Mumflrr/Plover/tree/main" target="_blank">
-                <img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" />
-            </a>
-
-            <p>Click on the Plover logo to learn more.</p>
-
             <div className='row'>
                 <button onClick={schedulerScrape} disabled={isScraping}>
                     {isScraping ? "Scraping..." : "Start Scrape"}

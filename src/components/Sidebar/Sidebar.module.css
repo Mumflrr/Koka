@@ -1,10 +1,7 @@
-
-
-
 .sidebar {
     background-color: var(--main-dark);
     opacity: 1;
-    width: 3rem;
+    width: 5rem;
     height: 100vh;
     display: flex;
     flex-direction: column;
@@ -54,6 +51,8 @@
 }
 
 .sidebar-logo {
+    width: 2rem;
+    height: 2rem;
     color: #F9F9F9;
 }
 

@@ -25,9 +25,9 @@ function Sidebar() {
     ];
 
     return (
-        <aside className={ss.sidebar}>
+        <aside className={ss['sidebar']}>
             <div className={ss['sidebar-header']}>
-                <span className={ss['sidebar-logo']}>Logo</span>
+                <span className={ss['sidebar-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
                 <span className={ss['sidebar-title']}>Plover</span>
             </div>
 
