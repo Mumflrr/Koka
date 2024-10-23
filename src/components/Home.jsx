@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { NavLink } from 'react-router-dom'
 import "../App.css";
+import Sidebar from "./Sidebar/Sidebar";
 
 function Home() {
     const [isScraping, setIsScraping] = useState(false);
@@ -19,21 +20,21 @@ function Home() {
     };
 
     return (
-        <div className="container">
+        <div className='container'>
             <h1>Welcome to Plover!</h1>
 
             <a href="https://github.com/Mumflrr/Plover/tree/main" target="_blank">
-                <img src="/plover-stencil.svg" className="logo plover" alt="Plover 'logo'" />
+                <img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" />
             </a>
 
             <p>Click on the Plover logo to learn more.</p>
 
-            <div className="row">
+            <div className='row'>
                 <button onClick={schedulerScrape} disabled={isScraping}>
                     {isScraping ? "Scraping..." : "Start Scrape"}
                 </button>
 
-                <NavLink to='/courses' className='nav-link'>Courses</NavLink>
+                <Sidebar/>
             </div>
 
             <p>{scrapeStatus}</p>

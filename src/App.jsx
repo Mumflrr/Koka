@@ -66,16 +66,16 @@ function App() {
     }
 
     return (
-        <BrowserRouter>
-            <Routes>
-                <Route path='/' element={<Home />} />
-                <Route path='/calendar' element={<Calendar />}/>
-                <Route path='/courses' element={<Courses />}/>
-                <Route path='/dining' element={<Dining />}/>
-                <Route path='/organisms' element={<Organisms />}/>
-                <Route path='/settings' element={<Settings />}/>
-            </Routes>
-        </BrowserRouter>
+            <BrowserRouter>
+                <Routes>
+                    <Route path='/' element={<Home />} />
+                    <Route path='/calendar' element={<Calendar />}/>
+                    <Route path='/courses' element={<Courses />}/>
+                    <Route path='/dining' element={<Dining />}/>
+                    <Route path='/organisms' element={<Organisms />}/>
+                    <Route path='/settings' element={<Settings />}/>
+                </Routes>
+            </BrowserRouter>
     );
 }
 
