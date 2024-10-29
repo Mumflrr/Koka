@@ -5,8 +5,8 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
     transition: width 225ms ease, border-radius 225ms ease;
+    box-sizing: border-box;
 }
 
 .sidebar:hover {
@@ -16,59 +16,67 @@
 }
 
 .sidebar-header {
-    padding: 3rem 0;
-    width: 100%;
+    padding: 1rem 0;
     text-align: center;
-}
-
-.sidebar-label {
-    color:#F9F9F9;
-}
-
-.sidebar-nav {
-    width: 100%;
     display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.sidebar-item {
+    justify-content: center;
     width: 100%;
-    text-decoration: none;
 }
 
-.sidebar-settings {
-    margin-top: auto;
-    padding: 0rem;
-    width: 100%;
-    text-align: center;
-}
-
-.sidebar-icon {
-    width: 1.5rem;
-    height: 1.5rem;
-    color: #F9F9F9;
-}
-
-.sidebar-logo {
+.sidebar-header-logo {
     width: 2rem;
     height: 2rem;
     color: #F9F9F9;
+    flex-shrink: 0;
 }
 
-.sidebar-title {
+.sidebar-header-title {
     color: #F9F9F9;
     margin-left: 0.5rem;
 }
 
-.settings-button {
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     width: 100%;
-    padding: 0.5rem;
+}
+
+.sidebar-item {
+    padding: 1rem 0;
+    text-decoration: none;
     display: flex;
     align-items: center;
-    background: none;
-    border: none;
-    cursor: pointer;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.sidebar:hover .sidebar-item-label {
+    opacity: 1;
+    width: auto;
+    margin-left: 0.5rem;
+}
+
+.sidebar:hover .sidebar-item-icon {
+    padding-left: 2.5rem;
+}
+
+.sidebar-item-label {
+    color: #F9F9F9;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 0;
+    transition: opacity 225ms ease;
+}
+
+.sidebar-item-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: #F9F9F9;
+    padding-left: 1rem;
+    flex-shrink: 0;
+    transition: 225ms ease;
 }
 
 .active {
@@ -78,5 +86,22 @@
 .sidebar-footer {
     margin-top: auto;
     width: 100%;
-    padding: 1rem;
+    padding: 1rem 0;
+}
+
+.settings-button {
+    width: 100%;
+    padding: 1rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.sidebar:hover .settings-button {
+    justify-content: flex-start;
+    padding-left: 1.5rem;
 }

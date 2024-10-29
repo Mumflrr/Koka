@@ -9,8 +9,8 @@ const SidebarItem = ({ icon: Icon, label, to }) => {
     <NavLink 
       to={to}
       className={({ isActive }) => `${ss['sidebar-item']} ${isActive ? ss.active : ''}`}>
-      <Icon className={ss['sidebar-icon']} />
-      <span className={ss['sidebar-label']}>{label}</span>
+      <Icon className={ss['sidebar-item-icon']} />
+      <span className={ss['sidebar-item-label']}>{label}</span>
     </NavLink>
   );
 };
@@ -27,8 +27,8 @@ function Sidebar() {
     return (
         <aside className={ss['sidebar']}>
             <div className={ss['sidebar-header']}>
-                <span className={ss['sidebar-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
-                <span className={ss['sidebar-title']}>Plover</span>
+                <span className={ss['sidebar-header-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
+                <span className={ss['sidebar-header-title']}>Plover</span>
             </div>
 
             <nav className={ss['sidebar-nav']}>
@@ -44,8 +44,8 @@ function Sidebar() {
 
             <div className={ss['sidebar-footer']}>
                 <button className={ss['settings-button']}>
-                    <Settings className={ss['sidebar-icon']} />
-                    <span className={ss['sidebar-label']}>Settings</span>
+                    <Settings className={ss['sidebar-item-icon']} />
+                    <span className={ss['sidebar-item-label']}>Settings</span>
                 </button>
             </div>
         </aside>
