@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Calendar, Utensils, BookOpen, Squirrel, Settings } from "lucide-react";
+import { useSidebarContext } from './SidebarContext';
 import ss from "./Sidebar.module.css";
 
 // Reusable sidebar item component with fixed CSS module classes
@@ -16,6 +17,7 @@ const SidebarItem = ({ icon: Icon, label, to }) => {
 };
 
 function Sidebar() {
+    const { isExpanded, setIsExpanded } = useSidebarContext();
     const sidebarItems = [
         { icon: LayoutDashboard, label: "Home", path: "/" },
         { icon: Calendar, label: "Calendar", path: "/calendar" },
@@ -25,7 +27,11 @@ function Sidebar() {
     ];
 
     return (
-        <aside className={ss['sidebar']}>
+        <aside 
+            className={`${ss['sidebar']} ${isExpanded ? ss['expanded'] : ''}`}
+            onMouseEnter={() => setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+        >
             <div className={ss['sidebar-header']}>
                 <span className={ss['sidebar-header-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
                 <span className={ss['sidebar-header-title']}>Plover</span>
@@ -43,9 +49,8 @@ function Sidebar() {
             </nav>
 
             <div className={ss['sidebar-footer']}>
-                <button className={ss['settings-button']}>
+                <button className={ss['sidebar-item-icon']}>
                     <Settings className={ss['sidebar-item-icon']} />
-                    <span className={ss['sidebar-item-label']}>Settings</span>
                 </button>
             </div>
         </aside>

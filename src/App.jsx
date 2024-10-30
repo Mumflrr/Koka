@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { SidebarProvider } from './components/Sidebar/SidebarContext';
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import Home from './components/Home';
@@ -66,16 +67,18 @@ function App() {
     }
 
     return (
-        <BrowserRouter>
-            <Routes>
-                <Route path='/' element={<Home />} />
-                <Route path='/calendar' element={<Calendar />}/>
-                <Route path='/courses' element={<Courses />}/>
-                <Route path='/dining' element={<Dining />}/>
-                <Route path='/organisms' element={<Organisms />}/>
-                <Route path='/settings' element={<Settings />}/>
-            </Routes>
-        </BrowserRouter>
+        <SidebarProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path='/' element={<Home />} />
+                    <Route path='/calendar' element={<Calendar />}/>
+                    <Route path='/courses' element={<Courses />}/>
+                    <Route path='/dining' element={<Dining />}/>
+                    <Route path='/organisms' element={<Organisms />}/>
+                    <Route path='/settings' element={<Settings />}/>
+                </Routes>
+            </BrowserRouter>
+        </SidebarProvider>
     );
 }
 
