@@ -6,11 +6,16 @@ import ss from "./Courses.module.css";
 
 
 function Courses() {
-
     return (
-        <div className = {ss['container']}>
+        <div>
             <Sidebar/>
-            <h1 className='page-header'>Courses</h1>
+            <div className = {ss['courses']}>
+                <h1 className='page-header'>Courses</h1>
+                <button onClick={() => invoke('scheduler_scrape')}>
+                CLICK ME
+                </button>
+            </div>
+
         </div>
     );
 }

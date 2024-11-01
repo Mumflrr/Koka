@@ -18,7 +18,7 @@
     },
     "windows": [
         {
-            "width": 900,
+            "width": 1000,
             "height": 300,
             "decorations": false,
             "url": "splashscreen.html",
@@ -28,8 +28,8 @@
         },
         {
             "title": "Plover",
-            "width": 900,
-            "height": 600,
+            "width": 1000,
+            "height": 667,
             "minWidth": 700,
             "minHeight": 450,
             "label": "main",

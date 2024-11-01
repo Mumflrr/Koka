@@ -4,12 +4,13 @@ import { LayoutDashboard, Calendar, Utensils, BookOpen, Squirrel, Settings } fro
 import { useSidebarContext } from './SidebarContext';
 import ss from "./Sidebar.module.css";
 
-// Reusable sidebar item component with fixed CSS module classes
 const SidebarItem = ({ icon: Icon, label, to }) => {
   return (
+
     <NavLink 
       to={to}
       className={({ isActive }) => `${ss['sidebar-item']} ${isActive ? ss.active : ''}`}>
+      <span className={ss['sidebar-item-bar']}></span>
       <Icon className={ss['sidebar-item-icon']} />
       <span className={ss['sidebar-item-label']}>{label}</span>
     </NavLink>
@@ -23,15 +24,14 @@ function Sidebar() {
         { icon: Calendar, label: "Calendar", path: "/calendar" },
         { icon: Utensils, label: "Food", path: "/dining" },
         { icon: BookOpen, label: "Courses", path: "/courses" },
-        { icon: Squirrel, label: "Cute Organisms", path: "/organisms" },
+        { icon: Squirrel, label: "Gallery", path: "/gallery" },
     ];
 
     return (
         <aside 
             className={`${ss['sidebar']} ${isExpanded ? ss['expanded'] : ''}`}
             onMouseEnter={() => setIsExpanded(true)}
-            onMouseLeave={() => setIsExpanded(false)}
-        >
+            onMouseLeave={() => setIsExpanded(false)}>
             <div className={ss['sidebar-header']}>
                 <span className={ss['sidebar-header-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
                 <span className={ss['sidebar-header-title']}>Plover</span>
@@ -43,8 +43,7 @@ function Sidebar() {
                         key={item.path}
                         icon={item.icon}
                         label={item.label}
-                        to={item.path}
-                    />
+                        to={item.path}/>
                 ))}
             </nav>
 

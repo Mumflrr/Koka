@@ -19,12 +19,12 @@
     --alert: #B52948;
     --action: #24CFC5;
 
+    --sidebar-short-width: 5rem;
+
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
 
-    display: grid;
-    grid-template-columns: auto 1fr;
 }
 
 h1 {

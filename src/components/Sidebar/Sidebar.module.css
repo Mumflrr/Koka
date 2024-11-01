@@ -1,10 +1,11 @@
 .sidebar {
     background-color: var(--main-dark);
-    width: 5rem;
+    width: var(--sidebar-short-width);
     height: 100vh;
     display: flex;
     flex-direction: column;
     transition: width 225ms ease, border-radius 225ms ease;
+    position: absolute;
 }
 
 .sidebar-header {
@@ -20,6 +21,7 @@
     height: 2rem;
     color: #F9F9F9;
     flex-shrink: 0;
+    padding-left: 1.4rem;
 }
 
 .sidebar-header-title {
@@ -27,8 +29,8 @@
     opacity: 0;
     overflow: hidden;
     white-space: nowrap;
-    width: 0;
     transition: opacity 225ms ease;
+    margin-left: 0.5rem;
 }
 
 .sidebar-nav {
@@ -36,47 +38,38 @@
     flex-direction: column;
     flex: 1;
     width: 100%;
-    justify-content: center;
 }
 
 .sidebar-item {
-    padding: 1rem 0;
+    padding: 1rem 12%;
     text-decoration: none;
     display: flex;
-    align-items: center;
-    width: 100%;
+    width: 76%;
     gap: 0.5rem;
+    position: relative;
 }
 
-.expanded {
-    width: 13rem;
-    border-radius: 12px;
-    opacity: 0.98;
-}
-
-.expanded .sidebar-item-label {
-    opacity: 1;
-    width: auto;
-    margin-left: 0.5rem;
-}
-
-.expanded .sidebar-header-title {
-    opacity: 1;
-    width: auto;
-    margin-left: 0.5rem;
-}
-
-.expanded .sidebar-item-icon {
-    padding-left: 2.5rem;
-}
-
-.sidebar-item-label {
-    color: #F9F9F9;
+.sidebar-item::before {
+    content: '';
+    height: 100%;
+    width: 0px;
+    background: green;
     opacity: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    width: 0;
-    transition: opacity 225ms ease;
+    transition: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    padding-left: .5rem;
+}
+
+.sidebar-item-bar {
+    width: .5rem;
+    height: 100%;
+    background: palevioletred;
+    position: absolute;
+    opacity: 0;
+    bottom: 0;
+    left: 0;
 }
 
 .sidebar-item-icon {
@@ -86,6 +79,45 @@
     padding-left: 1rem;
     flex-shrink: 0;
     transition: 225ms ease;
+}
+
+.sidebar-item-label {
+    color: #F9F9F9;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity 225ms ease;
+    margin-left: 0.5rem;
+}
+
+.expanded {
+    width: 13rem;
+    border-radius: 12px;
+    opacity: 0.95;
+}
+
+.expanded .sidebar-item-label {
+    z-index: 2;
+    opacity: 1;
+}
+
+.expanded .sidebar-header-title {
+    opacity: 1;
+}
+
+.expanded .sidebar-item-icon {
+    z-index: 2;
+    padding-left: 1rem;
+}
+
+.sidebar-item:not(.active):hover::before {
+    opacity: 1;
+    width: 50px;
+    transition: 225ms ease;
+}
+
+.sidebar-item:not(.active):hover .sidebar-item-bar {
+    opacity: 1;
 }
 
 .active {
