@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use thirtyfour::prelude::*;
+use anyhow::anyhow;
+use tokio::time::{sleep, Instant};
 use crate::{start_chromedriver, ConnectInfo};
 
 pub async fn check_schedule_scrape(connect_info_mutex: &Arc<tokio::sync::Mutex<ConnectInfo>>) -> Result<(), String> {
@@ -34,47 +36,43 @@ pub async fn check_schedule_scrape(connect_info_mutex: &Arc<tokio::sync::Mutex<C
 // Performs the scraping
 async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Error> {
     // Navigate to myPack
-    driver.goto("https://portalsp.acs.ncsu.edu/").await?;
-
-    // If shibboleth authentication opens, wait for the main page to load
-    match driver.find(By::Id("ncstate-utility-bar")).await {
-        Ok(_) => {
-            loop {
-                match driver.find(By::Id("pt_envinfo")).await {
-                    Ok(_) => break,
-                    Err(_) => continue,
-                }
-            }
-        },
-        Err(_) => ()
+    driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
+    
+    // Determine if properly navigated to shib page; ONLY WORKS IF ASSUMED WINDOW WILL OPEN
+    let button = match driver.find(By::ClassName("IdPSelectPreferredIdPButton")).await {
+        Ok(button) => button,
+        Err(_) => return Err(anyhow!("Unable to access myPack")),
     };
 
-    driver.find(By::Id("win0divPTNUI_LAND_REC_GROUPLET$1")).await.unwrap().click().await?;
-    driver.find(By::Id("win25divSCC_LO_FL_WRK_SCC_VIEW_BTN$1")).await.unwrap().click().await?; // Id changes
-    driver.find(By::Id("ui-id-7")).await.unwrap().click().await?;
-    driver.find(By::Id("ui-id-3")).await.unwrap().click().await?;
-
-
-    // Look for header to implicitly wait for the page to load.
-    //driver.find(By::ClassName("firstHeading")).await?;
+    // Find and click the button to input credentials
+    button.find(By::Tag("a")).await?.click().await?;
     
-/*     let elem_form = driver.find(By::Id("search-form")).await?;
-                           
-    // Find element from element.
-    let elem_text = elem_form.find(By::Id("searchInput")).await?;
-                           
-    // Type in the search terms.
-    elem_text.send_keys("selenium").await?;
-                           
-    // Click the search button.
-    let elem_button = elem_form.find(By::Css("button[type='submit']")).await?;
-    elem_button.click().await?;
-                           
-    assert_eq!(driver.title().await?, "Selenium - Wikipedia");
+    // Wait for user to input credentials and duo auth
+    let timeout = Duration::from_secs(120);
+    let start = Instant::now();
+    
+    while start.elapsed() < timeout {
+        if driver.find(By::Id("pt_envinfo")).await.is_ok() {
+            break;
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    if start.elapsed() >= timeout {
+        return Err(anyhow!("timeout!"))
+    }
+    
+    driver.enter_frame(0).await?;
+    let cart_label = driver.query(By::Id("add-to-cart-label")).first().await?;
+    cart_label.wait_until().displayed().await?;
+    cart_label.click().await?;
+    driver.find(By::Id("classSearchTab")).await?.click().await?;
 
-                   */            
+
+
+    loop{}
+
     // Always explicitly close the browser.
     driver.quit().await?;
                             
-    Ok(())
+    //Ok(())
 }

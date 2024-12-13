@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Calendar, Utensils, BookOpen, Squirrel, Settings } from "lucide-react";
+import { LayoutDashboard, Calendar, Utensils, Presentation, FolderClock, Squirrel} from "lucide-react";
 import { useSidebarContext } from './SidebarContext';
 import ss from "./Sidebar.module.css";
 
@@ -23,7 +23,8 @@ function Sidebar() {
         { icon: LayoutDashboard, label: "Home", path: "/" },
         { icon: Calendar, label: "Calendar", path: "/calendar" },
         { icon: Utensils, label: "Food", path: "/dining" },
-        { icon: BookOpen, label: "Courses", path: "/courses" },
+        { icon: Presentation, label: "Courses", path: "/courses" },
+        { icon: FolderClock, label: "Scheduler", path: "/scheduler" },
         { icon: Squirrel, label: "Gallery", path: "/gallery" },
     ];
 
@@ -48,9 +49,8 @@ function Sidebar() {
             </nav>
 
             <div className={ss['sidebar-footer']}>
-                <button className={ss['sidebar-item-icon']}>
-                    <Settings className={ss['sidebar-item-icon']} />
-                </button>
+                {/*<IconButton icon={<Gear/>} size="lg" className={ss['sidebar-item-icon']}/> */}
+
             </div>
         </aside>
     );

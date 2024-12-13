@@ -7,18 +7,22 @@
     padding:0;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
+    transition:225ms ease;
 }
 
 :root {
     font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   
     background-color: #222222;
+    color: var(--main-light);
     --main-light: #F9F9F9;
     --main-dark: #2F2F35;
     --alert: #B52948;
     --action: #24CFC5;
+    --action-dark: #1c42a3;
 
     --sidebar-short-width: 5rem;
+    --sidebar-expanded-width: 13rem;
 
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

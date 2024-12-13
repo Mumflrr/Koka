@@ -9,6 +9,7 @@ import Calendar from './components/Calendar';
 import Dining from './components/Dining';
 import Gallery from './components/Organisms';
 import Settings from './components/Settings';
+import Scheduler from './components/Scheduler';
 import './App.css';
 
 function App() {
@@ -76,6 +77,7 @@ function App() {
                     <Route path='/dining' element={<Dining />}/>
                     <Route path='/gallery' element={<Gallery />}/>
                     <Route path='/settings' element={<Settings />}/>
+                    <Route path='/scheduler' element={<Settings />}/>
                 </Routes>
             </BrowserRouter>
         </SidebarProvider>

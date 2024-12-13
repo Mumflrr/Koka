@@ -6,7 +6,7 @@ import Sidebar from "../Sidebar/Sidebar";
 import ss from "./Courses.module.css";
 
 
-function Courses() {
+function Scheduler() {
     const [scrapeResult, setScrapeStatus] = useState("");
 
     useEffect(() => {
@@ -49,4 +49,4 @@ function Courses() {
     );
 }
 
-export default Courses;
+export default Scheduler;
