@@ -39,10 +39,6 @@ function Courses() {
             <Sidebar/>
             <div className = {ss['courses']}>
                 <h1 className='page-header'>Courses</h1>
-                <button onClick={startScrape}>
-                CLICK ME
-                </button>
-                <p>{scrapeResult}</p>
             </div>
 
         </div>

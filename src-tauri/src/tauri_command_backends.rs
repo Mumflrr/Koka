@@ -1,40 +1,10 @@
-use std::{sync::Arc, time::Duration};
-
+use std::time::Duration;
 use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
-use crate::{start_chromedriver, ConnectInfo};
-
-pub async fn check_schedule_scrape(connect_info_mutex: &Arc<tokio::sync::Mutex<ConnectInfo>>) -> Result<(), String> {
-    // Check internet status
-    
-    
-    // Acquire lock
-    let connect_info = connect_info_mutex.lock().await;
-    
-    // Start chromedriver - pass a reference to the ConnectInfo inside the MutexGuard
-    let driver = match start_chromedriver(&connect_info).await {
-        Ok(webdriver) => {
-            // If successful, drop the lock and return the webdriver
-            drop(connect_info);
-            webdriver
-        },
-        Err(err) => {
-            // Lock automatically released here when connect_info goes out of scope
-            return Err(format!("Failed to start chromedriver: {}", err));
-        }
-    };
-    
-
-    // Do the actual scrape
-    match perform_schedule_scrape(driver).await {
-        Ok(()) => Ok(()),
-        Err(err) => Err(format!("{}", err)),
-    }
-}
 
 // Performs the scraping
-async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Error> {
+pub async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Error> {
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     

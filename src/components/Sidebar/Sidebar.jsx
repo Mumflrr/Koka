@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Calendar, Utensils, Presentation, FolderClock, Squirrel} from "lucide-react";
+import { LayoutDashboard, Calendar, Utensils, Presentation, SearchIcon, Squirrel} from "lucide-react";
 import { useSidebarContext } from './SidebarContext';
 import ss from "./Sidebar.module.css";
 
@@ -24,7 +24,7 @@ function Sidebar() {
         { icon: Calendar, label: "Calendar", path: "/calendar" },
         { icon: Utensils, label: "Food", path: "/dining" },
         { icon: Presentation, label: "Courses", path: "/courses" },
-        { icon: FolderClock, label: "Scheduler", path: "/scheduler" },
+        { icon: SearchIcon, label: "Scheduler", path: "/scheduler" },
         { icon: Squirrel, label: "Gallery", path: "/gallery" },
     ];
 

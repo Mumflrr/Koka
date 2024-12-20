@@ -4,6 +4,7 @@
 mod program_setup;
 mod tauri_command_backends;
 mod chrome_functions;
+mod database_functions;
 
 use program_setup::*;
 use tauri::{Manager, Window};
@@ -11,7 +12,6 @@ use tauri_command_backends::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
-use tokio::runtime::Runtime;
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -33,7 +33,7 @@ struct AppState {
 }
 
 // ConnectInfo struct (only one should ever be instantiated)
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct ConnectInfo {
     // Naviagtes to specific chromedriver version depending on the os
     os: String,
@@ -42,25 +42,74 @@ struct ConnectInfo {
 }
 
 #[tauri::command]
+fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // First, check if we've already completed startup to prevent duplicate runs
+    if state.startup_complete.load(Ordering::SeqCst) {
+        println!("Startup already completed, skipping...");
+        return Ok(());
+    }
+
+    // Create a blocking runtime specifically for this operation
+    // We use a blocking runtime instead of a standard runtime because we're in a sync context
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()  // Enable both I/O and time drivers
+        .build()
+        .map_err(|e| format!("Failed to create runtime: {}", e))?;
+
+    // Use the runtime to run our async operation synchronously
+    // block_on transforms our async operation into a synchronous one
+    let connection_struct = rt.block_on(async {
+        setup_program().await
+    }).map_err(|e| format!("Error: {}", e))?;
+
+    // Update the connection info in our state
+    rt.block_on(async {
+        let mut connect_info = state.connect_info.lock().await;
+        *connect_info = connection_struct;
+    });
+
+    // Mark startup as complete
+    state.startup_complete.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
 fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
-    // Clone the Arc<Mutex<ConnectInfo>> since that is what we want to use
-    let connect_info = Arc::clone(&state.connect_info);
-    
-    // Create new thread so this can run async
+    // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
+    let connect_info_mutex = Arc::clone(&state.connect_info);
+
+    // Spawn a new thread for async processing
     thread::spawn(move || {
-        // Runtime will allow an async function to run in a sync context
+        // Create a Tokio runtime to run async code in this thread
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
-        // Run check schedule scrape, if successful return unit type, otherwise return error
-        match rt.block_on(async {
-            check_schedule_scrape(&connect_info).await
-        }) {
-            Ok(()) => return window.emit("scrape_result", ()),
-            Err(err) => return window.emit("scrape_result", err.to_string()),
+        // Run the async task using the runtime
+        let result = rt.block_on(async {
+            // Acquire a lock and clone the connect info for local use
+            let mut connect_info = {
+                let locked_connect_info = connect_info_mutex.lock().await;
+                (*locked_connect_info).clone() // Clone the data to use outside the lock
+            };
+
+            chrome_update_check(&mut connect_info).await?;
+            let driver = start_chromedriver(&connect_info).await?;
+
+            // Perform the schedule scrape with the initialized driver
+            perform_schedule_scrape(driver).await
+        });
+
+        // Emit the result to the frontend
+        match result {
+            Ok(_) => {
+                let _ = window.emit("scrape_result", ());
+            }
+            Err(err) => {
+                let _ = window.emit("scrape_result", err.to_string());
+            }
         }
     });
 
-    // Put this here so program doesn't freak out 
+    // Return Ok to indicate the command has started successfully
     Ok(())
 }
 
@@ -80,31 +129,6 @@ fn show_splashscreen(window: Window) {
     if let Some(splashscreen) = window.get_window("splashscreen") {
         splashscreen.show().unwrap();
     }
-}
-
-#[tauri::command]
-fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    if state.startup_complete.load(Ordering::SeqCst) {
-        println!("Startup already completed, skipping...");
-        return Ok(());
-    }
-
-    let connection_struct = match setup_program() {
-        Ok(result) => result,
-        Err(err) => return Err(format!("Error: {}", err)),
-    };
-
-    // Create a new runtime
-    let rt = Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
-
-    // Use the runtime to block on the async operation
-    rt.block_on(async {
-        let mut connect_info = state.connect_info.lock().await;
-        *connect_info = connection_struct;
-    });
-
-    state.startup_complete.store(true, Ordering::SeqCst);
-    Ok(())
 }
 
 

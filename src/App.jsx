@@ -9,11 +9,10 @@ import Calendar from './components/Calendar';
 import Dining from './components/Dining';
 import Gallery from './components/Organisms';
 import Settings from './components/Settings';
-import Scheduler from './components/Scheduler';
+import Scheduler from './components/Scheduler/Scheduler';
 import './App.css';
 
 function App() {
-    const [isStartupComplete, setIsStartupComplete] = useState(false);
 
     const showSplashscreen = useCallback( () => {
         try {
@@ -25,15 +24,13 @@ function App() {
     }, []);
 
     const startupApp = useCallback(async () => {
-        if (isStartupComplete) return; // Prevent duplicate calls
         try {
             await invoke("startup_app");
             console.log("App started successfully");
-            setIsStartupComplete(true);
         } catch (error) {
             console.error("Failed to startup app: ", error);
         }
-    }, [isStartupComplete]);
+    }, []);
 
     const closeSplashscreen = useCallback(async () => {
         try {
@@ -45,27 +42,10 @@ function App() {
     }, []);
 
     useEffect(() => {
-        const setupListener = async () => {
-            const unsubscribe = await listen("scrape_result", (event) => {
-                const result = event.payload;
-                console.log("Scrape result:", result);
-                // You can handle the scrape result here if needed
-            });
-
-            return () => {
-                unsubscribe.then((f) => f()); // Unsubscribe when component unmounts
-            };
-        };
-
         showSplashscreen();
         startupApp();
         closeSplashscreen();
-        setupListener();
     }, [showSplashscreen, startupApp, closeSplashscreen]);
-
-    if (!isStartupComplete) {
-        return <div>Loading...</div>; // Or your splash screen component
-    }
 
     return (
         <SidebarProvider>
@@ -77,7 +57,7 @@ function App() {
                     <Route path='/dining' element={<Dining />}/>
                     <Route path='/gallery' element={<Gallery />}/>
                     <Route path='/settings' element={<Settings />}/>
-                    <Route path='/scheduler' element={<Settings />}/>
+                    <Route path='/scheduler' element={<Scheduler />}/>
                 </Routes>
             </BrowserRouter>
         </SidebarProvider>

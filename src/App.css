@@ -12,7 +12,6 @@
 
 :root {
     font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  
     background-color: #222222;
     color: var(--main-light);
     --main-light: #F9F9F9;

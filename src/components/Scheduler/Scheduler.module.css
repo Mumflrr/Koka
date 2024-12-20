@@ -1,5 +1,62 @@
-.courses {
+.scheduler {
     padding-left: var(--sidebar-short-width);
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 2fr;
+    grid-template-rows: 1fr 2fr;
+    height: 100vh;
+    gap: 10px;
+    z-index: 0; /* Keeps it in context but below direct child elements */
+}
+
+.calendar-container {
+    display: grid;
+    grid-template-columns: 0.5fr repeat(5, 1fr);
+    grid-template-rows: 0.5fr repeat(13, 1fr);
+    margin: 20px;
+    grid-column: 1 / 4;
+    grid-row: 1 / 3;
+    background-color: white;
+    border-radius: 10px 10px 10px 10px;
+    border: 1px solid #ccc;
+    z-index: 1;
+    overflow: hidden;
+}
+
+.calendar-header-container {
+    background-color: white;
+    z-index: 2;
+}
+
+.calendar-header-container p {
+    color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+}
+
+
+.calendar-time-slot {
+    background-color: var(--main-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.calendar-cell {
+    border: 1px solid #ddd;
+    background-color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.calendar-cell:hover {
+    background-color: #e6f7ff;
+}
+
+.time-text {
+    color: black;
+    margin: 0;
 }

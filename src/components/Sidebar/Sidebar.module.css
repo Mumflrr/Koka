@@ -6,6 +6,7 @@
     flex-direction: column;
     transition: width 225ms ease, border-radius 225ms ease;
     position: absolute;
+    z-index:2;
 }
 
 .sidebar-header {
@@ -93,7 +94,8 @@
 
 .expanded {
     width: var(--sidebar-expanded-width);
-    border-radius: 12px;
+    border-top-right-radius: 3%;
+    border-bottom-right-radius: 3%;
     opacity: 0.97;
 }
 
@@ -104,11 +106,11 @@
 }
 
 .expanded .sidebar-item-icon {
-    z-index: 2;
+    z-index: 3;
 }
 
 .expanded .sidebar-item-label {
-    z-index: 2;
+    z-index: 3;
     opacity: 1;
 }
 
