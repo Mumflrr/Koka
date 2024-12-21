@@ -29,9 +29,9 @@
         {
             "title": "Plover",
             "width": 1000,
-            "height": 667,
-            "minWidth": 700,
-            "minHeight": 450,
+            "height": 669,
+            "minWidth": 860,
+            "minHeight": 575,
             "label": "main",
             "url": "index.html",
             "visible": false

@@ -10,8 +10,9 @@
 
 .calendar-container {
     display: grid;
-    grid-template-columns: 0.5fr repeat(5, 1fr);
-    grid-template-rows: 0.5fr repeat(13, 1fr);
+    position: relative; /* This allows absolute positioning of children */
+    grid-template-columns: 60px repeat(5, 1fr);
+    grid-template-rows: 25px repeat(13, 1fr);
     margin: 20px;
     grid-column: 1 / 4;
     grid-row: 1 / 3;
@@ -35,14 +36,22 @@
     font-weight: bold;
 }
 
-
 .calendar-time-slot {
     background-color: var(--main-light);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 0.9em;
-    font-weight: bold;
+    position: relative; /* Make this the positioning context */
+    height: 100%;      /* Ensure full height */
+}
+
+.time-text {
+    color: black;
+    margin: 0;
+    position: absolute;
+    top: -17%;         /* Shift upward by 50% */
+    right: 8px;        /* Add some right padding */
+}
+
+.first-time-slot .time-text{
+    top: 0%;
 }
 
 .calendar-cell {
@@ -50,13 +59,20 @@
     background-color: white;
     cursor: pointer;
     transition: background-color 0.3s;
+    position: relative;
 }
 
 .calendar-cell:hover {
     background-color: #e6f7ff;
 }
 
-.time-text {
-    color: black;
-    margin: 0;
+.event-block {
+    box-shadow: 0 0px 0px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.event-block:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
