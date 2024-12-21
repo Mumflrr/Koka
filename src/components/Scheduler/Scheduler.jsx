@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import "../../App.css";
@@ -6,64 +6,97 @@ import "ldrs/grid";
 import Sidebar from "../Sidebar/Sidebar";
 import ss from "./Scheduler.module.css";
 
-function TimeBlock({ event, styles, overlappingEvents }) {
+function TimeBlock({ event, overlappingEvents }) {
     const calculatePosition = () => {
         const calendar = document.querySelector(`.${ss["calendar-container"]}`);
         if (!calendar) return { top: 0, left: 0, height: 0, width: 0 };
         
-        const startHour = convertTimeToDecimal(event.startTime);
-        const endHour = convertTimeToDecimal(event.endTime);
-
+        // Get header height and time column width
         const headerHeight = calendar.querySelector(`.${ss["calendar-header-container"]}`)?.offsetHeight || 0;
         const timeColumnWidth = calendar.querySelector(`.${ss["calendar-time-slot"]}`)?.offsetWidth || 0;
-
-        const cellHeight = calendar.querySelector(`.${ss["calendar-cell"]}`)?.offsetHeight || 0;
-        const cellWidth = calendar.querySelector(`.${ss["calendar-cell"]}`)?.offsetWidth || 0;
-
-        // Calculate position and dimensions
-        const top = headerHeight + (startHour - 7) * cellHeight;
-        const baseLeft = event.day * cellWidth + timeColumnWidth;
         
-        // Calculate width based on overlapping events
+        // Calculate cell dimensions
+        const totalHeight = calendar.clientHeight - headerHeight;
+        const cellHeight = totalHeight / 13; // 13 time slots
+        const availableWidth = calendar.clientWidth - timeColumnWidth;
+        const cellWidth = availableWidth / 5; // 5 days
+        
+        // Convert times to decimal hours (e.g., 9:30 -> 9.5)
+        const startHour = convertTimeToDecimal(event.startTime);
+        const endHour = convertTimeToDecimal(event.endTime);
+        
+        // Calculate vertical position (accounting for 8:00 start time)
+        const startOffset = startHour - 8; // Offset from 8:00
+        const duration = endHour - startHour;
+        
+        // Calculate positions
+        const top = headerHeight + (startOffset * cellHeight);
+        const height = duration * cellHeight;
+        
+        // Handle overlapping events
         const eventCount = overlappingEvents.length;
         const eventIndex = overlappingEvents.findIndex(e => 
             e.startTime === event.startTime && e.title === event.title
         );
-        const width = cellWidth / eventCount;
-        const left = baseLeft + (width * eventIndex);
         
-        const height = (endHour - startHour) * cellHeight;
-
-        return { top, left, height, width };
+        // Calculate width and horizontal position
+        const width = -1 + cellWidth / eventCount;
+        const left = timeColumnWidth + (event.day * cellWidth) + (width * eventIndex);
+        
+        return {
+            top,
+            left,
+            height,
+            width,
+        };
     };
 
-    const { top, left, height, width } = calculatePosition();
+    // Store the calculation function in a ref
+    const positionRef = React.useRef(calculatePosition);
+    
+    // State for current position
+    const [position, setPosition] = React.useState(calculatePosition());
+
+    // Update position on window resize
+    React.useEffect(() => {
+        const calendar = document.querySelector(`.${ss["calendar-container"]}`);
+        if (!calendar) return;
+
+        const updatePosition = () => {
+            setPosition(positionRef.current());
+        };
+
+        const observer = new ResizeObserver(updatePosition);
+        observer.observe(calendar);
+
+        // Initial position calculation
+        updatePosition();
+
+        return () => observer.disconnect();
+    }, []);
 
     return (
         <div 
-            className={`${styles["event-block"]} ${overlappingEvents.length > 1 ? styles["overlapping"] : ""}`}
+            className={`${ss["event-block"]} ${overlappingEvents.length > 1 ? ss["overlapping"] : ""} ${event.professor == -1 ? ss["activity"] : ss["class"]}`}
             style={{
                 position: 'absolute',
-                top: `${top}px`,
-                left: `${left}px`,
-                height: `${height}px`,
-                width: `${width}px`,
-                backgroundColor: event.color || '#3498db',
-                zIndex: 3,
-                color: 'white',
-                fontSize: '0.8rem',
-                padding: '4px',
-                borderRadius: '4px',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                top: `${position.top}px`,
+                left: `${position.left}px`,
+                height: `${position.height}px`,
+                width: `${position.width}px`,
             }}
             title={`${event.title}\n${event.startTime} - ${event.endTime}`}
         >
-            <div className={styles["event-title"]}>{event.title}</div>
-            <div className={styles["event-time"]}>
+            <div className={ss["event-title"]}>{event.title}</div>
+            <div className={ss["event-time"]}>
                 {event.startTime} - {event.endTime}
             </div>
+            {event.professor !== -1 && (
+                <div className={ss["event-professor"]}>{event.professor}</div>
+            )}
+            {event.description !== -1 && (
+                <div className={ss["event-description"]}>{event.description}</div>
+            )}
         </div>
     );
 }
@@ -113,8 +146,8 @@ function groupOverlappingEvents(events) {
 
 
 function Scheduler() {
-    const [loadActivitiesResult, setLoadActivitiesStatus] = useState("");
-    const [activities, setActivities] = useState([]);
+    const [loadEventsResult, setLoadEventsStatus] = useState("");
+    const [events, setEvents] = useState([]);
     const [classes, setClasses] = useState([]);
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
     const timeSlots = Array.from({ length: 13 }, (_, i) => `${8 + i}:00`);
@@ -131,27 +164,19 @@ function Scheduler() {
         });
     
         return () => {
-            loadActivities();
+            loadEvents();
             unsubscribe.then(f => f());
         };
     }, []);
 
-    const Class = ({name, time, dates, professor, description}) => {
+    const Event = ({name, startTime, endTime, days, professor, description}) => {
         return {
-            name: name,
-            time: time,
-            date: dates,
-            professor: professor,
-            description: description
-        }
-    }
-
-    const Activity = (startTime, endTime, day, title) => {
-        return {
+            name,
             startTime,
             endTime,
-            day,
-            title
+            days,
+            professor,
+            description,
         }
     }
 
@@ -164,41 +189,47 @@ function Scheduler() {
         }
     }
 
-    async function loadActivities() {
-        // Create a simple activity object and put it in an array
-        setActivities([{
+    async function loadEvents() {
+        // Create a simple Event object and put it in an array
+        setEvents([{
             startTime: "9:15",
             endTime: "13:00",
             day: 2,
-            title: "TEST"
+            title: "TEST",
+            professor: -1,
+            description: -1
         }]);
 
-        setActivities(prevActivities => [...prevActivities, {
+        setEvents(prevEvents => [...prevEvents, {
             startTime: "13:00",
             endTime: "14:00",
             day: 2,
-            title: "TEST1"
+            title: "TEST1",
+            professor: -1,
+            description: -1
         }, {
             startTime: "13:59",
             endTime: "15:00",
             day: 2,
-            title: "TEST2"
+            title: "TEST2",
+            professor: "Albemarle",
+            description: -1
         }]);
         
-        setLoadActivitiesStatus("Loading activities...");
+        setLoadEventsStatus("Loading events...");
         try {
-            await invoke("loadActivities");
+            await invoke("loadEvents");
         } catch (error) {
-            setLoadActivitiesStatus(`Error loading activities: ${error}`);
+            setLoadEventsStatus(`Error loading events: ${error}`);
         }
     }
 
 
-    async function openActivity(time, dayIndex) {
+    async function openEvent(time, dayIndex) {
     
     }
 
-    async function saveActivity() {
+    async function saveEvent() {
           
     }
 
@@ -206,24 +237,6 @@ function Scheduler() {
         
     }
 
-    // First, let's make checkEvent synchronous since we're just filtering arrays
-    function checkEvent(time, dayIndex) {
-        // Check both activities and classes arrays for events at this time slot
-        const matchingActivities = activities.filter(activity => {
-            return activity.day === dayIndex && 
-                activity.startTime <= time && 
-                activity.endTime > time;
-        });
-
-        const matchingClasses = classes.filter(classItem => {
-            return classItem.day === dayIndex && 
-                classItem.startTime <= time && 
-                classItem.endTime > time;
-        });
-
-        // Return the combined array of matching events
-        return [...matchingActivities, ...matchingClasses];
-    }
 
     return (
         <div>
@@ -248,19 +261,18 @@ function Scheduler() {
                                 <div
                                     key={`${time}-${dayIndex}`}
                                     className={ss["calendar-cell"]}
-                                    onClick={() => openActivity(time, dayIndex)}
+                                    onClick={() => openEvent(time, dayIndex)}
                                 />
                             ))}
                         </React.Fragment>
                     ))}
                     
-                    {/* Render event blocks with proper overlap handling */}
-                    {groupOverlappingEvents([...activities, ...classes]).map((group, groupIndex) => 
+                    {/* Render event blocks */}
+                    {groupOverlappingEvents([...events, ...classes]).map((group, groupIndex) => 
                         group.map((event, eventIndex) => (
                             <TimeBlock 
                                 key={`${groupIndex}-${eventIndex}`}
                                 event={event}
-                                styles={ss}
                                 overlappingEvents={group}
                             />
                         ))
