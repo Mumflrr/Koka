@@ -74,6 +74,24 @@ fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn close_splashscreen(window: Window) {
+    // Close splashscreen
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.close().unwrap();
+    }
+    // Show main window
+    window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
+}
+
+#[tauri::command]
+fn show_splashscreen(window: Window) {
+    std::thread::sleep(Duration::from_millis(500));
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.show().unwrap();
+    }
+}
+
+#[tauri::command]
 fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
     // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
     let connect_info_mutex = Arc::clone(&state.connect_info);
@@ -111,24 +129,6 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
 
     // Return Ok to indicate the command has started successfully
     Ok(())
-}
-
-#[tauri::command]
-fn close_splashscreen(window: Window) {
-    // Close splashscreen
-    if let Some(splashscreen) = window.get_window("splashscreen") {
-        splashscreen.close().unwrap();
-    }
-    // Show main window
-    window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
-}
-
-#[tauri::command]
-fn show_splashscreen(window: Window) {
-    std::thread::sleep(Duration::from_millis(500));
-    if let Some(splashscreen) = window.get_window("splashscreen") {
-        splashscreen.show().unwrap();
-    }
 }
 
 

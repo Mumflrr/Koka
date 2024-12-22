@@ -7,18 +7,8 @@ const Scheduler = () => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const startHour = 8;
   const endHour = 20;
-  const intervalMinutes = 1;
-  const gridLineInterval = 30;
-  const totalMinutes = (endHour - startHour) * 60;
-  
+  const totalMinutes = (endHour - startHour) * 60;  
   const containerRef = useRef(null);
-  const [containerHeight, setContainerHeight] = useState(0);
-  
-  const timeSlots = Array.from(
-    { length: (endHour - startHour) * 60 / intervalMinutes },
-    (_, i) => addMinutes(new Date().setHours(startHour, 0, 0, 0), i * intervalMinutes)
-  );
-
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -57,17 +47,6 @@ const Scheduler = () => {
     return time.getHours() * 60 + time.getMinutes() - startHour * 60;
   };
 
-  const isEventInSlot = (event, slotTime, dayIndex) => {
-    if (event.day !== dayIndex) return false;
-    
-    const eventStart = parseTime(event.startTime);
-    const eventEnd = parseTime(event.endTime);
-    const slotEnd = addMinutes(slotTime, intervalMinutes);
-    
-    return isWithinInterval(slotTime, { start: eventStart, end: eventEnd }) ||
-           isWithinInterval(slotEnd, { start: eventStart, end: eventEnd });
-  };
-
   // Process events to add positioning information
   const processEvents = (rawEvents) => {
     const eventsByDay = rawEvents.reduce((acc, event) => {
@@ -90,8 +69,6 @@ const Scheduler = () => {
       
       dayEvents.forEach((event) => {
         const eventStart = parseTime(event.startTime);
-        const eventEnd = parseTime(event.endTime);
-
         const overlapsWithGroup = currentGroup.some(groupEvent => {
           const groupEventEnd = parseTime(groupEvent.endTime);
           return eventStart < groupEventEnd;
@@ -131,20 +108,6 @@ const Scheduler = () => {
 
     return rawEvents;
   };
-
-  // Update container height on mount and window resize
-  useEffect(() => {
-    const updateHeight = () => {
-      if (containerRef.current) {
-        const gridHeight = containerRef.current.clientHeight - 50; // Subtract header height
-        setContainerHeight(gridHeight);
-      }
-    };
-
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
 
   useEffect(() => {
     setEvents(prevEvents => processEvents([...prevEvents]));

@@ -172,9 +172,7 @@ pub async fn get_version(connect_info: &mut ConnectInfo) -> Result<String, anyho
 
 pub async fn chrome_update_check(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
     let old_version = get_version(connect_info).await?;
-    if old_version != connect_info.version {
-        setup_chrome_and_driver(connect_info).await?;
-    } else if check_invalid_paths(connect_info) {
+    if old_version != connect_info.version || check_invalid_paths(connect_info) {
         setup_chrome_and_driver(connect_info).await?;
     }
 
@@ -186,7 +184,7 @@ pub fn check_invalid_paths(connect_info: &mut ConnectInfo) -> bool {
     let driver_path = get_chromedriver_path(connect_info);
     let binary_path = get_chromebinary_path(connect_info);
 
-    return !driver_path.exists() || !binary_path.exists()
+    !driver_path.exists() || !binary_path.exists()
 }
 
 pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, anyhow::Error> {

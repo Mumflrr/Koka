@@ -59,7 +59,7 @@
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: [times] 60px repeat(5, 1fr);
-    height: calc(100% - 50px); /* Subtract header height */
+    height: calc(100% - 25px); /* Subtract header height */
     position: relative;
     min-height: 0; /* Allow container to shrink */
 }
