@@ -1,13 +1,15 @@
 use std::process::Command;
-use crate::{chrome_update_check, get_version, ConnectInfo};
-use rusqlite::{params, Connection, Result};
+use crate::{chrome_update_check, database_functions::setup_database, ConnectInfo};
+use rusqlite::Result;
 
 // Function called to setup and install dependencies for the program
 pub async fn setup_program() -> Result<ConnectInfo, anyhow::Error> {
+    // First get OS info without saving to database
+    let os_info = os_setup_initial();
+    println!("OS setup complete!");
 
-    // May need to call quit chromedriver functions here
-    // Setup database and return the setup struct or panic
-    let mut connect_info = setup_database().await?;
+    // Then setup database with the OS info
+    let mut connect_info = setup_database(os_info).await?;
     println!("Database setup!");
 
     // Setup Chromium and ChromeDriver
@@ -17,52 +19,8 @@ pub async fn setup_program() -> Result<ConnectInfo, anyhow::Error> {
     Ok(connect_info)
 }
 
-
-async fn setup_database() -> Result<ConnectInfo, anyhow::Error> {
-    // Open database file
-    let conn = Connection::open("programData.db")?;
-
-    // Create table if need be
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS data (id SMALLINT, version TINYTEXT, os TINYTEXT)",
-        (),
-    )?;
-
-    // Pre-allocate struct and prepare statement
-    let mut connect_info: ConnectInfo;
-    let mut stmt = conn.prepare("SELECT version, os FROM data WHERE id = 0")?;
-
-    // Run statement and try to save result into a struct
-    // If successful then save the resulting struct into the pre-allocated struct
-    // If an error is thrown because there is no table, then setup struct with os_setup and get_version
-    match stmt.query_row([], |row| {
-                                    Ok(ConnectInfo {
-                                        version: row.get(0)?,
-                                        os: row.get(1)?,
-                                    })}) {
-        Ok(result_struct) => connect_info = result_struct,
-        Err(_) => {
-                    connect_info = os_setup(&conn);
-                    get_version(&mut connect_info).await?;
-                    }
-    }
-
-    println!("Retrieved data: {}, {}", connect_info.os, connect_info.version);
-
-    Ok(connect_info)
-} 
-
-// Setup base struct
-fn setup_struct() -> ConnectInfo {
-    ConnectInfo {
-        os : String::from(""),
-        version : String::from(""),
-    }
-}
-
-// For the given os, setup the ConnectInfo struct and set the struct os_url field to the
-// corresponding chromedriver directory, and save values into database
-fn os_setup(conn: &Connection) -> ConnectInfo {
+// New function to get OS info without database interaction
+fn os_setup_initial() -> ConnectInfo {
     let mut connect_info = setup_struct();
 
     // Determine the OS and architecture
@@ -80,19 +38,20 @@ fn os_setup(conn: &Connection) -> ConnectInfo {
         panic!("Unsupported operating system");
     };
 
-    // Save OS information to the database
-    conn.execute(
-        "INSERT INTO data (id, os) VALUES (0, ?1)",
-        params![connect_info.os],
-    )
-    .expect("OSetup: Unable to save program info into db");
-
     // Install dependencies
     check_and_install_dependencies();
 
     connect_info
 }
 
+
+// Setup base struct
+fn setup_struct() -> ConnectInfo {
+    ConnectInfo {
+        os : String::from(""),
+        version : String::from(""),
+    }
+}
 
 // Ensure the system has dependencies installed
 fn check_and_install_dependencies() {

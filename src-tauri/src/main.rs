@@ -6,8 +6,9 @@ mod tauri_command_backends;
 mod chrome_functions;
 mod database_functions;
 
+use database_functions::{delete_event_database, load_events_database, save_events_database, Event};
 use program_setup::*;
-use tauri::{Manager, Window};
+use tauri::{Manager, State, Window};
 use tauri_command_backends::*;
 use chrome_functions::*;
 
@@ -131,6 +132,77 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
     Ok(())
 }
 
+#[tauri::command]
+fn create_event_frontend(event: Event, events_state: State<Mutex<Vec<Event>>>) -> Result<(), String> {
+    // Since we can't await in a sync function, we'll create a runtime
+    let rt = tokio::runtime::Runtime::new()
+        .expect("Failed to create runtime");
+            
+    // Lock the mutex in the runtime
+    let mut events = rt.block_on(events_state.lock());
+    events.push(event.clone());
+    
+    // Clone the updated events for the new thread
+    let events_to_save = events.clone();
+    
+    thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create runtime");
+            
+        let result = rt.block_on(async {
+            save_events_database(events_to_save).await
+        });
+        
+        if let Err(e) = result {
+            eprintln!("Error saving events: {}", e);
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_events_frontend(events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Event>, String> {
+    let rt = tokio::runtime::Runtime::new()
+        .expect("Failed to create runtime");
+    
+    let handle = thread::spawn(|| {
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create runtime");
+            
+        rt.block_on(async {
+            load_events_database()
+                .await
+                .map_err(|e| format!("Failed to load events: {}", e))
+        })
+    });
+    
+    // Update the state with the loaded events
+    match handle.join() {
+        Ok(Ok(loaded_events)) => {
+            let mut events = rt.block_on(events_state.lock());
+            *events = loaded_events.clone();
+            Ok(loaded_events)
+        },
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("Thread panicked while loading events".to_string())
+    }
+}
+
+#[tauri::command]
+async fn delete_event_frontend(event_id: i32, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
+    // First try to delete from database
+    if let Err(e) = delete_event_database(event_id).await {
+        return Err(format!("Failed to delete event: {}", e));
+    }
+    
+    // If database deletion succeeds, update state
+    let mut events = events_state.lock().await;
+    events.retain(|e| e.id != event_id);
+    
+    Ok(())
+}
+
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -142,6 +214,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 connect_info: Arc::new(Mutex::new(ConnectInfo::default())),
                 startup_complete: AtomicBool::new(false),
             });
+
+            app.manage(Mutex::new(Vec::<Event>::new()));
 
             let ascii = r#" 
   ____    ___                                   
@@ -161,6 +235,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             close_splashscreen,
             startup_app,
             show_splashscreen,
+            create_event_frontend,
+            get_events_frontend,
+            delete_event_frontend,
         ])
         .run(tauri::generate_context!())?;
 
