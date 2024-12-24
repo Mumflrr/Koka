@@ -3,18 +3,141 @@ import React from 'react';
 import { parse, format, addMinutes } from 'date-fns';
 import { invoke } from "@tauri-apps/api/tauri";
 import ss from './CalendarGrid.module.css';
-import { Trash2 } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 
-const Modal = ({ isOpen, onClose, children }) => {
-  if (!isOpen) return null;
-  return (
-    <div className={ss['modal-overlay']} onClick={onClose}>
-      <div className={ss['modal-content']} onClick={e => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
+
+const DayCheckbox = ({ day, index, checked, onChange }) => (
+    <label 
+      className={`${ss['day-checkbox']} ${checked ? ss.selected : ''}`}
+      key={day}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onChange(index)}
+      />
+      <span className={ss['days-text']}>{day}</span>
+    </label>
   );
-};
+
+  
+const Modal = ({ isOpen, onClose, children }) => {
+    return (
+      <div 
+        className={`${ss['slide-modal-container']} ${isOpen ? ss['modal-open'] : ''}`}
+        onClick={onClose}
+      >
+        <div 
+          className={ss['slide-modal']}
+          onClick={e => e.stopPropagation()}
+        >
+          <button 
+            className={ss['close-button']} 
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            <X size={20} />
+          </button>
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+
+  const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
+    const days = ['M', 'Tu', 'W', 'Th', 'F'];
+    
+    const handleDayToggle = (dayIndex) => {
+      setNewEvent(prev => ({
+        ...prev,
+        selectedDays: prev.selectedDays.includes(dayIndex)
+          ? prev.selectedDays.filter(d => d !== dayIndex)
+          : [...prev.selectedDays, dayIndex]
+      }));
+    };
+  
+    return (
+      <>
+        <div className={ss['form-grid']}>
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Title</label>
+            <input
+              type="text"
+              className={ss['form-input']}
+              value={newEvent.title}
+              onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
+            />
+          </div>
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Days</label>
+            <div className={ss['days-grid']}>
+              {days.map((day, index) => (
+                <DayCheckbox
+                  key={day}
+                  day={day}
+                  index={index}
+                  checked={newEvent.selectedDays.includes(index)}
+                  onChange={handleDayToggle}
+                />
+              ))}
+            </div>
+          </div>
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Time</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="time"
+                className={ss['form-input']}
+                value={newEvent.startTime}
+                onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
+                style={{ width: '50%' }}
+              />
+              <input
+                type="time"
+                className={ss['form-input']}
+                value={newEvent.endTime}
+                onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
+                style={{ width: '50%' }}
+              />
+            </div>
+          </div>
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Professor</label>
+            <input
+              type="text"
+              className={ss['form-input']}
+              value={newEvent.professor}
+              onChange={(e) => setNewEvent({...newEvent, professor: e.target.value})}
+            />
+          </div>
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Description</label>
+            <textarea
+              className={ss['form-textarea']}
+              value={newEvent.description}
+              onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
+              placeholder="Add event description..."
+            />
+          </div>
+        </div>
+        <div className={ss['button-container']}>
+          <button 
+            className={`${ss.button} ${ss['button-outline']}`}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button 
+            className={`${ss.button} ${ss['button-primary']}`}
+            onClick={onSave}
+          >
+            Create
+          </button>
+        </div>
+      </>
+    );
+  };
 
 const Event = ({ event, eventStyle, onDelete }) => {
     const asyncConfirm = async (message) => {
@@ -67,19 +190,21 @@ const Event = ({ event, eventStyle, onDelete }) => {
     );
   };
 
+const defaultEventState = {
+    title: '',
+    startTime: '',
+    endTime: '',
+    selectedDays: [], // Initialize empty array
+    professor: '',
+    description: ''
+};
+
 const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete }) => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const totalMinutes = (endHour - startHour) * 60;
   const containerRef = React.useRef(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [newEvent, setNewEvent] = React.useState({
-    title: '',
-    startTime: '',
-    endTime: '',
-    day: 0,
-    professor: '',
-    description: ''
-  });
+  const [newEvent, setNewEvent] = React.useState({...defaultEventState});
 
   const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
 
@@ -103,28 +228,36 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     const endTime = format(addMinutes(parseTime(clickTime), 60), 'HH:mm');
 
     setNewEvent({
-      title: '',
+      ...defaultEventState,
       startTime: clickTime,
       endTime: endTime,
-      day: dayIndex,
-      professor: '',
-      description: ''
+      selectedDays: [dayIndex], // Initialize with clicked day
     });
     setIsModalOpen(true);
   };
 
+  const handleDayToggle = (dayIndex) => {
+    setNewEvent(prev => ({
+      ...prev,
+      selectedDays: prev.selectedDays.includes(dayIndex)
+        ? prev.selectedDays.filter(d => d !== dayIndex)
+        : [...prev.selectedDays, dayIndex]
+    }));
+  };
+
   const handleSaveEvent = () => {
-    if (newEvent.title && newEvent.startTime && newEvent.endTime) {
-      onEventCreate(newEvent);
-      setIsModalOpen(false);
-      setNewEvent({
-        title: '',
-        startTime: '',
-        endTime: '',
-        day: 0,
-        professor: '',
-        description: ''
+    if (newEvent.title && newEvent.startTime && newEvent.endTime && newEvent.selectedDays.length > 0) {
+      // Create an event for each selected day
+      newEvent.selectedDays.forEach(dayIndex => {
+        const eventForDay = {
+          ...newEvent,
+          day: dayIndex
+        };
+        onEventCreate(eventForDay);
       });
+      
+      setIsModalOpen(false);
+      setNewEvent({...defaultEventState});
     }
   };
 
@@ -137,7 +270,9 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     return { top: `${top}%`, height: `${height}%`, zIndex: eventIndex + 1 };
   };
 
+
   return (
+    <div className={ss['calendar-container']}>
     <div className={ss['calendar-grid']}>
       <div className={ss['header-spacer']} />
       {days.map(day => (
@@ -183,72 +318,18 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
         ))}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className={ss['modal-header']}>
-          <h2 className={ss['modal-title']}>Create New Event</h2>
-        </div>
-        <div className={ss['form-grid']}>
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Title</label>
-            <input
-              type="text"
-              className={ss['form-input']}
-              value={newEvent.title}
-              onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
+        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            <div className={ss['modal-header']}>
+                <h2 className={ss['modal-title']}>New Event</h2>
+            </div>
+            <EventForm 
+                newEvent={newEvent}
+                setNewEvent={setNewEvent}
+                onSave={handleSaveEvent}
+                onCancel={() => setIsModalOpen(false)}
             />
-          </div>
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Start Time</label>
-            <input
-              type="time"
-              className={ss['form-input']}
-              value={newEvent.startTime}
-              onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
-            />
-          </div>
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>End Time</label>
-            <input
-              type="time"
-              className={ss['form-input']}
-              value={newEvent.endTime}
-              onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
-            />
-          </div>
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Professor</label>
-            <input
-              type="text"
-              className={ss['form-input']}
-              value={newEvent.professor}
-              onChange={(e) => setNewEvent({...newEvent, professor: e.target.value})}
-            />
-          </div>
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Description</label>
-            <input
-              type="text"
-              className={ss['form-input']}
-              value={newEvent.description}
-              onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
-            />
-          </div>
-        </div>
-        <div className={ss['button-container']}>
-          <button 
-            className={`${ss.button} ${ss['button-outline']}`}
-            onClick={() => setIsModalOpen(false)}
-          >
-            Cancel
-          </button>
-          <button 
-            className={`${ss.button} ${ss['button-primary']}`}
-            onClick={handleSaveEvent}
-          >
-            Create Event
-          </button>
-        </div>
-      </Modal>
+            </Modal>
+      </div>
     </div>
   );
 };
