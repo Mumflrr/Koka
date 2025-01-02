@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SidebarProvider } from './components/Sidebar/SidebarContext';
 import { invoke } from "@tauri-apps/api/tauri";
-import { listen } from "@tauri-apps/api/event";
 import Home from './components/Home';
 import Courses from './components/Courses/Courses';
 import Calendar from './components/Calendar';
@@ -48,19 +46,17 @@ function App() {
     }, [showSplashscreen, startupApp, closeSplashscreen]);
 
     return (
-        <SidebarProvider>
-            <BrowserRouter>
-                <Routes>
-                    <Route path='/' element={<Home />} />
-                    <Route path='/calendar' element={<Calendar />}/>
-                    <Route path='/courses' element={<Courses />}/>
-                    <Route path='/dining' element={<Dining />}/>
-                    <Route path='/gallery' element={<Gallery />}/>
-                    <Route path='/settings' element={<Settings />}/>
-                    <Route path='/scheduler' element={<Scheduler />}/>
-                </Routes>
-            </BrowserRouter>
-        </SidebarProvider>
+        <BrowserRouter>
+            <Routes>
+                <Route path='/' element={<Home />} />
+                <Route path='/calendar' element={<Calendar />}/>
+                <Route path='/courses' element={<Courses />}/>
+                <Route path='/dining' element={<Dining />}/>
+                <Route path='/gallery' element={<Gallery />}/>
+                <Route path='/settings' element={<Settings />}/>
+                <Route path='/scheduler' element={<Scheduler />}/>
+            </Routes>
+        </BrowserRouter>
     );
 }
 

@@ -20,7 +20,6 @@ reqwest = { version = "0.11", features = ["json", "blocking"] }
 zip = "0.5"
 anyhow = "1.0"
 
-
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
