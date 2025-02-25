@@ -94,7 +94,7 @@
 
 .event {
     position: absolute;
-    padding: 8px;
+    padding-left: 2px;
     border-radius: 6px;
     overflow: hidden;
     transition: all 0.2s ease;
@@ -124,7 +124,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .event-title {
@@ -133,7 +133,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 8px;
+    margin-right: 4px;
 }
 
 .delete-button {

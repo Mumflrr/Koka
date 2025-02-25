@@ -44,8 +44,44 @@ const Modal = ({ isOpen, onClose, children }) => {
     );
   };
 
+// New component for displaying event details
+const EventInfoDisplay = ({ event, onClose }) => {
+  return (
+    <>
+      <div className={ss['modal-header']}>
+        <h2 className={ss['modal-title']}>{event.title}</h2>
+      </div>
+      <div className={ss['form-grid']}>
+        <div className={ss['form-row']}>
+          <label className={ss['form-label']}>Time</label>
+          <div className={ss['info-text']}>{event.startTime} - {event.endTime}</div>
+        </div>
+        {event.professor && (
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Professor</label>
+            <div className={ss['info-text']}>{event.professor}</div>
+          </div>
+        )}
+        {event.description && (
+          <div className={ss['form-row']}>
+            <label className={ss['form-label']}>Description</label>
+            <div className={ss['info-text']}>{event.description}</div>
+          </div>
+        )}
+      </div>
+      <div className={ss['button-container']}>
+        <button 
+          className={`${ss.button} ${ss['button-primary']}`}
+          onClick={onClose}
+        >
+          Close
+        </button>
+      </div>
+    </>
+  );
+};
 
-  const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
+const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
     const days = ['M', 'Tu', 'W', 'Th', 'F'];
     
     const handleDayToggle = (dayIndex) => {
@@ -139,15 +175,21 @@ const Modal = ({ isOpen, onClose, children }) => {
     );
   };
 
-const Event = ({ event, eventStyle, onDelete }) => {
+const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
+
     const asyncConfirm = async (message) => {
         return new Promise((resolve) => {
           const result = window.confirm(message);
           resolve(result); // Resolve the promise with the user's choice
         });
       };
+
+    const openInfo = (e) => {
+        e.stopPropagation();
+        onInfoOpen(event); // Pass the event to the parent component
+    }
       
-      const handleDelete = async (e) => {
+    const handleDelete = async (e) => {
         e.stopPropagation(); // Prevent parent click handlers
       
         const confirmed = await asyncConfirm('Are you sure you want to delete this event?'); // Await user's choice
@@ -160,13 +202,13 @@ const Event = ({ event, eventStyle, onDelete }) => {
           console.error('Error deleting event:', err); // Log error
           alert('Failed to delete event. Please try again.'); // Inform user
         }
-      };
+    };
   
     return (
       <div
         className={`${ss.event} ${event.professor === '' ? ss.activity : ss.class}`}
         style={eventStyle}
-        onClick={(e) => e.stopPropagation()}
+        onClick={openInfo}
       >
         <div className={ss['event-header']}>
           <div className={ss['event-title']}>{event.title}</div>
@@ -202,8 +244,10 @@ const defaultEventState = {
 const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete }) => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const totalMinutes = (endHour - startHour) * 60;
-  const containerRef = React.useRef(null);
+//  const containerRef = React.useRef(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isInfoOpen, setIsInfoOpen] = React.useState(false);
+  const [selectedEvent, setSelectedEvent] = React.useState(null);
   const [newEvent, setNewEvent] = React.useState({...defaultEventState});
 
   const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
@@ -236,13 +280,9 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     setIsModalOpen(true);
   };
 
-  const handleDayToggle = (dayIndex) => {
-    setNewEvent(prev => ({
-      ...prev,
-      selectedDays: prev.selectedDays.includes(dayIndex)
-        ? prev.selectedDays.filter(d => d !== dayIndex)
-        : [...prev.selectedDays, dayIndex]
-    }));
+  const handleEventClick = (event) => {
+    setSelectedEvent(event);
+    setIsInfoOpen(true);
   };
 
   const handleSaveEvent = () => {
@@ -312,12 +352,14 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
                         left: event.left,
                     }}
                     onDelete={onEventDelete}
+                    onInfoOpen={handleEventClick}
                     />
                 ))}
           </div>
         ))}
       </div>
 
+        {/* Modal for creating new events */}
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
             <div className={ss['modal-header']}>
                 <h2 className={ss['modal-title']}>New Event</h2>
@@ -328,7 +370,17 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
                 onSave={handleSaveEvent}
                 onCancel={() => setIsModalOpen(false)}
             />
-            </Modal>
+        </Modal>
+
+        {/* Modal for displaying event info */}
+        <Modal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)}>
+            {selectedEvent && (
+                <EventInfoDisplay 
+                    event={selectedEvent}
+                    onClose={() => setIsInfoOpen(false)}
+                />
+            )}
+        </Modal>
       </div>
     </div>
   );

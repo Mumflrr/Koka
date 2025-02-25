@@ -13,6 +13,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transition: 0ms;
 }
   
 .message-container {
@@ -46,10 +47,3 @@
   .button-primary:hover {
     background-color: #1d4ed8;
   }
-
-@media (max-width: 768px) {
-    .calendar-wrapper {
-        padding: 0.5rem;
-    }
-
-}

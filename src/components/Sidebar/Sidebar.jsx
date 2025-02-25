@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Calendar, Utensils, Presentation, SearchIcon, Squirrel} from "lucide-react";
 import useStore from '../Store.jsx';
+import { shallow } from 'zustand/shallow'
 import ss from "./Sidebar.module.css";
 
 const SidebarItem = ({ icon: Icon, label, to }) => {
@@ -20,6 +21,7 @@ const SidebarItem = ({ icon: Icon, label, to }) => {
 function Sidebar() {
     const isExpanded = useStore(state => state.isExpanded)
     const setIsExpanded = useStore(state => state.setIsExpanded)
+    
     const sidebarItems = [
         { icon: LayoutDashboard, label: "Home", path: "/" },
         { icon: Calendar, label: "Calendar", path: "/calendar" },
