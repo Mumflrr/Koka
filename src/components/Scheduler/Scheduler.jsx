@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from "@tauri-apps/api/tauri";
 import { parse } from 'date-fns';
-import CalendarGrid from './CalendarGrid';
+import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
@@ -10,6 +10,10 @@ const Scheduler = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapeStatus, setScrapeStatus] = useState("");
+  const [params, setParams] = useState([]);
+  const [classes, setClasses] = useState([]);
 
   useEffect(() => {
     loadEvents();
@@ -120,6 +124,17 @@ const Scheduler = () => {
     return rawEvents;
   };
 
+  const schedulerScrape = async () => {
+    setIsScraping(true);
+    try {
+        await invoke("scheduler_scrape", {params: 'ovare', classes: 'teste'});
+    } catch (error) {
+        setScrapeStatus(`Error starting scrape: ${error}`);
+    } finally {
+        setIsScraping(false);
+    }
+};
+
   if (loading) {
     return (
       <div className={ss['scheduler']}>
@@ -158,6 +173,11 @@ const Scheduler = () => {
         onEventDelete={handleDeleteEvent}
         />
       </div>
+      <button onClick={schedulerScrape} disabled={isScraping}>
+                    {isScraping ? "Scraping..." : "Start Scrape"}
+      </button>
+
+      <p>{scrapeStatus}</p>
     </div>
   );
 };

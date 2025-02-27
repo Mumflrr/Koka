@@ -33,6 +33,12 @@ struct AppState {
     startup_complete: AtomicBool,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Class {
+    code: Box<String>,
+    name: Box<String>,
+}
+
 // ConnectInfo struct (only one should ever be instantiated)
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct ConnectInfo {
@@ -93,7 +99,7 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+fn scheduler_scrape(params: [bool; 3] , classes: Box<[Class]>, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
     // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
@@ -114,7 +120,7 @@ fn scheduler_scrape(state: tauri::State<'_, AppState>, window: tauri::Window) ->
             let driver = start_chromedriver(&connect_info).await?;
 
             // Perform the schedule scrape with the initialized driver
-            perform_schedule_scrape(driver).await
+            perform_schedule_scrape(params, classes, driver).await
         });
 
         // Emit the result to the frontend

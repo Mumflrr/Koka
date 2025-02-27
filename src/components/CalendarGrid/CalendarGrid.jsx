@@ -236,7 +236,7 @@ const defaultEventState = {
     title: '',
     startTime: '',
     endTime: '',
-    selectedDays: [], // Initialize empty array
+    selectedDays: [],
     professor: '',
     description: ''
 };

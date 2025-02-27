@@ -3,8 +3,10 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
+use crate::Class;
+
 // Performs the scraping
-pub async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Error> {
+pub async fn perform_schedule_scrape(params: [bool; 3], classes: Box<[Class]>, driver: WebDriver) -> Result<(), anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     
@@ -37,7 +39,15 @@ pub async fn perform_schedule_scrape(driver: WebDriver) -> Result<(), anyhow::Er
     cart_label.click().await?;
     driver.find(By::Id("classSearchTab")).await?.click().await?;
 
+    if params[0] {
 
+    }
+    if params[1] {
+
+    }
+    if params[2] {
+
+    }
 
     loop{}
 

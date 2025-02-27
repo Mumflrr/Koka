@@ -417,6 +417,10 @@
     min-width: 14px; /* Prevent checkbox from shrinking */
     margin: 0;
   }
+
+  .info-text {
+    color: black;
+  }
   
   
 
