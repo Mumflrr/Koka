@@ -1,7 +1,18 @@
 import { parse } from 'date-fns';
 
+const startHour = 8;
+const endHour = 20;
+const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
+
+const getMinutesSinceStart = (timeStr) => {
+    const time = parseTime(timeStr);
+    return time.getHours() * 60 + time.getMinutes() - startHour * 60;
+};
+
 const processEvents = (rawEvents) => {
     if (!rawEvents || rawEvents.length === 0) return [];
+
+    const totalMinutes = (endHour - startHour) * 60;
 
     const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
 
@@ -75,9 +86,19 @@ const processEvents = (rawEvents) => {
                 event.left = '0%';
             }
         });
+
+        // Calculate vertical positioning
+        eventsByDay[day].forEach(event => {
+            const startMinutes = getMinutesSinceStart(event.startTime);
+            const endMinutes = getMinutesSinceStart(event.endTime);
+            const duration = endMinutes - startMinutes;
+            
+            event.topPosition = `${(startMinutes / totalMinutes) * 100}%`;
+            event.heightPosition = `${(duration / totalMinutes) * 100}%`;
+        });
     });
 
-    return rawEvents;
+    return Object.values(eventsByDay).flat();
 };
 
 export default processEvents;

@@ -287,11 +287,6 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
 
   const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
 
-  const getMinutesSinceStart = (timeStr) => {
-    const time = parseTime(timeStr);
-    return time.getHours() * 60 + time.getMinutes() - startHour * 60;
-  };
-
   const getTimeFromPosition = (yPos, columnHeight) => {
     const percentageDown = yPos / columnHeight;
     const minutesSinceStart = Math.floor(percentageDown * totalMinutes);
@@ -330,15 +325,6 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     }
   };
 
-  const calculateEventStyle = (startTime, endTime, eventIndex) => {
-    const startMinutes = getMinutesSinceStart(startTime);
-    const endMinutes = getMinutesSinceStart(endTime);
-    const duration = endMinutes - startMinutes;
-    const top = (startMinutes / totalMinutes) * 100;
-    const height = (duration / totalMinutes) * 100;
-    return { top: `${top}%`, height: `${height}%`, zIndex: eventIndex + 1 };
-  };
-
   return (
     <div className={ss['calendar-container']}>
       <div className={ss['calendar-grid']}>
@@ -372,13 +358,15 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
               {events
                 .filter(event => isDaySelected(event.day, dayIndex))
                 .map((event, eventIndex) => (
-                  <Event 
-                    key={`${event.id}-${dayIndex}`} // Using dayIndex in key for multi-day events
+                    <Event 
+                    key={`${event.id}-${dayIndex}`}
                     event={event}
                     eventStyle={{
-                      ...calculateEventStyle(event.startTime, event.endTime, eventIndex),
+                      top: event.topPosition,
+                      height: event.heightPosition,
                       width: event.width,
                       left: event.left,
+                      zIndex: eventIndex + 1
                     }}
                     onDelete={onEventDelete}
                     onInfoOpen={handleEventClick}
