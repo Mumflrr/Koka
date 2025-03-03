@@ -1,7 +1,6 @@
 // CalendarGrid.js
 import React from 'react';
 import { parse, format, addMinutes } from 'date-fns';
-import { invoke } from "@tauri-apps/api/tauri";
 import ss from './CalendarGrid.module.css';
 import { Trash2, X } from 'lucide-react';
 
@@ -176,7 +175,8 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
   };
 
 const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
-
+    const [eventCreated, setEventCreated] = React.useState(false);
+    
     const asyncConfirm = async (message) => {
         return new Promise((resolve) => {
           const result = window.confirm(message);
@@ -196,8 +196,9 @@ const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
         if (!confirmed) return; // Exit early if the user cancels
       
         try {
-          await invoke('delete_event_frontend', { eventId: event.id }); // Invoke deletion
+          setEventCreated(true);
           onDelete(event.id); // Notify parent about deletion
+          setEventCreated(false);
         } catch (err) {
           console.error('Error deleting event:', err); // Log error
           alert('Failed to delete event. Please try again.'); // Inform user
@@ -244,7 +245,6 @@ const defaultEventState = {
 const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete }) => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const totalMinutes = (endHour - startHour) * 60;
-//  const containerRef = React.useRef(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isInfoOpen, setIsInfoOpen] = React.useState(false);
   const [selectedEvent, setSelectedEvent] = React.useState(null);

@@ -7,6 +7,8 @@ use crate::Class;
 
 // Performs the scraping
 pub async fn perform_schedule_scrape(params: [bool; 3], classes: Box<[Class]>, driver: WebDriver) -> Result<(), anyhow::Error> {    
+    println!("1: {}, 2:{}, 3:{}", params[0], params[1], params[2]);
+    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     

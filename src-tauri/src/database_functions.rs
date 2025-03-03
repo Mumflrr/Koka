@@ -38,6 +38,19 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         (),
     )?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS scheduler (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            day INTEGER NOT NULL,
+            professor TEXT,
+            description TEXT
+        )",
+        (),
+    )?;
+
     // Pre-allocate struct and prepare statement
     let mut connect_info: ConnectInfo;
     let mut stmt = conn.prepare("SELECT version, os FROM data WHERE id = 0")?;
@@ -87,7 +100,7 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
 }
 
 
-pub async fn save_events_database(events: Vec<Event>) -> Result<(), anyhow::Error> {
+pub async fn save_calendar_events(events: Vec<Event>) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
         
@@ -115,7 +128,7 @@ pub async fn save_events_database(events: Vec<Event>) -> Result<(), anyhow::Erro
     }).await?
 }
 
-pub async fn load_events_database() -> Result<Vec<Event>, anyhow::Error> {
+pub async fn load_calendar_events() -> Result<Vec<Event>, anyhow::Error> {
     tokio::task::spawn_blocking(|| -> Result<Vec<Event>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
         let mut stmt = conn.prepare(
@@ -139,11 +152,75 @@ pub async fn load_events_database() -> Result<Vec<Event>, anyhow::Error> {
     }).await?
 }
 
-pub async fn delete_event_database(event_id: i32) -> Result<(), anyhow::Error> {
+pub async fn delete_calendar_events(event_id: i32) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
         conn.execute(
             "DELETE FROM events WHERE id = ?1",
+            params![event_id],
+        )?;
+        Ok(())
+    }).await?
+}
+
+
+pub async fn save_scheduler_events(events: Vec<Event>) -> Result<(), anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+        
+        // Clear existing events
+        conn.execute("DELETE FROM scheduler", [])?;
+        
+        // Insert new events
+        for event in events {
+            conn.execute(
+                "INSERT INTO scheduler (id, title, start_time, end_time, day, professor, description) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    event.id,
+                    event.title,
+                    event.start_time,
+                    event.end_time,
+                    event.day,
+                    event.professor,
+                    event.description
+                ],
+            )?;
+        }
+        
+        Ok(())
+    }).await?
+}
+
+pub async fn load_scheduler_events() -> Result<Vec<Event>, anyhow::Error> {
+    tokio::task::spawn_blocking(|| -> Result<Vec<Event>, anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, title, start_time, end_time, day, professor, description FROM scheduler"
+        )?;
+        
+        let events = stmt.query_map([], |row| {
+            Ok(Event {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                start_time: row.get(2)?,
+                end_time: row.get(3)?,
+                day: row.get(4)?,
+                professor: row.get(5)?,
+                description: row.get(6)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+        
+        Ok(events)
+    }).await?
+}
+
+pub async fn delete_scheduler_events(event_id: i32) -> Result<(), anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+        conn.execute(
+            "DELETE FROM scheduler WHERE id = ?1",
             params![event_id],
         )?;
         Ok(())
