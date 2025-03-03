@@ -6,8 +6,23 @@ const processEvents = (rawEvents) => {
     const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
 
     const eventsByDay = rawEvents.reduce((acc, event) => {
-        acc[event.day] = acc[event.day] || [];
-        acc[event.day].push(event);
+        // Process each day bit (Sunday = bit 0, Saturday = bit 6)
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+            // Check if the current day bit is set (1)
+            if ((event.day & (1 << dayIndex)) !== 0) {
+                // Convert dayIndex to a consistent string key
+                const dayKey = dayIndex.toString();
+                
+                // Initialize the array for this day if it doesn't exist
+                acc[dayKey] = acc[dayKey] || [];
+                
+                // Clone the event for each day it occurs on
+                const eventCopy = { ...event };
+                
+                // Add the event to this day's array
+                acc[dayKey].push(eventCopy);
+            }
+        }
         return acc;
     }, {});
 
