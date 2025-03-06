@@ -33,6 +33,12 @@ struct AppState {
     startup_complete: AtomicBool,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub enum EventType {
+    Calendar,
+    Scheduler
+}
+
 #[derive(Serialize, Deserialize)]
 struct Class {
     code: Box<String>,
@@ -138,17 +144,15 @@ fn scheduler_scrape(params: [bool; 3] , classes: Box<[Class]>, state: tauri::Sta
     Ok(())
 }
 
+// Create event method
 #[tauri::command]
-fn create_event_calendar(event: Event, events_state: State<Mutex<Vec<Event>>>) -> Result<(), String> {
-    // Since we can't await in a sync function, we'll create a runtime
+fn create_event(event: Event, event_type: EventType, events_state: State<Mutex<Vec<Event>>>) -> Result<(), String> {
     let rt = tokio::runtime::Runtime::new()
         .expect("Failed to create runtime");
-            
-    // Lock the mutex in the runtime
+    
     let mut events = rt.block_on(events_state.lock());
     events.push(event.clone());
     
-    // Clone the updated events for the new thread
     let events_to_save = events.clone();
     
     thread::spawn(move || {
@@ -156,7 +160,10 @@ fn create_event_calendar(event: Event, events_state: State<Mutex<Vec<Event>>>) -
             .expect("Failed to create runtime");
             
         let result = rt.block_on(async {
-            save_calendar_events(events_to_save).await
+            match event_type {
+                EventType::Calendar => save_calendar_events(events_to_save).await,
+                EventType::Scheduler => save_scheduler_events(events_to_save).await,
+            }
         });
         
         if let Err(e) = result {
@@ -167,19 +174,23 @@ fn create_event_calendar(event: Event, events_state: State<Mutex<Vec<Event>>>) -
     Ok(())
 }
 
+// Get events method
 #[tauri::command]
-fn get_events_calendar(events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Event>, String> {
+fn get_events(event_type: EventType, events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Event>, String> {
     let rt = tokio::runtime::Runtime::new()
         .expect("Failed to create runtime");
     
-    let handle = thread::spawn(|| {
+    let event_type_clone = event_type.clone();
+    let handle = thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new()
             .expect("Failed to create runtime");
             
         rt.block_on(async {
-            load_calendar_events()
-                .await
-                .map_err(|e| format!("Failed to load events: {}", e))
+            match event_type_clone {
+                EventType::Calendar => load_calendar_events().await,
+                EventType::Scheduler => load_scheduler_events().await,
+            }
+            .map_err(|e| format!("Failed to load events: {}", e))
         })
     });
     
@@ -195,81 +206,16 @@ fn get_events_calendar(events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Eve
     }
 }
 
+// Delete event method
 #[tauri::command]
-async fn delete_event_calendar(event_id: i32, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
+async fn delete_event(event_id: i32, event_type: EventType, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
     // First try to delete from database
-    if let Err(e) = delete_calendar_events(event_id).await {
-        return Err(format!("Failed to delete event: {}", e));
-    }
+    let result = match event_type {
+        EventType::Calendar => delete_calendar_events(event_id).await,
+        EventType::Scheduler => delete_scheduler_events(event_id).await,
+    };
     
-    // If database deletion succeeds, update state
-    let mut events = events_state.lock().await;
-    events.retain(|e| e.id != event_id);
-    
-    Ok(())
-}
-
-#[tauri::command]
-fn create_event_scheduler(event: Event, events_state: State<Mutex<Vec<Event>>>) -> Result<(), String> {
-    // Since we can't await in a sync function, we'll create a runtime
-    let rt = tokio::runtime::Runtime::new()
-        .expect("Failed to create runtime");
-            
-    // Lock the mutex in the runtime
-    let mut events = rt.block_on(events_state.lock());
-    events.push(event.clone());
-    
-    // Clone the updated events for the new thread
-    let events_to_save = events.clone();
-    
-    thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("Failed to create runtime");
-            
-        let result = rt.block_on(async {
-            save_scheduler_events(events_to_save).await
-        });
-        
-        if let Err(e) = result {
-            eprintln!("Error saving events: {}", e);
-        }
-    });
-
-    Ok(())
-}
-
-#[tauri::command]
-fn get_events_scheduler(events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Event>, String> {
-    let rt = tokio::runtime::Runtime::new()
-        .expect("Failed to create runtime");
-    
-    let handle = thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("Failed to create runtime");
-            
-        rt.block_on(async {
-            load_scheduler_events()
-                .await
-                .map_err(|e| format!("Failed to load events: {}", e))
-        })
-    });
-    
-    // Update the state with the loaded events
-    match handle.join() {
-        Ok(Ok(loaded_events)) => {
-            let mut events = rt.block_on(events_state.lock());
-            *events = loaded_events.clone();
-            Ok(loaded_events)
-        },
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err("Thread panicked while loading events".to_string())
-    }
-}
-
-#[tauri::command]
-async fn delete_event_scheduler(event_id: i32, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
-    // First try to delete from database
-    if let Err(e) = delete_scheduler_events(event_id).await {
+    if let Err(e) = result {
         return Err(format!("Failed to delete event: {}", e));
     }
     
@@ -312,12 +258,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             close_splashscreen,
             startup_app,
             show_splashscreen,
-            create_event_calendar,
-            get_events_calendar,
-            delete_event_calendar,
-            create_event_scheduler,
-            get_events_scheduler,
-            delete_event_scheduler,
+            create_event,
+            get_events,
+            delete_event,
         ])
         .run(tauri::generate_context!())?;
 

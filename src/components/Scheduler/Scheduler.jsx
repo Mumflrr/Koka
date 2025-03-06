@@ -25,7 +25,7 @@ const Scheduler = () => {
         try {
             setLoading(true);
             setError(null);
-            const loadedEvents = await invoke('get_events_scheduler');
+            const loadedEvents = await invoke('get_events', {eventType: "Scheduler"});
             const processedEvents = processEvents(loadedEvents);
             setEvents(processedEvents);
         } catch (err) {
@@ -42,7 +42,7 @@ const Scheduler = () => {
                 ...newEvent,
                 id: Math.max(...events.map(e => e.id), 0) + 1
             };
-            await invoke('create_event_scheduler', { event: eventToSave });
+            await invoke('create_event', { event: eventToSave, eventType: "Scheduler" });
             setEvents(prevEvents => {
                 const updatedEvents = [...prevEvents, eventToSave];
                 return processEvents(updatedEvents);
@@ -54,7 +54,7 @@ const Scheduler = () => {
     };
 
     const handleDeleteEvent = async (eventId) => {
-        await invoke('delete_event_scheduler', { eventId: eventId });
+        await invoke('delete_event', { eventId: eventId, eventType: "Scheduler" });
         setEvents(prevEvents => {
             return prevEvents.filter(e => e.id !== eventId);
         });
