@@ -13,7 +13,7 @@ use tauri_command_backends::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
-use std::env;
+use std::{env, fmt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -41,8 +41,42 @@ pub enum EventType {
 
 #[derive(Serialize, Deserialize)]
 struct Class {
-    code: Box<String>,
-    name: Box<String>,
+    code: String,
+    name: String,
+    section: String,
+    time: (i32, i32),
+    days: Vec<bool>,
+    location: String,
+    instructor: String,
+    seats: String,
+    description: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ClassParam {
+    code: String,
+    name: String,
+    section: String,
+    time: Vec<(i32, i32)>,
+    days: Vec<bool>,
+    instructor: String,
+}
+
+// To use the `{}` marker, the trait `fmt::Display` must be implemented
+// manually for the type.
+impl fmt::Display for Class {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(f, "{}, {}, {}, {} - {}, [", self.code, self.name, self.section, self.time.0, self.time.1).unwrap();
+        for item in self.days.clone() {
+            write!(f, "{}", item).unwrap();
+        }
+        write!(f, "], {}, {}, {}, {}", self.location, self.instructor, self.seats, self.description)
+    }
 }
 
 // ConnectInfo struct (only one should ever be instantiated)
@@ -105,7 +139,7 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-fn scheduler_scrape(params: [bool; 3] , classes: Box<[Class]>, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+fn scheduler_scrape(params: [bool; 3] , classes: Vec<ClassParam>, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
     // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
@@ -139,6 +173,8 @@ fn scheduler_scrape(params: [bool; 3] , classes: Box<[Class]>, state: tauri::Sta
             }
         }
     });
+
+    //TODO: Convert class times from i32 to string? maybe?
 
     // Return Ok to indicate the command has started successfully
     Ok(())

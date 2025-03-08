@@ -9,6 +9,7 @@
     text-rendering: optimizeLegibility;
     transition:225ms ease;
     z-index: 0;
+    overflow: hidden;
 }
 
 :root {

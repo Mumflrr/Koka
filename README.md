@@ -11,6 +11,7 @@ A little project of mine for learning Rust, React, database management, and web 
 ## Things to keep an eye on:
 - Handle no wifi situations (version getting, scraping, setting up, etc)
 - Security if I want to implement way to store credentials
+- Implementing pre req checks (theoretically possible but loads of works)
 
 ### Questions
 If you want to contact me please don't I already have too much to think about T_T
