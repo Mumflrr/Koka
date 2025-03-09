@@ -42,6 +42,7 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
     if !params[0] {
+        //TODO: Try to fix problem where when you click on a box it becomes translucent and you cant click on another until it processes
         check_boxes[0].click().await?;
     }
     if params[1] {
@@ -139,19 +140,14 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
     let mut results = Vec::new();
     
     // Find all rows that contain class information
-    let result_rows = driver.find_all(By::Css("td.child")).await?;
-    
+    let result_rows = driver.find_all(By::Css("tr[role='row']")).await?;
     for row in result_rows {
-        let data = row.find_all(By::Tag("td")).await?; 
+        let data = row.find_all(By::Css("span.classDetailValue")).await?; 
 
-        for item in &data {
-            println!("--{}", item.text().await?);
-        }
-
-        loop{}
+        println!("section: {}, time: {}, days: {} location: {}, instructor: {}", &data[2].inner_html().await?.to_string(), &data[5].inner_html().await?.to_string(), &data[4].inner_html().await?.to_string(), &data[data.len() - 2].inner_html().await?.to_string(), &data[data.len() - 1].inner_html().await?.to_string());
 
         // Convert days from Vec<String> to Vec<bool>
-        let day_string = data[2].text().await?;
+        let day_string = data[4].inner_html().await?.to_string();
         let mut days_bool = vec![false; 5]; // [Mon, Tue, Wed, Thu, Fri]
         days_bool[0] = if day_string.contains("Mon") {true} else {false};
         days_bool[1] = if day_string.contains("Tue") {true} else {false};
@@ -160,7 +156,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         days_bool[4] = if day_string.contains("Fri") {true} else {false};
 
         // Get section number
-        let section_text = data[0].text().await?;
+        let section_text = data[2].inner_html().await?.to_string();
         let section = section_text
             .chars()
             .skip_while(|ch| !ch.is_digit(10))
@@ -171,7 +167,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         let section = if section.is_empty() { "".to_string() } else { section };
 
         // Time handling
-        let time_text = data[3].text().await?;
+        let time_text = data[5].inner_html().await?.to_string();
         let time = if time_text.trim().is_empty() {
             // Default for empty time strings
             (-1, -1)
@@ -185,13 +181,14 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
             section: section,
             time: time,
             days: days_bool,
-            location: data[4].text().await?,
-            instructor: data[5].text().await?,
-            seats: data[6].text().await?,
+            location: data[data.len() - 2].inner_html().await?.to_string(),
+            instructor: data[data.len() - 1].inner_html().await?.to_string(),
             description: predetermined_info[2].clone(),
         });
 
         println!("{}", results[results.len() - 1]);
+
+        //TODO: Make it adjsutable based on if a field is blank (will shorten data array)
     }
 
     Ok(results)

@@ -19,7 +19,7 @@ const Scheduler = () => {
     const [scrapedClasses, setScrapedClasses] = useState([[]]);
 
     useEffect(() => {
-        setClassesToScrape([["CSC", "316", "", [[-1, -1]], [], ""], ["CSC", "246", "", [[-1, -1]], [], ""], ["MA", "341", "", [[-1, -1]], [], ""]]);
+        setClassesToScrape([["CSC", "116", "", [[-1, -1]], [], ""], ["CSC", "246", "", [[-1, -1]], [], ""], ["MA", "341", "", [[-1, -1]], [], ""]]);
         setParams([false, false, false]);
         loadEvents();
 

@@ -48,7 +48,6 @@ struct Class {
     days: Vec<bool>,
     location: String,
     instructor: String,
-    seats: String,
     description: String,
 }
 
@@ -75,7 +74,7 @@ impl fmt::Display for Class {
         for item in self.days.clone() {
             write!(f, "{}", item).unwrap();
         }
-        write!(f, "], {}, {}, {}, {}", self.location, self.instructor, self.seats, self.description)
+        write!(f, "], {}, {}, {}", self.location, self.instructor, self.description)
     }
 }
 

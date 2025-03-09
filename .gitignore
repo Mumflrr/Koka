@@ -26,3 +26,5 @@ dist-ssr
 /src-tauri/resources
 
 **.db
+
+**/history.sqlite
