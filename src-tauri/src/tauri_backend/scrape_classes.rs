@@ -41,20 +41,20 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     driver.find(By::Id("classSearchTab")).await?.click().await?;
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
-    let check_wait = driver.find(By::Css("div.searchOpts")).await?.find(By::Tag("form")).await?;
+    //let check_wait = driver.find(By::Css("div.searchOpts")).await?.find(By::Tag("form")).await?;
+    // When form has class of 'ui-state-disabled' then wait
     if !params[0] {
-        let should_wait = check_wait.class_name().await;
-        match should_wait {
-            Ok(_) => println!("GO AHEAD"),
-            Err(_) => println!("YES WAIT"),
-        }
-
+        //TODO: FIX
         check_boxes[0].click().await?;
     }
     if params[1] {
+        //TODO: FIX
+        sleep(Duration::from_secs(1)).await;
         check_boxes[1].click().await?;
     }
     if !params[2] {
+        //TODO: FIX
+        sleep(Duration::from_secs(1)).await;
         check_boxes[2].click().await?;
     }
 
@@ -74,10 +74,10 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         catalog_input.clear().await?;
         catalog_input.send_keys(&class.name).await?;
 
-        // Input professor name if available
+        // Clear and input professor name if available
+        let instructor_input = driver.find(By::Id("instructorName")).await?;
+        instructor_input.clear().await?;
         if !class.instructor.is_empty() {
-            let instructor_input = driver.find(By::Id("instructorName")).await?;
-            instructor_input.clear().await?;
             instructor_input.send_keys(&class.instructor).await?;
         }
 
@@ -95,12 +95,12 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         course_link.wait_until().displayed().await?;
         table.find(By::Css("span.showCourseDetailsLink")).await?.click().await?;
 
-        // Wait for dialog to appear
-        let dialog = driver.query(By::Id("dialog2")).first().await?;
-        dialog.wait_until().displayed().await?;
-        let dialog = driver.find(By::Id("dialog2")).await?; 
+        // Wait for dialog to appear 
+        //TODO: Implement better wait system
+        sleep(Duration::from_secs(2)).await;
+        let dialog = driver.find(By::Id("dialog2")).await?;
         let dialog_text = dialog.text().await?;
-        
+
         // Extract description from the dialog
         let description = match dialog.find(By::XPath("//span[contains(text(),'Description')]/following::text()")).await {
             Ok(desc_elem) => desc_elem.text().await.unwrap_or_default(),
@@ -127,10 +127,11 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         results.push(search_results);
 
         //TODO: FIXXXXX
-        driver.find(By::Css("div.ui-dialog-buttonpane")).await?.click().await?;        
-
+        let close_buttons = driver.find_all(By::Css("button.ui-button")).await?;
+        close_buttons[1].click().await?;
+        driver.find(By::Css("button.ui-dialog-titlebar-close")).await?.click().await?;
         // Add a small delay between searches to avoid overwhelming the server
-        sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_secs(2)).await;
     }
 
     // Always explicitly close the browser.
@@ -151,15 +152,18 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
 
         // Make array that data will be stored into (section should be always present so pre-initialized)
         let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
-        data_array[0] = raw_data[0].find(By::Css("span.classDetailValue")).await?.inner_html().await?; 
+        data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
 
+        let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
         for i in 2..raw_data.len() - 1 {
             let element = raw_data[i].inner_html().await;
             data_array[i - 1] = element.unwrap_or("".to_string());
         }
+        data_array[3] = temp;
+        let location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
         
         // Convert days from Vec<String> to Vec<bool>
-        let day_string = data_array[1];
+        let day_string = data_array[1].clone();
         let mut days_bool = vec![false; 5]; // [Mon, Tue, Wed, Thu, Fri]
         days_bool[0] = if day_string.contains("Mon") {true} else {false};
         days_bool[1] = if day_string.contains("Tue") {true} else {false};
@@ -168,7 +172,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         days_bool[4] = if day_string.contains("Fri") {true} else {false};
 
         // Time handling
-        let time_text = data_array[2];
+        let time_text = data_array[2].clone();
         let time = if time_text.trim().is_empty() {
             // Default for empty time strings
             (-1, -1)
@@ -179,11 +183,11 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         results.push(Class {
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
-            section: data_array[0],
+            section: data_array[0].clone(),
             time: time,
             days: days_bool,
-            location: data_array[4],
-            instructor: data_array[3],
+            location: location_result,
+            instructor: data_array[4].clone(),
             description: predetermined_info[2].clone(),
         });
 
@@ -191,26 +195,6 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
     }
 
     Ok(results)
-}
-
-// Extract class location
-fn extract_location(html: &str) -> String {
-    // Check for Distance Education - Online first
-    if html.contains("Distance Education - Online") {
-        return "Distance Education - Online".to_string();
-    }
-    
-    // Look for the text inside show-detail span
-    if let Some(start_idx) = html.find("<span class=\"show-detail\">") {
-        let content_start = start_idx + "<span class=\"show-detail\">".len();
-        
-        if let Some(end_idx) = html[content_start..].find("</span>") {
-            return html[content_start..(content_start + end_idx)].to_string();
-        }
-    }
-    
-    // Return original or empty if no match is found
-    html.to_string()
 }
 
 // Fixed convert_time function to handle empty inputs
@@ -297,23 +281,22 @@ fn convert_single_time(time: String) -> (i32, i32) {
     (adjusted_hours, minutes)
 }
 
-// Helper function to extract text between a prefix and a suffix
+// Extract text between a prefix and suffix from text
 fn extract_text_after(text: &str, prefix: &str, suffix: &str) -> String {
-    if let Some(start_idx) = text.find(prefix) {
+    if let Some(start_idx) = text.to_lowercase().find(&prefix.to_lowercase()) {
         // Get the starting position after the prefix
         let start = start_idx + prefix.len();
         
         // Get the substring after the prefix
         let after_prefix = &text[start..];
-        
+
         // Find the suffix in the substring after the prefix
         if let Some(end_idx) = after_prefix.find(suffix) {
-            // Return the trimmed substring between prefix and suffix
             return after_prefix[..end_idx].trim().to_string();
         } else {
-            // If suffix not found, return everything after the prefix
             return after_prefix.trim().to_string();
         }
     }
+    
     "".to_string()
 }

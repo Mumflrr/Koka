@@ -2,14 +2,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod program_setup;
-mod tauri_command_backends;
+mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
 use database_functions::{delete_calendar_events, delete_scheduler_events, load_calendar_events, load_scheduler_events, save_calendar_events, save_scheduler_events, Event};
 use program_setup::*;
 use tauri::{Manager, State, Window};
-use tauri_command_backends::*;
+use tauri_backend::scrape_classes::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
