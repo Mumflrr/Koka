@@ -41,8 +41,14 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     driver.find(By::Id("classSearchTab")).await?.click().await?;
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
+    let check_wait = driver.find(By::Css("div.searchOpts")).await?.find(By::Tag("form")).await?;
     if !params[0] {
-        //TODO: Try to fix problem where when you click on a box it becomes translucent and you cant click on another until it processes
+        let should_wait = check_wait.class_name().await;
+        match should_wait {
+            Ok(_) => println!("GO AHEAD"),
+            Err(_) => println!("YES WAIT"),
+        }
+
         check_boxes[0].click().await?;
     }
     if params[1] {
@@ -113,9 +119,6 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
             description
         );
     
-        // TODO: Close the dialog
-        
-
         // Now scrape the search results
         let predetermined_info = vec!(class.code, class.name, full_description);
         let search_results = scrape_search_results(&table, predetermined_info).await?;
@@ -123,7 +126,8 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         // Add these results to our main results vector
         results.push(search_results);
 
-        driver.find(By::Css("div.ui-dialog-buttonset")).await?.click().await?;        
+        //TODO: FIXXXXX
+        driver.find(By::Css("div.ui-dialog-buttonpane")).await?.click().await?;        
 
         // Add a small delay between searches to avoid overwhelming the server
         sleep(Duration::from_millis(500)).await;
@@ -139,15 +143,23 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
 async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
-    // Find all rows that contain class information
-    let result_rows = driver.find_all(By::Css("tr[role='row']")).await?;
+    // Find all instances of the class
+    let result_rows = driver.find_all(By::Css("td.child")).await?;
     for row in result_rows {
-        let data = row.find_all(By::Css("span.classDetailValue")).await?; 
+        // The data per class instance should be able to be found with these tags
+        let raw_data = row.find_all(By::Tag("td")).await?; 
 
-        println!("section: {}, time: {}, days: {} location: {}, instructor: {}", &data[2].inner_html().await?.to_string(), &data[5].inner_html().await?.to_string(), &data[4].inner_html().await?.to_string(), &data[data.len() - 2].inner_html().await?.to_string(), &data[data.len() - 1].inner_html().await?.to_string());
+        // Make array that data will be stored into (section should be always present so pre-initialized)
+        let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
+        data_array[0] = raw_data[0].find(By::Css("span.classDetailValue")).await?.inner_html().await?; 
 
+        for i in 2..raw_data.len() - 1 {
+            let element = raw_data[i].inner_html().await;
+            data_array[i - 1] = element.unwrap_or("".to_string());
+        }
+        
         // Convert days from Vec<String> to Vec<bool>
-        let day_string = data[4].inner_html().await?.to_string();
+        let day_string = data_array[1];
         let mut days_bool = vec![false; 5]; // [Mon, Tue, Wed, Thu, Fri]
         days_bool[0] = if day_string.contains("Mon") {true} else {false};
         days_bool[1] = if day_string.contains("Tue") {true} else {false};
@@ -155,19 +167,8 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         days_bool[3] = if day_string.contains("Thu") {true} else {false};
         days_bool[4] = if day_string.contains("Fri") {true} else {false};
 
-        // Get section number
-        let section_text = data[2].inner_html().await?.to_string();
-        let section = section_text
-            .chars()
-            .skip_while(|ch| !ch.is_digit(10))
-            .take_while(|ch| ch.is_digit(10))
-            .collect::<String>();
-
-        // Only use empty string if no digits were found
-        let section = if section.is_empty() { "".to_string() } else { section };
-
         // Time handling
-        let time_text = data[5].inner_html().await?.to_string();
+        let time_text = data_array[2];
         let time = if time_text.trim().is_empty() {
             // Default for empty time strings
             (-1, -1)
@@ -178,20 +179,38 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         results.push(Class {
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
-            section: section,
+            section: data_array[0],
             time: time,
             days: days_bool,
-            location: data[data.len() - 2].inner_html().await?.to_string(),
-            instructor: data[data.len() - 1].inner_html().await?.to_string(),
+            location: data_array[4],
+            instructor: data_array[3],
             description: predetermined_info[2].clone(),
         });
 
         println!("{}", results[results.len() - 1]);
-
-        //TODO: Make it adjsutable based on if a field is blank (will shorten data array)
     }
 
     Ok(results)
+}
+
+// Extract class location
+fn extract_location(html: &str) -> String {
+    // Check for Distance Education - Online first
+    if html.contains("Distance Education - Online") {
+        return "Distance Education - Online".to_string();
+    }
+    
+    // Look for the text inside show-detail span
+    if let Some(start_idx) = html.find("<span class=\"show-detail\">") {
+        let content_start = start_idx + "<span class=\"show-detail\">".len();
+        
+        if let Some(end_idx) = html[content_start..].find("</span>") {
+            return html[content_start..(content_start + end_idx)].to_string();
+        }
+    }
+    
+    // Return original or empty if no match is found
+    html.to_string()
 }
 
 // Fixed convert_time function to handle empty inputs
@@ -201,10 +220,13 @@ fn convert_time(time_str: String) -> (i32, i32) {
         return (-1, -1);
     }
     
+    // Simple HTML tag removal (not comprehensive but handles basic cases)
+    let cleaned_time = time_str.replace("<span class=\"inner_tbl_br\">", "").replace("</span>", "");
+    
     // Check if we have a time range (contains a hyphen)
-    if time_str.contains("-") {
+    if cleaned_time.contains("-") {
         // Split the range and extract both start and end times
-        let parts: Vec<&str> = time_str.split("-").collect();
+        let parts: Vec<&str> = cleaned_time.split("-").collect();
         if parts.len() >= 2 {
             let start_time = parts[0].trim().to_string();
             let end_time = parts[1].trim().to_string();
@@ -226,7 +248,7 @@ fn convert_time(time_str: String) -> (i32, i32) {
     }
     
     // If no hyphen, process as a single time
-    let (hours, minutes) = convert_single_time(time_str);
+    let (hours, minutes) = convert_single_time(cleaned_time);
     if hours == -1 || minutes == -1 {
         return (-1, -1);
     }
