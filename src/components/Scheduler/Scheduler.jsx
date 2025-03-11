@@ -14,13 +14,15 @@ const Scheduler = () => {
     const [error, setError] = useState(null);
     const [isScraping, setIsScraping] = useState(false);
     const [scrapeStatus, setScrapeStatus] = useState("");
-    const [params, setParams] = useState([]);
-    const [classesToScrape, setClassesToScrape] = useState([]);
+    const [paramCheckBoxes, setParamCheckBoxes] = useState([]);
+    const [paramClasses, setParamClasses] = useState([]);
+    const [paramEvents, setParamEvents] = useState([]);
     const [scrapedClasses, setScrapedClasses] = useState([[]]);
 
     useEffect(() => {
-        setClassesToScrape([["CSC", "116", "", [[-1, -1]], [], ""], ["CSC", "246", "", [[-1, -1]], [], "Sturgill"], ["MA", "341", "", [[-1, -1]], [], ""]]);
-        setParams([false, false, false]);
+        setParamClasses([["CSC", "116", "", ""], ["CSC", "246", "", "Sturgill"], ["MA", "341", "", ""]]);
+        setParamCheckBoxes([false, false, false]);
+        setParamEvents([[1130,1230], [true, true, false, false, false]]);
         loadEvents();
 
         // Set up event listener for scrape results
@@ -34,6 +36,7 @@ const Scheduler = () => {
                 setError(`Scrape failed: ${event.payload}`);
             } else {
                 setScrapedClasses(event.payload);
+                console.log(scrapedClasses);
                 setScrapeStatus("Scrape completed successfully!");
                 setError(null);
             }
@@ -94,8 +97,8 @@ const Scheduler = () => {
             // Call the Rust function to start the scraping process
             // Note: This will return immediately while scraping continues in the background
             await invoke("scheduler_scrape", {
-                params: params, 
-                classes: classesToScrape
+                params: paramCheckBoxes, 
+                classes: paramClasses
             });
             
             // Don't update states here as the operation is continuing in the background

@@ -41,20 +41,17 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     driver.find(By::Id("classSearchTab")).await?.click().await?;
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
-    //let check_wait = driver.find(By::Css("div.searchOpts")).await?.find(By::Tag("form")).await?;
-    // When form has class of 'ui-state-disabled' then wait
     if !params[0] {
-        //TODO: Update wait logic
         check_boxes[0].click().await?;
     }
     if params[1] {
-        //TODO: Update wait logic
-        sleep(Duration::from_secs(1)).await;
+        //TODO: See if wait logic works
+        check_boxes[1].wait_until().clickable().await?;
         check_boxes[1].click().await?;
     }
     if !params[2] {
-        //TODO: Update wait logic
-        sleep(Duration::from_secs(1)).await;
+        //TODO: See if wait logic works
+        check_boxes[2].wait_until().clickable().await?;
         check_boxes[2].click().await?;
     }
 
@@ -92,12 +89,13 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
 
         // Find the course details link
         let course_link = table.query(By::Css("span.showCourseDetailsLink")).first().await?;
+        println!("1");
         course_link.wait_until().displayed().await?;
         table.find(By::Css("span.showCourseDetailsLink")).await?.click().await?;
 
         // Wait for dialog to appear 
         //TODO: Implement better wait system
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(1)).await;
         let dialog = driver.find(By::Id("dialog2")).await?;
         let dialog_text = dialog.text().await?;
 
@@ -129,9 +127,6 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         let close_buttons = driver.find_all(By::Css("button.ui-button")).await?;
         close_buttons[1].click().await?;
         driver.find(By::Css("button.ui-dialog-titlebar-close")).await?.click().await?;
-
-        // Add a small delay between searches just in case
-        sleep(Duration::from_secs(1)).await;
     }
 
     // Always explicitly close the browser.
@@ -163,7 +158,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         
         // Convert days from Vec<String> to Vec<bool>
         let day_string = &data_array[1];
-        let days_bool = vec![
+        let days_bool = [
             day_string.contains("Mon"),
             day_string.contains("Tue"),
             day_string.contains("Wed"),
@@ -185,7 +180,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
             // Default for empty time strings
             (-1, -1)
         } else {
-            convert_time(time_text)
+            convert_time(time_text.as_str())
         };
 
         results.push(Class {
@@ -206,30 +201,42 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
 }
 
 // Optimized time conversion function
-fn convert_time(time_str: String) -> (i32, i32) {
+fn convert_time(time_str: &str) -> (i32, i32) {
     // Handle empty input
     let time_str = time_str.trim();
     if time_str.is_empty() {
         return (-1, -1);
     }
     
-    // Remove HTML tags
-    let cleaned_time = time_str
+    // Remove HTML tags more efficiently; the double 'let' is for lifetime reasons
+    // When multiple functions are strung together back to back in a line, each method returns 
+    // an intermediary value
+    // The .replace() function returns a temporary String pointing from the time_str variable
+    // The .trim() function returns a &str of the String from the .replace()
+    // When the function 'line' is completed, all the intermediaries (like the Strings from .replace())
+    // are dropped, and so the &str from .trim() is pointing to dropped memory
+    // However when spaced like this, the .replace() strings are owned by the binding variable
+    // and so will not be dropped until binding is freed from memory instead of when the line of 
+    // functions/operations is complete
+    let binding = time_str
         .replace("<span class=\"inner_tbl_br\">", "")
-        .replace("</span>", "")
-        .trim()
-        .to_string();
+        .replace("</span>", "");
+    let cleaned_time = binding
+        .trim();
     
     // Check if we have a time range
-    if let Some((start_time, end_time)) = cleaned_time.split_once('-') {
-        let start = parse_time_component(start_time.trim());
-        let end = parse_time_component(end_time.trim());
+    if let Some(hyphen_pos) = cleaned_time.find('-') {
+        let start_time = &cleaned_time[..hyphen_pos].trim();
+        let end_time = &cleaned_time[hyphen_pos+1..].trim();
+        
+        let start = parse_time_component(start_time);
+        let end = parse_time_component(end_time);
         
         return (start, end);
     }
     
     // If no hyphen, process as a single time
-    (parse_time_component(&cleaned_time), -1)
+    (parse_time_component(cleaned_time), -1)
 }
 
 // Helper function to parse a single time component like "11:45 AM"
@@ -275,18 +282,22 @@ fn parse_time_component(time: &str) -> i32 {
 
 // Extract text between a prefix and suffix from text
 fn extract_text_after(text: &str, prefix: &str, suffix: &str) -> String {
-    text.to_lowercase()
-        .find(&prefix.to_lowercase())
-        .map(|start_idx| {
-            let start = start_idx + prefix.len();
-            let after_prefix = &text[start..];
-            
-            after_prefix
-                .find(suffix)
-                .map_or_else(
-                    || after_prefix.trim().to_string(),
-                    |end_idx| after_prefix[..end_idx].trim().to_string()
-                )
-        })
-        .unwrap_or_default()
+    // Case-insensitive search using lowercase for comparison only
+    let text_lower = text.to_lowercase();
+    let prefix_lower = prefix.to_lowercase();
+    
+    if let Some(start_idx) = text_lower.find(&prefix_lower) {
+        let start = start_idx + prefix.len();
+        let text_after = &text[start..];
+        let after_lower = &text_lower[start..];
+        
+        // Find suffix in lowercase text but extract from original
+        if let Some(end_idx) = after_lower.find(&suffix.to_lowercase()) {
+            text_after[..end_idx].trim().to_string()
+        } else {
+            text_after.trim().to_string()
+        }
+    } else {
+        String::new()
+    }
 }

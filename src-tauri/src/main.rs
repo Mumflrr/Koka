@@ -13,7 +13,6 @@ use tauri_backend::scrape_classes::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
-use std::thread::sleep;
 use std::{env, fmt, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -45,20 +44,31 @@ struct Class {
     name: String,
     section: String,
     time: (i32, i32),
-    days: Vec<bool>,
+    days: [bool; 5],
     location: String,
     instructor: String,
     description: String,
 }
 
 #[derive(Serialize, Deserialize)]
+struct ScrapeClassesParameters {
+    params_checkbox: [bool; 3],
+    classes: Vec<ClassParam>,
+    events: Vec<EventParam>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct EventParam {
+    time: (i32, i32),
+    days: [bool; 5],
+}
+
+#[derive(Serialize, Deserialize)]
 struct ClassParam {
-    code: String,
-    name: String,
-    section: String,
-    time: Vec<(i32, i32)>,
-    days: Vec<bool>,
-    instructor: String,
+    code: String, // Look for this code
+    name: String, // Look for this name
+    section: String, // Look for this section
+    instructor: String, // Search for this instructor
 }
 
 // To use the `{}` marker, the trait `fmt::Display` must be implemented
