@@ -44,16 +44,16 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     //let check_wait = driver.find(By::Css("div.searchOpts")).await?.find(By::Tag("form")).await?;
     // When form has class of 'ui-state-disabled' then wait
     if !params[0] {
-        //TODO: FIX
+        //TODO: Update wait logic
         check_boxes[0].click().await?;
     }
     if params[1] {
-        //TODO: FIX
+        //TODO: Update wait logic
         sleep(Duration::from_secs(1)).await;
         check_boxes[1].click().await?;
     }
     if !params[2] {
-        //TODO: FIX
+        //TODO: Update wait logic
         sleep(Duration::from_secs(1)).await;
         check_boxes[2].click().await?;
     }
@@ -126,12 +126,12 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
         // Add these results to our main results vector
         results.push(search_results);
 
-        //TODO: FIXXXXX
         let close_buttons = driver.find_all(By::Css("button.ui-button")).await?;
         close_buttons[1].click().await?;
         driver.find(By::Css("button.ui-dialog-titlebar-close")).await?.click().await?;
-        // Add a small delay between searches to avoid overwhelming the server
-        sleep(Duration::from_secs(2)).await;
+
+        // Add a small delay between searches just in case
+        sleep(Duration::from_secs(1)).await;
     }
 
     // Always explicitly close the browser.
@@ -160,16 +160,24 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
             data_array[i - 1] = element.unwrap_or("".to_string());
         }
         data_array[3] = temp;
-        let location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
         
         // Convert days from Vec<String> to Vec<bool>
-        let day_string = data_array[1].clone();
-        let mut days_bool = vec![false; 5]; // [Mon, Tue, Wed, Thu, Fri]
-        days_bool[0] = if day_string.contains("Mon") {true} else {false};
-        days_bool[1] = if day_string.contains("Tue") {true} else {false};
-        days_bool[2] = if day_string.contains("Wed") {true} else {false};
-        days_bool[3] = if day_string.contains("Thu") {true} else {false};
-        days_bool[4] = if day_string.contains("Fri") {true} else {false};
+        let day_string = &data_array[1];
+        let days_bool = vec![
+            day_string.contains("Mon"),
+            day_string.contains("Tue"),
+            day_string.contains("Wed"),
+            day_string.contains("Thu"),
+            day_string.contains("Fri")
+        ];
+
+        let location_result: String;
+        if days_bool.iter().all(|&value| value == false) {
+            location_result = "Distance Education - Online".to_string();
+        }
+        else {
+            location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
+        }
 
         // Time handling
         let time_text = data_array[2].clone();
@@ -179,7 +187,7 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         } else {
             convert_time(time_text)
         };
-        
+
         results.push(Class {
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
@@ -197,57 +205,40 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
     Ok(results)
 }
 
-// Fixed convert_time function to handle empty inputs
+// Optimized time conversion function
 fn convert_time(time_str: String) -> (i32, i32) {
     // Handle empty input
-    if time_str.trim().is_empty() {
+    let time_str = time_str.trim();
+    if time_str.is_empty() {
         return (-1, -1);
     }
     
-    // Simple HTML tag removal (not comprehensive but handles basic cases)
-    let cleaned_time = time_str.replace("<span class=\"inner_tbl_br\">", "").replace("</span>", "");
+    // Remove HTML tags
+    let cleaned_time = time_str
+        .replace("<span class=\"inner_tbl_br\">", "")
+        .replace("</span>", "")
+        .trim()
+        .to_string();
     
-    // Check if we have a time range (contains a hyphen)
-    if cleaned_time.contains("-") {
-        // Split the range and extract both start and end times
-        let parts: Vec<&str> = cleaned_time.split("-").collect();
-        if parts.len() >= 2 {
-            let start_time = parts[0].trim().to_string();
-            let end_time = parts[1].trim().to_string();
-            
-            let (start_hours, start_minutes) = convert_single_time(start_time);
-            let (end_hours, end_minutes) = convert_single_time(end_time);
-            
-            // Handle invalid time components
-            if start_hours == -1 || start_minutes == -1 || end_hours == -1 || end_minutes == -1 {
-                return (-1, -1);
-            }
-            
-            // Format as HHMM for both times
-            let combined_start = start_hours * 100 + start_minutes;
-            let combined_end = end_hours * 100 + end_minutes;
-            
-            return (combined_start, combined_end);
-        }
+    // Check if we have a time range
+    if let Some((start_time, end_time)) = cleaned_time.split_once('-') {
+        let start = parse_time_component(start_time.trim());
+        let end = parse_time_component(end_time.trim());
+        
+        return (start, end);
     }
     
     // If no hyphen, process as a single time
-    let (hours, minutes) = convert_single_time(cleaned_time);
-    if hours == -1 || minutes == -1 {
-        return (-1, -1);
-    }
-    
-    (hours * 100 + minutes, -1) // Return HHMM format for single time, -1 for end time
+    (parse_time_component(&cleaned_time), -1)
 }
 
-// Helper to convert a single time like "11:45 AM"
-fn convert_single_time(time: String) -> (i32, i32) {
-    // Parse the time string
+// Helper function to parse a single time component like "11:45 AM"
+fn parse_time_component(time: &str) -> i32 {
     let parts: Vec<&str> = time.split_whitespace().collect();
     
     // Early return if we don't have exactly two parts (time and AM/PM)
     if parts.len() != 2 {
-        return (-1, -1); // Return default value for invalid input
+        return -1;
     }
     
     let time_part = parts[0];
@@ -255,18 +246,18 @@ fn convert_single_time(time: String) -> (i32, i32) {
     
     let time_components: Vec<&str> = time_part.split(':').collect();
     if time_components.len() != 2 {
-        return (-1, -1); // Return default value for invalid input
+        return -1;
     }
     
     // Parse hours and minutes
     let hours: i32 = match time_components[0].parse() {
         Ok(h) => h,
-        Err(_) => return (-1, -1),
+        Err(_) => return -1,
     };
     
     let minutes: i32 = match time_components[1].parse() {
         Ok(m) => m,
-        Err(_) => return (-1, -1),
+        Err(_) => return -1,
     };
     
     // Convert to military time
@@ -278,25 +269,24 @@ fn convert_single_time(time: String) -> (i32, i32) {
         hours
     };
     
-    (adjusted_hours, minutes)
+    // Return in HHMM format
+    adjusted_hours * 100 + minutes
 }
 
 // Extract text between a prefix and suffix from text
 fn extract_text_after(text: &str, prefix: &str, suffix: &str) -> String {
-    if let Some(start_idx) = text.to_lowercase().find(&prefix.to_lowercase()) {
-        // Get the starting position after the prefix
-        let start = start_idx + prefix.len();
-        
-        // Get the substring after the prefix
-        let after_prefix = &text[start..];
-
-        // Find the suffix in the substring after the prefix
-        if let Some(end_idx) = after_prefix.find(suffix) {
-            return after_prefix[..end_idx].trim().to_string();
-        } else {
-            return after_prefix.trim().to_string();
-        }
-    }
-    
-    "".to_string()
+    text.to_lowercase()
+        .find(&prefix.to_lowercase())
+        .map(|start_idx| {
+            let start = start_idx + prefix.len();
+            let after_prefix = &text[start..];
+            
+            after_prefix
+                .find(suffix)
+                .map_or_else(
+                    || after_prefix.trim().to_string(),
+                    |end_idx| after_prefix[..end_idx].trim().to_string()
+                )
+        })
+        .unwrap_or_default()
 }
