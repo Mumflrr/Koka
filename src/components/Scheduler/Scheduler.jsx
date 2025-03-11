@@ -33,7 +33,7 @@ const Scheduler = () => {
                 setScrapeStatus(`Error: ${event.payload}`);
                 setError(`Scrape failed: ${event.payload}`);
             } else {
-                console.log("Scrape completed successfully");
+                setScrapedClasses(event.payload);
                 setScrapeStatus("Scrape completed successfully!");
                 setError(null);
             }

@@ -13,11 +13,11 @@ use tauri_backend::scrape_classes::*;
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
-use std::{env, fmt};
+use std::thread::sleep;
+use std::{env, fmt, thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::thread;
 use anyhow::Result;
 use std::time::Duration;
 
@@ -39,7 +39,7 @@ pub enum EventType {
     Scheduler
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Class {
     code: String,
     name: String,
@@ -129,6 +129,7 @@ fn close_splashscreen(window: Window) {
     window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
 }
 
+//TODO: Show splashscreen not working if updating?
 #[tauri::command]
 fn show_splashscreen(window: Window) {
     std::thread::sleep(Duration::from_millis(500));
@@ -159,13 +160,17 @@ fn scheduler_scrape(params: [bool; 3] , classes: Vec<ClassParam>, state: tauri::
             let driver = start_chromedriver(&connect_info).await?;
 
             // Perform the schedule scrape with the initialized driver
-            perform_schedule_scrape(params, classes, driver).await
+            let classes = perform_schedule_scrape(params, classes, driver).await;
+            match classes {
+                Ok(classes) => Ok(classes),
+                Err(e) => Err(e),
+            }
         });
 
         // Emit the result to the frontend
         match result {
-            Ok(_) => {
-                let _ = window.emit("scrape_result", ());
+            Ok(classes) => {
+                let _ = window.emit("scrape_result", classes);
             }
             Err(err) => {
                 let _ = window.emit("scrape_result", err.to_string());
@@ -173,9 +178,7 @@ fn scheduler_scrape(params: [bool; 3] , classes: Vec<ClassParam>, state: tauri::
         }
     });
 
-    //TODO: Convert class times from i32 to string? maybe?
-
-    // Return Ok to indicate the command has started successfully
+    // Return Ok to indicate the command has run successfully
     Ok(())
 }
 
