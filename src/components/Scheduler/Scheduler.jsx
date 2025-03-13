@@ -20,9 +20,9 @@ const Scheduler = () => {
     const [scrapedClasses, setScrapedClasses] = useState([[]]);
 
     useEffect(() => {
-        setParamClasses([["CSC", "116", "", ""], ["CSC", "246", "", "Sturgill"], ["MA", "341", "", ""]]);
+        setParamClasses([["CSC", "116", "", ""], ["CSC", "246", "", "Sturgill"]]);
         setParamCheckBoxes([false, false, false]);
-        setParamEvents([[1130,1230], [true, true, false, false, false]]);
+        setParamEvents([[[800, 831], [true, false, false, false, false]]]);
         loadEvents();
 
         // Set up event listener for scrape results
@@ -97,8 +97,7 @@ const Scheduler = () => {
             // Call the Rust function to start the scraping process
             // Note: This will return immediately while scraping continues in the background
             await invoke("scheduler_scrape", {
-                params: paramCheckBoxes, 
-                classes: paramClasses
+                parameters: [paramCheckBoxes, paramClasses, paramEvents], 
             });
             
             // Don't update states here as the operation is continuing in the background

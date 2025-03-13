@@ -149,7 +149,7 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-fn scheduler_scrape(params: [bool; 3] , classes: Vec<ClassParam>, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
     // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
@@ -170,7 +170,7 @@ fn scheduler_scrape(params: [bool; 3] , classes: Vec<ClassParam>, state: tauri::
             let driver = start_chromedriver(&connect_info).await?;
 
             // Perform the schedule scrape with the initialized driver
-            let classes = perform_schedule_scrape(params, classes, driver).await;
+            let classes = perform_schedule_scrape(parameters, driver).await;
             match classes {
                 Ok(classes) => Ok(classes),
                 Err(e) => Err(e),

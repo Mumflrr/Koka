@@ -3,11 +3,11 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{Class, ClassParam};
+use crate::{Class, EventParam, ScrapeClassesParameters};
 
 
 // Performs the scraping
-pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
+pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     
@@ -41,22 +41,22 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     driver.find(By::Id("classSearchTab")).await?.click().await?;
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
-    if !params[0] {
+    if !parameters.params_checkbox[0] {
         check_boxes[0].click().await?;
     }
-    if params[1] {
+    if parameters.params_checkbox[1] {
         //TODO: See if wait logic works
         check_boxes[1].wait_until().clickable().await?;
         check_boxes[1].click().await?;
     }
-    if !params[2] {
+    if !parameters.params_checkbox[2] {
         //TODO: See if wait logic works
         check_boxes[2].wait_until().clickable().await?;
         check_boxes[2].click().await?;
     }
 
     let mut results: Vec<Vec<Class>> = Vec::new();
-    for class in classes {
+    for class in parameters.classes {
         // Click the dropdown to open it
         let subject_select = driver.find(By::Id("subject")).await?;
         subject_select.click().await?;
@@ -119,7 +119,7 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
     
         // Now scrape the search results
         let predetermined_info = vec!(class.code, class.name, full_description);
-        let search_results = scrape_search_results(&table, predetermined_info).await?;
+        let search_results = scrape_search_results(&parameters.events, &table, &predetermined_info).await?;
 
         // Add these results to our main results vector
         results.push(search_results);
@@ -136,7 +136,7 @@ pub async fn perform_schedule_scrape(params: [bool; 3], classes: Vec<ClassParam>
 }
 
 // Scrape search results from the page
-async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<String>) -> WebDriverResult<Vec<Class>> {
+async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
     // Find all instances of the class
@@ -154,25 +154,6 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
             let element = raw_data[i].inner_html().await;
             data_array[i - 1] = element.unwrap_or("".to_string());
         }
-        data_array[3] = temp;
-        
-        // Convert days from Vec<String> to Vec<bool>
-        let day_string = &data_array[1];
-        let days_bool = [
-            day_string.contains("Mon"),
-            day_string.contains("Tue"),
-            day_string.contains("Wed"),
-            day_string.contains("Thu"),
-            day_string.contains("Fri")
-        ];
-
-        let location_result: String;
-        if days_bool.iter().all(|&value| value == false) {
-            location_result = "Distance Education - Online".to_string();
-        }
-        else {
-            location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
-        }
 
         // Time handling
         let time_text = data_array[2].clone();
@@ -182,6 +163,26 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
         } else {
             convert_time(time_text.as_str())
         };
+        
+        // Convert days from Vec<String> to Vec<bool>
+        let day_string = &data_array[1];
+        let mut days_bool = [false; 5];
+        days_bool[0] = day_string.contains("Mon");
+        days_bool[1] = day_string.contains("Tue");
+        days_bool[2] = day_string.contains("Wed");
+        days_bool[3] = day_string.contains("Thu");
+        days_bool[4] = day_string.contains("Fri");
+
+        if !validate_time_ok(&events, &time, &days_bool) {continue};
+
+        data_array[3] = temp;
+        let location_result: String;
+        if days_bool.iter().all(|&value| value == false) {
+            location_result = "Distance Education - Online".to_string();
+        }
+        else {
+            location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
+        }
 
         results.push(Class {
             code: predetermined_info[0].clone(),
@@ -198,6 +199,38 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: Vec<Stri
     }
 
     Ok(results)
+}
+
+fn validate_time_ok(events: &Vec<EventParam>, time: &(i32, i32), days: &[bool; 5]) -> bool {
+    // If the class has no specified time (indicated by -1) or no days, it can't conflict
+    if time.0 == -1 || time.1 == -1 || days.iter().all(|&day| !day) {
+        return true;
+    }
+
+    // Check each event for potential conflicts
+    for event in events {
+        // Check if there's any day overlap
+        let day_overlap = days.iter().zip(event.days.iter())
+            .any(|(&class_day, &event_day)| class_day && event_day);
+        
+        if !day_overlap {
+            continue; // No day overlap, so no conflict
+        }
+
+        // Check time overlap
+        // For a time conflict to occur:
+        // 1. Class start time is before or equal to event end time AND
+        // 2. Class end time is after or equal to event start time
+        let time_overlap = time.0 <= event.time.1 && time.1 >= event.time.0;
+        
+        if time_overlap {
+            // Found a conflict
+            return false;
+        }
+    }
+
+    // No conflicts found
+    true
 }
 
 // Optimized time conversion function
@@ -247,7 +280,6 @@ fn parse_time_component(time: &str) -> i32 {
     if parts.len() != 2 {
         return -1;
     }
-    
     let time_part = parts[0];
     let period = parts[1].to_uppercase();
     
