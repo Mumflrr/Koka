@@ -9,6 +9,7 @@ mod database_functions;
 use database_functions::{delete_calendar_events, delete_scheduler_events, load_calendar_events, load_scheduler_events, save_calendar_events, save_scheduler_events, Event};
 use program_setup::*;
 use tauri::{Manager, State, Window};
+use tauri_backend::class_combinations::generate_combinations;
 use tauri_backend::scrape_classes::*;
 use chrome_functions::*;
 
@@ -159,22 +160,22 @@ fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_,
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
 
         // Run the async task using the runtime
-        let result = rt.block_on(async {
+        let result: Result<Vec<Vec<Class>>, anyhow::Error> = rt.block_on(async {
             // Acquire a lock and clone the connect info for local use
             let mut connect_info = {
                 let locked_connect_info = connect_info_mutex.lock().await;
                 (*locked_connect_info).clone() // Clone the data to use outside the lock
             };
 
-            chrome_update_check(&mut connect_info).await?;
+            // Use match or map_err to convert errors to String
+            chrome_update_check(&mut connect_info).await?;  
             let driver = start_chromedriver(&connect_info).await?;
 
             // Perform the schedule scrape with the initialized driver
-            let classes = perform_schedule_scrape(parameters, driver).await;
-            match classes {
-                Ok(classes) => Ok(classes),
-                Err(e) => Err(e),
-            }
+            let classes = perform_schedule_scrape(parameters, driver).await?;
+                
+            // Return the final result
+            generate_combinations(classes).await
         });
 
         // Emit the result to the frontend
