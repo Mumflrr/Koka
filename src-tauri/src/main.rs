@@ -44,11 +44,11 @@ struct Class {
     code: String,
     name: String,
     description: String,
-    classes: Vec<ClassSection>,
+    classes: Vec<TimeBlock>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct ClassSection {
+struct TimeBlock {
     section: String,
     location: String,
     days: [((i32, i32), bool); 5],

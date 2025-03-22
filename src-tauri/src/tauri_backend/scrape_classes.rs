@@ -3,7 +3,7 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{ClassSection, Class, EventParam, ScrapeClassesParameters};
+use crate::{TimeBlock, Class, EventParam, ScrapeClassesParameters};
 
 // Performs the scraping
 pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
@@ -23,6 +23,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
     let timeout = Duration::from_secs(120);
     let start = Instant::now();
     
+    // Timeout
     while start.elapsed() < timeout {
         if driver.find(By::Id("pt_envinfo")).await.is_ok() {
             break;
@@ -33,6 +34,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         return Err(anyhow!("timeout!"))
     }
     
+    // Enter iframe
     driver.enter_frame(0).await?;
     let cart_label = driver.query(By::Id("add-to-cart-label")).first().await?;
     cart_label.wait_until().displayed().await?;
@@ -61,6 +63,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         }
     }
 
+    // For each class we want to scrape
     let mut results: Vec<Vec<Class>> = Vec::new();
     for class in parameters.classes {
         // Click the dropdown to open it
@@ -148,7 +151,7 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
     let sections = driver.find_all(By::Css("td.child")).await?;
     for individual_section in sections.iter() {
 
-        let mut class_sections: Vec<ClassSection> = Vec::new();
+        let mut class_sections: Vec<TimeBlock> = Vec::new();
         let mut section_time_blocks = individual_section.find_all(By::Tag("tr")).await?;
 
         // The first //tr WebElement for each section is not needed, therefore calculate how many
@@ -187,8 +190,11 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
 
             // Time handling
             let days = convert_time(data_array[2].as_str(), days_bool);
+
+            // If invalid time then skip
             if !validate_time_ok(&events, &days) {section_skipped = true; continue;};
 
+            // Get location
             data_array[3] = temp;
             let location_result: String;
             if days_bool.iter().all(|&value| value == false) {
@@ -198,7 +204,8 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
                 location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
             }
 
-            class_sections.push(ClassSection {
+            // Push time block to this section
+            class_sections.push(TimeBlock {
                 section: data_array[0].clone(),
                 location: location_result,
                 instructor: data_array[4].clone(),
@@ -206,8 +213,10 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             });
         }
 
+        // If a time block for this section was incomptabile, skip the whole section
         if section_skipped {continue;}
 
+        // Else push the section to the class Vec
         results.push(Class {
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
@@ -219,6 +228,7 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
     Ok(results)
 }
 
+// Check if times overlap with any events
 fn validate_time_ok(events: &Vec<EventParam>, days: &[((i32, i32), bool); 5]) -> bool {
     
     // For each day in the week

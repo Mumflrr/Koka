@@ -213,7 +213,7 @@
   }
   
   .slide-modal {
-    width: 38%;
+    width: 45%;
     height: 100%;
     background-color: white;
     padding: 18px;
@@ -304,22 +304,24 @@
   }
   
   .form-input {
-    width: calc(100% - 16px);
-    padding: 8px;
+    width: 100%;
+    padding: 4px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 0.95rem;
+    box-sizing: border-box;
   }
   
   .form-textarea {
-    width: calc(100% - 16px);
-    min-height: 100px;
+    width: 100%;
+    min-height: 50px;
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 0.95rem;
     resize: vertical;
     font-family: inherit;
+    box-sizing: border-box;
   }
   
   .form-input:focus,
@@ -331,9 +333,9 @@
 
 .button-container {
     display: flex;
-    justify-content: flex-end;
+    justify-content: center;
     gap: min(1rem, 2%);
-    margin-top: 2rem;
+    margin-top: 1rem;
 }
 
 .button {
@@ -388,6 +390,7 @@
     border-radius: 4px;
     transition: all 0.2s;
     min-width: 40px; /* Allows shrinking below minimum content size */
+    box-sizing: border-box;
   }
   
   .day-checkbox span {
@@ -431,6 +434,23 @@
   
   .button-danger:hover {
     background-color: #c82333;
+  }
+
+  .button-container-stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  
+  .full-width {
+    width: 100%;
   }
   
 

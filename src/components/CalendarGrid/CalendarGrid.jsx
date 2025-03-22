@@ -1,4 +1,3 @@
-// CalendarGrid.js
 import React from 'react';
 import { parse, format, addMinutes } from 'date-fns';
 import ss from './CalendarGrid.module.css';
@@ -16,7 +15,7 @@ const DAYS = {
 };
 
 // Display names for each day
-const dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F']; 
 
 // Helper function to convert day index to bit flag
@@ -70,89 +69,42 @@ const Modal = ({ isOpen, onClose, children }) => {
   );
 };
 
-// Updated to display days as comma-separated list for multi-day events
-const EventInfoDisplay = ({ event, onClose, onDelete }) => {
-  // Get readable day names for display
-  // Get readable day names for display
-  const eventDays = getDayLabelsFromBits(event.day);
-  
+// Modified EventForm with improved button layout
+const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = false }) => {
+  // Updated to handle bit flag for days
+  const handleDayToggle = (dayIndex) => {
+    const dayBit = dayIndexToBit(dayIndex);
+    setEvent(prev => ({
+      ...prev,
+      day: prev.day ^ dayBit // XOR to toggle the bit
+    }));
+  };
+
   const handleDelete = async () => {
     const confirmed = await new Promise((resolve) => {
       const result = window.confirm('Are you sure you want to delete this event?');
       resolve(result);
     });
     
-    if (confirmed) {
+    if (confirmed && onDelete) {
       onDelete(event.id);
-      onClose(); // Close the modal after deletion
+      onCancel(); // Close the modal after deletion
     }
   };
-  
+
   return (
     <>
       <div className={ss['modal-header']}>
-        <h2 className={ss['modal-title']}>{event.title}</h2>
+        <h2 className={ss['modal-title']}>{isEditing ? 'Edit Event' : 'New Event'}</h2>
       </div>
-      <div className={ss['form-grid']}>
-        <div className={ss['form-row']}>
-          <label className={ss['form-label']}>Days</label>
-          <div className={ss['info-text']}>{eventDays}</div>
-        </div>
-        <div className={ss['form-row']}>
-          <label className={ss['form-label']}>Time</label>
-          <div className={ss['info-text']}>{event.startTime} - {event.endTime}</div>
-        </div>
-        {event.professor && (
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Professor</label>
-            <div className={ss['info-text']}>{event.professor}</div>
-          </div>
-        )}
-        {event.description && (
-          <div className={ss['form-row']}>
-            <label className={ss['form-label']}>Description</label>
-            <div className={ss['info-text']}>{event.description}</div>
-          </div>
-        )}
-      </div>
-      <div className={ss['button-container']}>
-        <button 
-          className={`${ss.button} ${ss['button-danger']}`}
-          onClick={handleDelete}
-        >
-          Delete Event
-        </button>
-        <button 
-          className={`${ss.button} ${ss['button-primary']}`}
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
-    </>
-  );
-};
-
-const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
-  // Updated to handle bit flag for days
-  const handleDayToggle = (dayIndex) => {
-    const dayBit = dayIndexToBit(dayIndex);
-    setNewEvent(prev => ({
-      ...prev,
-      day: prev.day ^ dayBit // XOR to toggle the bit
-    }));
-  };
-
-  return (
-    <>
       <div className={ss['form-grid']}>
         <div className={ss['form-row']}>
           <label className={ss['form-label']}>Title*</label>
           <input
             type="text"
             className={ss['form-input']}
-            value={newEvent.title}
-            onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
+            value={event.title}
+            onChange={(e) => setEvent({...event, title: e.target.value})}
           />
         </div>
         <div className={ss['form-row']}>
@@ -163,7 +115,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
                 key={day}
                 day={day}
                 index={index}
-                checked={isDaySelected(newEvent.day, index)}
+                checked={isDaySelected(event.day, index)}
                 onChange={handleDayToggle}
               />
             ))}
@@ -175,16 +127,16 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
             <input
               type="time"
               className={ss['form-input']}
-              value={newEvent.startTime}
-              onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
+              value={event.startTime}
+              onChange={(e) => setEvent({...event, startTime: e.target.value})}
               style={{ width: '50%' }}
               onClick={(e) => e.stopPropagation()}
             />
             <input
               type="time"
               className={ss['form-input']}
-              value={newEvent.endTime}
-              onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
+              value={event.endTime}
+              onChange={(e) => setEvent({...event, endTime: e.target.value})}
               style={{ width: '50%' }}
               onClick={(e) => e.stopPropagation()}
             />
@@ -195,40 +147,52 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
           <input
             type="text"
             className={ss['form-input']}
-            value={newEvent.professor}
-            onChange={(e) => setNewEvent({...newEvent, professor: e.target.value})}
+            value={event.professor}
+            onChange={(e) => setEvent({...event, professor: e.target.value})}
           />
         </div>
         <div className={ss['form-row']}>
           <label className={ss['form-label']}>Description</label>
           <textarea
             className={ss['form-textarea']}
-            value={newEvent.description}
-            onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
+            value={event.description}
+            onChange={(e) => setEvent({...event, description: e.target.value})}
             placeholder="Add event description..."
           />
         </div>
       </div>
-      <div className={ss['button-container']}>
-        <button 
-          className={`${ss.button} ${ss['button-outline']}`}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        <button 
-          className={`${ss.button} ${ss['button-primary']}`}
-          onClick={onSave}
-          disabled={!newEvent.title || !newEvent.startTime || !newEvent.endTime || newEvent.day === 0}
-        >
-          Create
-        </button>
+
+      {/* Improved button layout - vertical stack for editing mode, horizontal for creation */}
+      <div className={isEditing ? ss['button-container-stacked'] : ss['button-container']}>
+        {isEditing && (
+          <button 
+            className={`${ss.button} ${ss['button-danger']} ${ss['full-width']}`}
+            onClick={handleDelete}
+          >
+            Delete Event
+          </button>
+        )}
+        <div className={ss['action-buttons']}>
+          <button 
+            className={`${ss.button} ${ss['button-outline']}`}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button 
+            className={`${ss.button} ${ss['button-primary']}`}
+            onClick={onSave}
+            disabled={!event.title || !event.startTime || !event.endTime || event.day === 0}
+          >
+            {isEditing ? 'Save' : 'Create'}
+          </button>
+        </div>
       </div>
     </>
   );
 };
 
-const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
+const Event = ({ event, eventStyle, onDelete, onEdit }) => {
   const [eventCreated, setEventCreated] = React.useState(false);
   
   const asyncConfirm = async (message) => {
@@ -238,9 +202,9 @@ const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
     });
   };
 
-  const openInfo = (e) => {
+  const handleClick = (e) => {
     e.stopPropagation();
-    onInfoOpen(event); // Pass the event to the parent component
+    onEdit(event); // Pass the event to the parent component for editing
   };
   
   const handleDelete = async (e) => {
@@ -266,7 +230,7 @@ const Event = ({ event, eventStyle, onDelete, onInfoOpen }) => {
     <div
       className={`${ss.event} ${event.professor === '' ? ss.activity : ss.class}`}
       style={eventStyle}
-      onClick={openInfo}
+      onClick={handleClick}
     >
       <div className={ss['event-header']}>
         <div className={ss['event-title']}>{event.title}</div>
@@ -299,11 +263,10 @@ const defaultEventState = {
   description: ''
 };
 
-const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete }) => {
+const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete, onEventUpdate }) => {
     const totalMinutes = (endHour - startHour) * 60;
     const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const [isInfoOpen, setIsInfoOpen] = React.useState(false);
-    const [selectedEvent, setSelectedEvent] = React.useState(null);
+    const [editingEvent, setEditingEvent] = React.useState(null);
     const [newEvent, setNewEvent] = React.useState({...defaultEventState});
   
     const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
@@ -322,6 +285,8 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
       const clickTime = getTimeFromPosition(relativeY, columnRect.height);
       const endTime = format(addMinutes(parseTime(clickTime), 60), 'HH:mm');
   
+      // Reset edit mode and set up for creating a new event
+      setEditingEvent(null);
       setNewEvent({
         ...defaultEventState,
         startTime: clickTime,
@@ -331,19 +296,33 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
       setIsModalOpen(true);
     };
   
-    const handleEventClick = (event) => {
-      setSelectedEvent(event);
-      setIsInfoOpen(true);
+    const handleEditEvent = (event) => {
+      // Set up for editing existing event
+      setEditingEvent(event);
+      setNewEvent({...event}); // Copy the event data to the form state
+      setIsModalOpen(true);
     };
   
     const handleSaveEvent = () => {
       if (newEvent.title && newEvent.startTime && newEvent.endTime && newEvent.day !== 0) {
-        // Now we can create a single event with multiple days encoded in the day property
-        onEventCreate(newEvent);
+        if (editingEvent) {
+          // Update existing event
+          onEventUpdate(newEvent);
+        } else {
+          // Create new event
+          onEventCreate(newEvent);
+        }
         
         setIsModalOpen(false);
         setNewEvent({...defaultEventState});
+        setEditingEvent(null);
       }
+    };
+  
+    const handleCloseModal = () => {
+      setIsModalOpen(false);
+      setEditingEvent(null);
+      setNewEvent({...defaultEventState});
     };
   
     // Ensure events are displayed correctly by using event ID as key instead of title-based key
@@ -392,35 +371,23 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
                         zIndex: eventIndex + 1
                       }}
                       onDelete={onEventDelete}
-                      onInfoOpen={handleEventClick}
+                      onEdit={handleEditEvent}
                     />
                   ))}
               </div>
             ))}
           </div>
   
-          {/* Modal for creating new events */}
-          <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-            <div className={ss['modal-header']}>
-              <h2 className={ss['modal-title']}>New Event</h2>
-            </div>
+          {/* Modal used for both creating and editing events */}
+          <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
             <EventForm 
-              newEvent={newEvent}
-              setNewEvent={setNewEvent}
+              event={newEvent}
+              setEvent={setNewEvent}
               onSave={handleSaveEvent}
-              onCancel={() => setIsModalOpen(false)}
+              onCancel={handleCloseModal}
+              onDelete={onEventDelete}
+              isEditing={!!editingEvent}
             />
-          </Modal>
-  
-          {/* Modal for displaying event info - pass onDelete handler */}
-          <Modal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)}>
-            {selectedEvent && (
-              <EventInfoDisplay 
-                event={selectedEvent}
-                onClose={() => setIsInfoOpen(false)}
-                onDelete={onEventDelete}
-              />
-            )}
           </Modal>
         </div>
       </div>
