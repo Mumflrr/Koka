@@ -7,6 +7,9 @@ import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
+// TODO: Bug when adding event of same name, previous events will have a block added to them
+// TODO: Add delete button to event pop in modal
+// TODO: Bug when chaging the time by using the modal times prevents creating event
 
 const Scheduler = () => {
     const [events, setEvents] = useState([]);
@@ -20,9 +23,9 @@ const Scheduler = () => {
     const [scrapedClasses, setScrapedClasses] = useState([[]]);
 
     useEffect(() => {
-        setParamClasses([["CSC", "116", "", ""], ["CSC", "246", "", "Sturgill"]]);
+        setParamClasses([["CSC", "116", "", ""], ["BIO", "181", "", ""]]);
         setParamCheckBoxes([false, false, false]);
-        setParamEvents([[[800, 831], [true, false, false, false, false]]]);
+        setParamEvents([[[800, 829], [true, false, false, false, false]]]);
         loadEvents();
 
         // Set up event listener for scrape results
@@ -36,7 +39,7 @@ const Scheduler = () => {
                 setError(`Scrape failed: ${event.payload}`);
             } else {
                 setScrapedClasses(event.payload);
-                console.log(scrapedClasses);
+                console.log(event.payload);
                 setScrapeStatus("Scrape completed successfully!");
                 setError(null);
             }
@@ -65,20 +68,24 @@ const Scheduler = () => {
 
     const handleCreateEvent = async (newEvent) => {
         try {
-            const eventToSave = {
-                ...newEvent,
-                id: Math.max(...events.map(e => e.id), 0) + 1
-            };
-            await invoke('create_event', { event: eventToSave, eventType: "Scheduler" });
-            setEvents(prevEvents => {
-                const updatedEvents = [...prevEvents, eventToSave];
-                return processEvents(updatedEvents);
-            });
+          // Create a truly unique ID using timestamp and random string
+          const uniqueId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+          
+          const eventToSave = {
+            ...newEvent,
+            id: uniqueId
+          };
+          
+          await invoke('create_event', { event: eventToSave, eventType: "Scheduler" });
+          setEvents(prevEvents => {
+            const updatedEvents = [...prevEvents, eventToSave];
+            return processEvents(updatedEvents);
+          });
         } catch (err) {
-            console.error('Error saving event:', err);
-            alert('Failed to save event. Please try again.');
+          console.error('Error saving event:', err);
+          alert('Failed to save event. Please try again.');
         }
-    };
+      };
 
     const handleDeleteEvent = async (eventId) => {
         await invoke('delete_event', { eventId: eventId, eventType: "Scheduler" });

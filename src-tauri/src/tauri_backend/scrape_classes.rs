@@ -3,8 +3,7 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{Class, EventParam, ScrapeClassesParameters};
-
+use crate::{ClassSection, Class, EventParam, ScrapeClassesParameters};
 
 // Performs the scraping
 pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
@@ -42,17 +41,24 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
 
     let check_boxes = driver.find_all(By::ClassName("search-filter-checkbox")).await?;
     if !parameters.params_checkbox[0] {
-        check_boxes[0].click().await?;
+        let result = check_boxes[0].click().await;
+        if result.is_err() {
+            check_boxes[0].click().await?;
+        }
     }
     if parameters.params_checkbox[1] {
-        //TODO: See if wait logic works
-        check_boxes[1].wait_until().clickable().await?;
-        check_boxes[1].click().await?;
+        // Attempt retry if fails due to intercepted element -> tends to occur at <div class="search-filter-checkbox
+        let result = check_boxes[1].click().await;
+        if result.is_err() {
+            check_boxes[1].click().await?;
+        }
     }
     if !parameters.params_checkbox[2] {
-        //TODO: See if wait logic works
-        check_boxes[2].wait_until().clickable().await?;
-        check_boxes[2].click().await?;
+        // Attempt retry if fails due to intercepted element -> tends to occur at <div class="search-filter-checkbox
+        let result = check_boxes[2].click().await;
+        if result.is_err() {
+            check_boxes[2].click().await?;
+        }
     }
 
     let mut results: Vec<Vec<Class>> = Vec::new();
@@ -89,7 +95,6 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
 
         // Find the course details link
         let course_link = table.query(By::Css("span.showCourseDetailsLink")).first().await?;
-        println!("1");
         course_link.wait_until().displayed().await?;
         table.find(By::Css("span.showCourseDetailsLink")).await?.click().await?;
 
@@ -140,92 +145,99 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
     let mut results = Vec::new();
     
     // Find all instances of the class
-    let result_rows = driver.find_all(By::Css("td.child")).await?;
-    for row in result_rows {
-        // The data per class instance should be able to be found with these tags
-        let raw_data = row.find_all(By::Tag("td")).await?; 
+    let sections = driver.find_all(By::Css("td.child")).await?;
+    for individual_section in sections.iter() {
 
-        // Make array that data will be stored into (section should be always present so pre-initialized)
-        let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
-        data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
+        let mut class_sections: Vec<ClassSection> = Vec::new();
+        let mut section_time_blocks = individual_section.find_all(By::Tag("tr")).await?;
 
-        let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
-        for i in 2..raw_data.len() - 1 {
-            let element = raw_data[i].inner_html().await;
-            data_array[i - 1] = element.unwrap_or("".to_string());
+        // The first //tr WebElement for each section is not needed, therefore calculate how many
+        // "classes" per section there is (for example if a lab is attached to the section then 
+        // there would be two "classes" in that section and therefore should skip over 2 elments
+        // before deleting another instead of every other if there was no lab attached)
+        // Then remove the //tr every nth spot, skipping over the //tr elements that actually
+        // contain information we want
+        section_time_blocks.remove(0);
+
+        // If one timeblock in the section is skipped then the whole section should be skipped
+        let mut section_skipped = false;
+
+        for time_block in section_time_blocks {   
+            // The data per class instance should be able to be found with these tags
+            let raw_data = time_block.find_all(By::Tag("td")).await?; 
+
+            // Make array that data will be stored into (section should be always present so pre-initialized)
+            let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
+            data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
+
+            let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
+            for i in 2..raw_data.len() - 1 {
+                let element = raw_data[i].inner_html().await;
+                data_array[i - 1] = element.unwrap_or("".to_string());
+            }
+
+            // Convert days from Vec<String> to Vec<bool>
+            let day_string = &data_array[1];
+            let mut days_bool = [false; 5];
+            days_bool[0] = day_string.contains("Mon");
+            days_bool[1] = day_string.contains("Tue");
+            days_bool[2] = day_string.contains("Wed");
+            days_bool[3] = day_string.contains("Thu");
+            days_bool[4] = day_string.contains("Fri");
+
+            // Time handling
+            let days = convert_time(data_array[2].as_str(), days_bool);
+            if !validate_time_ok(&events, &days) {section_skipped = true; continue;};
+
+            data_array[3] = temp;
+            let location_result: String;
+            if days_bool.iter().all(|&value| value == false) {
+                location_result = "Distance Education - Online".to_string();
+            }
+            else {
+                location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
+            }
+
+            class_sections.push(ClassSection {
+                section: data_array[0].clone(),
+                location: location_result,
+                instructor: data_array[4].clone(),
+                days: days,
+            });
         }
 
-        // Time handling
-        let time_text = data_array[2].clone();
-        let time = if time_text.trim().is_empty() {
-            // Default for empty time strings
-            (-1, -1)
-        } else {
-            convert_time(time_text.as_str())
-        };
-        
-        // Convert days from Vec<String> to Vec<bool>
-        let day_string = &data_array[1];
-        let mut days_bool = [false; 5];
-        days_bool[0] = day_string.contains("Mon");
-        days_bool[1] = day_string.contains("Tue");
-        days_bool[2] = day_string.contains("Wed");
-        days_bool[3] = day_string.contains("Thu");
-        days_bool[4] = day_string.contains("Fri");
-
-        if !validate_time_ok(&events, &time, &days_bool) {continue};
-
-        data_array[3] = temp;
-        let location_result: String;
-        if days_bool.iter().all(|&value| value == false) {
-            location_result = "Distance Education - Online".to_string();
-        }
-        else {
-            location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
-        }
+        if section_skipped {continue;}
 
         results.push(Class {
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
-            section: data_array[0].clone(),
-            time: time,
-            days: days_bool,
-            location: location_result,
-            instructor: data_array[4].clone(),
+            classes: class_sections,
             description: predetermined_info[2].clone(),
         });
-
-        println!("{}", results[results.len() - 1]);
     }
 
     Ok(results)
 }
 
-fn validate_time_ok(events: &Vec<EventParam>, time: &(i32, i32), days: &[bool; 5]) -> bool {
-    // If the class has no specified time (indicated by -1) or no days, it can't conflict
-    if time.0 == -1 || time.1 == -1 || days.iter().all(|&day| !day) {
-        return true;
-    }
-
-    // Check each event for potential conflicts
-    for event in events {
-        // Check if there's any day overlap
-        let day_overlap = days.iter().zip(event.days.iter())
-            .any(|(&class_day, &event_day)| class_day && event_day);
-        
-        if !day_overlap {
-            continue; // No day overlap, so no conflict
+fn validate_time_ok(events: &Vec<EventParam>, days: &[((i32, i32), bool); 5]) -> bool {
+    
+    // For each day in the week
+    for (day_index, day) in days.iter().enumerate() {
+        // Check if bool flag is false, signifying no class that day
+        if day.1 == false {
+            continue;
         }
-
-        // Check time overlap
-        // For a time conflict to occur:
-        // 1. Class start time is before or equal to event end time AND
-        // 2. Class end time is after or equal to event start time
-        let time_overlap = time.0 <= event.time.1 && time.1 >= event.time.0;
-        
-        if time_overlap {
-            // Found a conflict
-            return false;
+    
+        // Check each event for potential conflicts
+        for event in events {
+            // Check if there's a day overlap for this specific day
+            if !event.days[day_index] {
+                continue; // No day overlap for this specific day
+            }
+    
+            // Check time overlap
+            let time_overlap = day.0.0 <= event.time.1 && day.0.1 >= event.time.0;
+            if time_overlap {return false};
         }
     }
 
@@ -234,42 +246,46 @@ fn validate_time_ok(events: &Vec<EventParam>, time: &(i32, i32), days: &[bool; 5
 }
 
 // Optimized time conversion function
-fn convert_time(time_str: &str) -> (i32, i32) {
-    // Handle empty input
-    let time_str = time_str.trim();
-    if time_str.is_empty() {
-        return (-1, -1);
-    }
-    
-    // Remove HTML tags more efficiently; the double 'let' is for lifetime reasons
-    // When multiple functions are strung together back to back in a line, each method returns 
-    // an intermediary value
-    // The .replace() function returns a temporary String pointing from the time_str variable
-    // The .trim() function returns a &str of the String from the .replace()
-    // When the function 'line' is completed, all the intermediaries (like the Strings from .replace())
-    // are dropped, and so the &str from .trim() is pointing to dropped memory
-    // However when spaced like this, the .replace() strings are owned by the binding variable
-    // and so will not be dropped until binding is freed from memory instead of when the line of 
-    // functions/operations is complete
-    let binding = time_str
-        .replace("<span class=\"inner_tbl_br\">", "")
-        .replace("</span>", "");
-    let cleaned_time = binding
-        .trim();
-    
-    // Check if we have a time range
-    if let Some(hyphen_pos) = cleaned_time.find('-') {
+fn convert_time(time_str: &str, days: [bool; 5]) ->  [((i32, i32), bool); 5] {
+    let mut time = [((-1, -1), false); 5];
+
+    for i in 0..4 {    
+        // Handle empty input
+        let time_str = time_str.trim();
+        if time_str.is_empty() || !days[i]{
+            time[i] = ((-1, -1), false);
+            continue;
+        }
+        
+        // Remove HTML tags more efficiently; the double 'let' is for lifetime reasons
+        // When multiple functions are strung together back to back in a line, each method returns 
+        // an intermediary value
+        // The .replace() function returns a String pointing from the time_str variable
+        // The .trim() function returns a &str of the String from the .replace()
+        // When the function 'line' is completed, all the intermediaries (like the Strings from .replace())
+        // are dropped, and so the &str from .trim() is pointing to dropped memory
+        // However when spaced like this, the .replace() strings are owned by the binding variable
+        // and so will not be dropped until binding is freed from memory instead of when the line of 
+        // functions/operations is complete
+        let binding = time_str
+            .replace("<span class=\"inner_tbl_br\">", "")
+            .replace("</span>", "");
+        let cleaned_time = binding
+            .trim();
+        
+        // Check if we have a time range
+        let hyphen_pos = cleaned_time.find('-').unwrap();
         let start_time = &cleaned_time[..hyphen_pos].trim();
         let end_time = &cleaned_time[hyphen_pos+1..].trim();
-        
+            
         let start = parse_time_component(start_time);
         let end = parse_time_component(end_time);
-        
-        return (start, end);
+            
+        time[i] = ((start, end), true);
+
     }
-    
-    // If no hyphen, process as a single time
-    (parse_time_component(cleaned_time), -1)
+
+    time
 }
 
 // Helper function to parse a single time component like "11:45 AM"

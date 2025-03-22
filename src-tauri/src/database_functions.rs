@@ -4,7 +4,7 @@ use crate::{get_version, ConnectInfo};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Event {
-    pub id: i32,
+    pub id: String,
     pub title: String,
     #[serde(rename = "startTime")]
     pub start_time: String,
@@ -27,7 +27,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
@@ -40,7 +40,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS scheduler (
-            id INTEGER PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
@@ -152,7 +152,7 @@ pub async fn load_calendar_events() -> Result<Vec<Event>, anyhow::Error> {
     }).await?
 }
 
-pub async fn delete_calendar_events(event_id: i32) -> Result<(), anyhow::Error> {
+pub async fn delete_calendar_events(event_id: String) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
         conn.execute(
@@ -216,7 +216,7 @@ pub async fn load_scheduler_events() -> Result<Vec<Event>, anyhow::Error> {
     }).await?
 }
 
-pub async fn delete_scheduler_events(event_id: i32) -> Result<(), anyhow::Error> {
+pub async fn delete_scheduler_events(event_id: String) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
         conn.execute(

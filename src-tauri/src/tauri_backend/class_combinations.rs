@@ -1,99 +1,147 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::Class;
 
 pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
-    // Flatten the classes for processing
-    let mut flattened_classes = Vec::new();
-    let mut original_indices = Vec::new();
+    // Create indices for each class to avoid cloning during backtracking
+    let mut class_indices: Vec<Vec<usize>> = Vec::with_capacity(classes.len());
+    let mut flattened_classes: Vec<&Class> = Vec::new();
     
-    // Keep track of which original group and index each class came from
-    for (group_idx, group) in classes.iter().enumerate() {
-        for (class_idx, class) in group.iter().enumerate() {
-            flattened_classes.push(class.clone());
-            original_indices.push((group_idx, class_idx));
+    // Build index structure
+    for group in &classes {
+        let mut group_indices = Vec::with_capacity(group.len());
+        for class in group {
+            group_indices.push(flattened_classes.len());
+            flattened_classes.push(class);
         }
+        class_indices.push(group_indices);
     }
     
-    // Group classes by code+name to ensure we pick at most one of each course
-    let mut course_groups: HashMap<String, Vec<usize>> = HashMap::new();
-    
-    // Store indices instead of references to avoid lifetime issues
-    for (idx, class) in flattened_classes.iter().enumerate() {
-        let key = format!("{}{}", class.code, class.name);
-        course_groups.entry(key).or_insert_with(Vec::new).push(idx);
-    }
-    
-    // Convert to Vec to make it easier to work with in our backtracking algorithm
-    let course_groups: Vec<Vec<usize>> = course_groups.into_values().collect();
-    
-    // Generate all schedules using backtracking
+    // Generate all schedules using backtracking with indices
     let mut results: Vec<Vec<usize>> = Vec::new();
     let mut current_schedule: Vec<usize> = Vec::new();
     
     // Start the backtracking process
-    backtrack(&flattened_classes, &course_groups, &mut current_schedule, 0, &mut results);
+    backtrack(
+        &flattened_classes,
+        &class_indices,
+        &mut current_schedule,
+        0,
+        &mut results
+    );
+
+    results = sort_classes(results);
     
-    // Convert indices back to actual Class objects
+    // Convert indices back to actual Class objects (clone only at the end)
     let final_results = results
         .into_iter()
         .map(|schedule| {
-            schedule.into_iter().map(|idx| flattened_classes[idx].clone()).collect()
+            schedule.into_iter()
+                .map(|idx| flattened_classes[idx].clone())
+                .collect()
         })
         .collect();
-    
+
     Ok(final_results)
 }
 
 // Backtracking function to explore all possible combinations
 fn backtrack(
-    all_classes: &[Class],
-    course_groups: &[Vec<usize>],
+    flattened_classes: &[&Class],
+    class_indices: &[Vec<usize>],
     current_schedule: &mut Vec<usize>,
-    group_index: usize,
+    current_group: usize,
     results: &mut Vec<Vec<usize>>,
 ) {
     // Base case: we've considered all course groups
-    if group_index == course_groups.len() {
-        results.push(current_schedule.clone());
+    if current_group == class_indices.len() {
+        // Only add this schedule if it's not empty
+        if !current_schedule.is_empty() {
+            results.push(current_schedule.clone());
+        }
         return;
     }
     
-    // Consider taking no class from this group
-    backtrack(all_classes, course_groups, current_schedule, group_index + 1, results);
-    
     // Try each class in the current group
-    for &class_idx in &course_groups[group_index] {
-        if is_compatible(all_classes, class_idx, current_schedule) {
+    let mut added_class = false;
+    for &class_idx in &class_indices[current_group] {
+        if is_compatible(flattened_classes, class_idx, current_schedule) {
+            added_class = true;
             current_schedule.push(class_idx);
-            backtrack(all_classes, course_groups, current_schedule, group_index + 1, results);
+            backtrack(
+                flattened_classes,
+                class_indices,
+                current_schedule,
+                current_group + 1,
+                results
+            );
             current_schedule.pop();
         }
+    }
+    
+    // If we couldn't add any class from this group due to conflicts,
+    // skip this group and continue
+    if !added_class {
+        backtrack(
+            flattened_classes,
+            class_indices,
+            current_schedule,
+            current_group + 1,
+            results
+        );
     }
 }
 
 // Check if a class is compatible with the current schedule
-fn is_compatible(all_classes: &[Class], new_class_idx: usize, schedule_indices: &[usize]) -> bool {
-    let new_class = &all_classes[new_class_idx];
+fn is_compatible(all_classes: &[&Class], new_class_idx: usize, schedule_indices: &[usize]) -> bool {
+    let new_class = all_classes[new_class_idx];
     
     for &existing_idx in schedule_indices {
-        let existing_class = &all_classes[existing_idx];
+        let existing_class = all_classes[existing_idx];
         
-        // Check for time conflicts on any day they share
-        for day in 0..5 {
-            if new_class.days[day] && existing_class.days[day] {
-                // Check time overlap
-                let (new_start, new_end) = new_class.time;
-                let (existing_start, existing_end) = existing_class.time;
-                
-                // Classes conflict if one starts during another
-                // (start1 < end2) && (start2 < end1)
-                if (new_start < existing_end) && (existing_start < new_end) {
-                    return false;
+        // Check for time conflicts between all sections of both classes
+        for new_section in &new_class.classes {
+            for existing_section in &existing_class.classes {
+                // Check for time conflicts on any day they share
+                for day_idx in 0..5 {
+                    let new_day = new_section.days[day_idx];
+                    let existing_day = existing_section.days[day_idx];
+                    
+                    // Skip if either class doesn't have a session on this day
+                    if !new_day.1 || !existing_day.1 {
+                        continue;
+                    }
+                    
+                    // Extract time ranges
+                    let (new_start, new_end) = (new_day.0.0, new_day.0.1);
+                    let (existing_start, existing_end) = (existing_day.0.0, existing_day.0.1);
+                    
+                    // Check for time overlap
+                    if new_start <= existing_end && new_end >= existing_start {
+                        return false;
+                    }
                 }
             }
         }
     }
     
     true
+}
+
+fn sort_classes(all_classes: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
+    // Use a BTreeMap where the key is the length and the value is a Vec of schedules
+    let mut buckets: BTreeMap<usize, Vec<Vec<usize>>> = BTreeMap::new();
+
+    // Group schedules by length
+    for schedule in all_classes {
+        let len = schedule.len();
+        buckets.entry(len).or_insert_with(Vec::new).push(schedule);
+    }
+
+    // Flatten the map back into a vector, with longer schedules first
+    // (BTreeMap keys are sorted in ascending order)
+    buckets.into_iter()
+           .rev() // Reverse to get descending order (longer schedules first)
+           .flat_map(|(_, schedules)| schedules)
+           .collect()
 }

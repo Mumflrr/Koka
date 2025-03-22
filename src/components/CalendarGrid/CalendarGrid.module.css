@@ -36,7 +36,7 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    height: 60px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -422,6 +422,16 @@
     color: black;
   }
   
+
+  .button-danger {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+  }
+  
+  .button-danger:hover {
+    background-color: #c82333;
+  }
   
 
 @media (max-width: 768px) {

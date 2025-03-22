@@ -21,8 +21,8 @@ use tokio::sync::Mutex;
 use anyhow::Result;
 use std::time::Duration;
 
-
-//Add custom menu items
+//TODO: Work on splashscreen when updating chrome
+//TODO: Add custom menu items
 
 
 // AppState to allow for this struct to be passed into functions via Tauri without needing 
@@ -43,12 +43,16 @@ pub enum EventType {
 struct Class {
     code: String,
     name: String,
-    section: String,
-    time: (i32, i32),
-    days: [bool; 5],
-    location: String,
-    instructor: String,
     description: String,
+    classes: Vec<ClassSection>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct ClassSection {
+    section: String,
+    location: String,
+    days: [((i32, i32), bool); 5],
+    instructor: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,15 +81,22 @@ struct ClassParam {
 impl fmt::Display for Class {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write strictly the first element into the supplied output
-        // stream: `f`. Returns `fmt::Result` which indicates whether the
-        // operation succeeded or failed. Note that `write!` uses syntax which
-        // is very similar to `println!`.
-        write!(f, "{}, {}, {}, {} - {}, [", self.code, self.name, self.section, self.time.0, self.time.1).unwrap();
-        for item in self.days.clone() {
-            write!(f, "{}", item).unwrap();
+        // Write code number and name
+        write!(f, "{}, {}, <", self.code, self.name).unwrap();
+
+        // For each block in that section (for example if a lab is attached)
+        for item in self.classes.clone() {
+            write!(f, "{}, [", item.section)?;
+            // For each day in that block write the times
+            for day in item.days {    
+                if day.1 == true {
+                    write!(f, "{} - {} ",day.0.0, day.0.1).unwrap();
+                }
+                else {write!(f, " NA ").unwrap()}
+            }
+            write!(f, "], {}, {}", item.location, item.instructor)?;
         }
-        write!(f, "], {}, {}, {}", self.location, self.instructor, self.description)
+        write!(f, ">, {}", self.description)
     }
 }
 
@@ -176,6 +187,7 @@ fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_,
                 
             // Return the final result
             generate_combinations(classes).await
+
         });
 
         // Emit the result to the frontend
@@ -257,11 +269,11 @@ fn get_events(event_type: EventType, events_state: State<Mutex<Vec<Event>>>) -> 
 
 // Delete event method
 #[tauri::command]
-async fn delete_event(event_id: i32, event_type: EventType, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
+async fn delete_event(event_id: String, event_type: EventType, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
     // First try to delete from database
     let result = match event_type {
-        EventType::Calendar => delete_calendar_events(event_id).await,
-        EventType::Scheduler => delete_scheduler_events(event_id).await,
+        EventType::Calendar => delete_calendar_events(event_id.clone()).await,
+        EventType::Scheduler => delete_scheduler_events(event_id.clone()).await,
     };
     
     if let Err(e) = result {
@@ -270,6 +282,7 @@ async fn delete_event(event_id: i32, event_type: EventType, events_state: State<
     
     // If database deletion succeeds, update state
     let mut events = events_state.lock().await;
+
     events.retain(|e| e.id != event_id);
     
     Ok(())

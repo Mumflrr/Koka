@@ -71,9 +71,22 @@ const Modal = ({ isOpen, onClose, children }) => {
 };
 
 // Updated to display days as comma-separated list for multi-day events
-const EventInfoDisplay = ({ event, onClose }) => {
+const EventInfoDisplay = ({ event, onClose, onDelete }) => {
+  // Get readable day names for display
   // Get readable day names for display
   const eventDays = getDayLabelsFromBits(event.day);
+  
+  const handleDelete = async () => {
+    const confirmed = await new Promise((resolve) => {
+      const result = window.confirm('Are you sure you want to delete this event?');
+      resolve(result);
+    });
+    
+    if (confirmed) {
+      onDelete(event.id);
+      onClose(); // Close the modal after deletion
+    }
+  };
   
   return (
     <>
@@ -104,6 +117,12 @@ const EventInfoDisplay = ({ event, onClose }) => {
       </div>
       <div className={ss['button-container']}>
         <button 
+          className={`${ss.button} ${ss['button-danger']}`}
+          onClick={handleDelete}
+        >
+          Delete Event
+        </button>
+        <button 
           className={`${ss.button} ${ss['button-primary']}`}
           onClick={onClose}
         >
@@ -128,7 +147,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
     <>
       <div className={ss['form-grid']}>
         <div className={ss['form-row']}>
-          <label className={ss['form-label']}>Title</label>
+          <label className={ss['form-label']}>Title*</label>
           <input
             type="text"
             className={ss['form-input']}
@@ -137,7 +156,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
           />
         </div>
         <div className={ss['form-row']}>
-          <label className={ss['form-label']}>Days</label>
+          <label className={ss['form-label']}>Days*</label>
           <div className={ss['days-grid']}>
             {dayShortLabels.map((day, index) => (
               <DayCheckbox
@@ -151,7 +170,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
           </div>
         </div>
         <div className={ss['form-row']}>
-          <label className={ss['form-label']}>Time</label>
+          <label className={ss['form-label']}>Time*</label>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
               type="time"
@@ -159,6 +178,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
               value={newEvent.startTime}
               onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
               style={{ width: '50%' }}
+              onClick={(e) => e.stopPropagation()}
             />
             <input
               type="time"
@@ -166,6 +186,7 @@ const EventForm = ({ newEvent, setNewEvent, onSave, onCancel }) => {
               value={newEvent.endTime}
               onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
               style={{ width: '50%' }}
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>
@@ -279,128 +300,131 @@ const defaultEventState = {
 };
 
 const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete }) => {
-  const totalMinutes = (endHour - startHour) * 60;
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [isInfoOpen, setIsInfoOpen] = React.useState(false);
-  const [selectedEvent, setSelectedEvent] = React.useState(null);
-  const [newEvent, setNewEvent] = React.useState({...defaultEventState});
-
-  const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
-
-  const getTimeFromPosition = (yPos, columnHeight) => {
-    const percentageDown = yPos / columnHeight;
-    const minutesSinceStart = Math.floor(percentageDown * totalMinutes);
-    const hours = Math.floor(minutesSinceStart / 60) + startHour;
-    const minutes = Math.floor((minutesSinceStart % 60) / 15) * 15;
-    return format(new Date().setHours(hours, minutes), 'HH:mm');
-  };
-
-  const handleTimeSlotClick = (e, dayIndex) => {
-    const columnRect = e.currentTarget.getBoundingClientRect();
-    const relativeY = e.clientY - columnRect.top;
-    const clickTime = getTimeFromPosition(relativeY, columnRect.height);
-    const endTime = format(addMinutes(parseTime(clickTime), 60), 'HH:mm');
-
-    setNewEvent({
-      ...defaultEventState,
-      startTime: clickTime,
-      endTime: endTime,
-      day: dayIndexToBit(dayIndex), // Initialize with clicked day as bit
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleEventClick = (event) => {
-    setSelectedEvent(event);
-    setIsInfoOpen(true);
-  };
-
-  const handleSaveEvent = () => {
-    if (newEvent.title && newEvent.startTime && newEvent.endTime && newEvent.day !== 0) {
-      // Now we can create a single event with multiple days encoded in the day property
-      onEventCreate(newEvent);
-      
-      setIsModalOpen(false);
-      setNewEvent({...defaultEventState});
-    }
-  };
-
-  return (
-    <div className={ss['calendar-container']}>
-      <div className={ss['calendar-grid']}>
-        <div className={ss['header-spacer']} />
-        {dayLabels.map(day => (
-          <div key={day} className={ss['header-cell']}>
-            <span>{day}</span>
-          </div>
-        ))}
-
-        <div className={ss['time-slots-container']}>
-          <div className={ss['time-labels-column']}>
-            {Array.from({ length: endHour - startHour + 1 }).map((_, i) => (
-              <div key={i} className={ss['hour-label']}>
-                <span>{`${startHour + i}:00`}</span>
+    const totalMinutes = (endHour - startHour) * 60;
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [isInfoOpen, setIsInfoOpen] = React.useState(false);
+    const [selectedEvent, setSelectedEvent] = React.useState(null);
+    const [newEvent, setNewEvent] = React.useState({...defaultEventState});
+  
+    const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
+  
+    const getTimeFromPosition = (yPos, columnHeight) => {
+      const percentageDown = yPos / columnHeight;
+      const minutesSinceStart = Math.floor(percentageDown * totalMinutes);
+      const hours = Math.floor(minutesSinceStart / 60) + startHour;
+      const minutes = Math.floor((minutesSinceStart % 60) / 15) * 15;
+      return format(new Date().setHours(hours, minutes), 'HH:mm');
+    };
+  
+    const handleTimeSlotClick = (e, dayIndex) => {
+      const columnRect = e.currentTarget.getBoundingClientRect();
+      const relativeY = e.clientY - columnRect.top;
+      const clickTime = getTimeFromPosition(relativeY, columnRect.height);
+      const endTime = format(addMinutes(parseTime(clickTime), 60), 'HH:mm');
+  
+      setNewEvent({
+        ...defaultEventState,
+        startTime: clickTime,
+        endTime: endTime,
+        day: dayIndexToBit(dayIndex), // Initialize with clicked day as bit
+      });
+      setIsModalOpen(true);
+    };
+  
+    const handleEventClick = (event) => {
+      setSelectedEvent(event);
+      setIsInfoOpen(true);
+    };
+  
+    const handleSaveEvent = () => {
+      if (newEvent.title && newEvent.startTime && newEvent.endTime && newEvent.day !== 0) {
+        // Now we can create a single event with multiple days encoded in the day property
+        onEventCreate(newEvent);
+        
+        setIsModalOpen(false);
+        setNewEvent({...defaultEventState});
+      }
+    };
+  
+    // Ensure events are displayed correctly by using event ID as key instead of title-based key
+    return (
+      <div className={ss['calendar-container']}>
+        <div className={ss['calendar-grid']}>
+          {/* Header and time slots remain unchanged */}
+          <div className={ss['header-spacer']} />
+          {dayLabels.map(day => (
+            <div key={day} className={ss['header-cell']}>
+              <span>{day}</span>
+            </div>
+          ))}
+  
+          <div className={ss['time-slots-container']}>
+            <div className={ss['time-labels-column']}>
+              {Array.from({ length: endHour - startHour + 1 }).map((_, i) => (
+                <div key={i} className={ss['hour-label']}>
+                  <span>{`${startHour + i}:00`}</span>
+                </div>
+              ))}
+            </div>
+  
+            {dayLabels.map((_, dayIndex) => (
+              <div 
+                key={dayIndex} 
+                className={ss['day-column']}
+                onClick={(e) => handleTimeSlotClick(e, dayIndex)}
+              >
+                {Array.from({ length: (endHour - startHour) * 2 }).map((_, i) => (
+                  <div key={i} className={ss['grid-line']} />
+                ))}
+                
+                {/* Modified to use event.id as a unique key */}
+                {events
+                  .filter(event => isDaySelected(event.day, dayIndex))
+                  .map((event, eventIndex) => (
+                    <Event 
+                      key={`${event.id}-${dayIndex}`}
+                      event={event}
+                      eventStyle={{
+                        top: event.topPosition,
+                        height: event.heightPosition,
+                        width: event.width,
+                        left: event.left,
+                        zIndex: eventIndex + 1
+                      }}
+                      onDelete={onEventDelete}
+                      onInfoOpen={handleEventClick}
+                    />
+                  ))}
               </div>
             ))}
           </div>
-
-          {dayLabels.map((_, dayIndex) => (
-            <div 
-              key={dayIndex} 
-              className={ss['day-column']}
-              onClick={(e) => handleTimeSlotClick(e, dayIndex)}
-            >
-              {Array.from({ length: (endHour - startHour) * 2 }).map((_, i) => (
-                <div key={i} className={ss['grid-line']} />
-              ))}
-              
-              {/* Modified to check if the event has the current day bit set */}
-              {events
-                .filter(event => isDaySelected(event.day, dayIndex))
-                .map((event, eventIndex) => (
-                    <Event 
-                    key={`${event.id}-${dayIndex}`}
-                    event={event}
-                    eventStyle={{
-                      top: event.topPosition,
-                      height: event.heightPosition,
-                      width: event.width,
-                      left: event.left,
-                      zIndex: eventIndex + 1
-                    }}
-                    onDelete={onEventDelete}
-                    onInfoOpen={handleEventClick}
-                  />
-                ))}
+  
+          {/* Modal for creating new events */}
+          <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            <div className={ss['modal-header']}>
+              <h2 className={ss['modal-title']}>New Event</h2>
             </div>
-          ))}
-        </div>
-
-        {/* Modal for creating new events */}
-        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-          <div className={ss['modal-header']}>
-            <h2 className={ss['modal-title']}>New Event</h2>
-          </div>
-          <EventForm 
-            newEvent={newEvent}
-            setNewEvent={setNewEvent}
-            onSave={handleSaveEvent}
-            onCancel={() => setIsModalOpen(false)}
-          />
-        </Modal>
-
-        {/* Modal for displaying event info */}
-        <Modal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)}>
-          {selectedEvent && (
-            <EventInfoDisplay 
-              event={selectedEvent}
-              onClose={() => setIsInfoOpen(false)}
+            <EventForm 
+              newEvent={newEvent}
+              setNewEvent={setNewEvent}
+              onSave={handleSaveEvent}
+              onCancel={() => setIsModalOpen(false)}
             />
-          )}
-        </Modal>
+          </Modal>
+  
+          {/* Modal for displaying event info - pass onDelete handler */}
+          <Modal isOpen={isInfoOpen} onClose={() => setIsInfoOpen(false)}>
+            {selectedEvent && (
+              <EventInfoDisplay 
+                event={selectedEvent}
+                onClose={() => setIsInfoOpen(false)}
+                onDelete={onEventDelete}
+              />
+            )}
+          </Modal>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default CalendarGrid;
