@@ -28,3 +28,4 @@ dist-ssr
 **.db
 
 **/history.sqlite
+.qodo

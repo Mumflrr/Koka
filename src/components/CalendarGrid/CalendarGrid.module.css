@@ -9,7 +9,7 @@
     grid-template-columns: [times] 60px repeat(5, 1fr);
     grid-template-rows: auto 1fr;
     background-color: white;
-    border-radius: 12px;
+    border-radius: 0px 0px 12px 12px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     overflow: hidden;
     min-height: 0;
@@ -26,24 +26,22 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    border-bottom: 1px solid #e2e8f0;
 }
 
 .header-cell {
     text-align: center;
-    border-bottom: 1px solid #e2e8f0;
     background: #f8fafc;
     position: sticky;
     top: 0;
     z-index: 1;
-    height: 40px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .header-cell span {
-    font-weight: 600;
+    font-weight: 450;
     font-size: 0.95rem;
     color: #334155;
 }
