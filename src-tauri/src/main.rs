@@ -6,9 +6,9 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{delete_calendar_events, delete_scheduler_events, load_calendar_events, load_scheduler_events, save_calendar_events, save_scheduler_events, Event};
+use database_functions::{delete_events, save_event, load_events, Event};
 use program_setup::*;
-use tauri::{Manager, State, Window};
+use tauri::{Manager, Window};
 use tauri_backend::class_combinations::generate_combinations;
 use tauri_backend::scrape_classes::*;
 use chrome_functions::*;
@@ -205,87 +205,22 @@ fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_,
     Ok(())
 }
 
-// Create event method
 #[tauri::command]
-fn create_event(event: Event, event_type: EventType, events_state: State<Mutex<Vec<Event>>>) -> Result<(), String> {
-    let rt = tokio::runtime::Runtime::new()
-        .expect("Failed to create runtime");
-    
-    let mut events = rt.block_on(events_state.lock());
-    events.push(event.clone());
-    
-    let events_to_save = events.clone();
-    
-    thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("Failed to create runtime");
-            
-        let result = rt.block_on(async {
-            match event_type {
-                EventType::Calendar => save_calendar_events(events_to_save).await,
-                EventType::Scheduler => save_scheduler_events(events_to_save).await,
-            }
-        });
-        
-        if let Err(e) = result {
-            eprintln!("Error saving events: {}", e);
-        }
-    });
-
-    Ok(())
+async fn create_event(event: Event, table: String) -> Result<(), String> {
+    save_event(table, event).await
+        .map_err(|e| format!("Failed to save event: {}", e))
 }
 
-// Get events method
 #[tauri::command]
-fn get_events(event_type: EventType, events_state: State<Mutex<Vec<Event>>>) -> Result<Vec<Event>, String> {
-    let rt = tokio::runtime::Runtime::new()
-        .expect("Failed to create runtime");
-    
-    let event_type_clone = event_type.clone();
-    let handle = thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("Failed to create runtime");
-            
-        rt.block_on(async {
-            match event_type_clone {
-                EventType::Calendar => load_calendar_events().await,
-                EventType::Scheduler => load_scheduler_events().await,
-            }
-            .map_err(|e| format!("Failed to load events: {}", e))
-        })
-    });
-    
-    // Update the state with the loaded events
-    match handle.join() {
-        Ok(Ok(loaded_events)) => {
-            let mut events = rt.block_on(events_state.lock());
-            *events = loaded_events.clone();
-            Ok(loaded_events)
-        },
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err("Thread panicked while loading events".to_string())
-    }
+async fn get_events(table: String) -> Result<Vec<Event>, String> {
+    load_events(table).await
+        .map_err(|e| format!("Failed to load events: {}", e))
 }
 
-// Delete event method
 #[tauri::command]
-async fn delete_event(event_id: String, event_type: EventType, events_state: State<'_, Mutex<Vec<Event>>>) -> Result<(), String> {
-    // First try to delete from database
-    let result = match event_type {
-        EventType::Calendar => delete_calendar_events(event_id.clone()).await,
-        EventType::Scheduler => delete_scheduler_events(event_id.clone()).await,
-    };
-    
-    if let Err(e) = result {
-        return Err(format!("Failed to delete event: {}", e));
-    }
-    
-    // If database deletion succeeds, update state
-    let mut events = events_state.lock().await;
-
-    events.retain(|e| e.id != event_id);
-    
-    Ok(())
+async fn delete_event(event_id: String, table: String) -> Result<(), String> {
+    delete_events(table, event_id).await
+        .map_err(|e| format!("Failed to delete event: {}", e))
 }
 
 

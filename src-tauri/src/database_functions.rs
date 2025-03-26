@@ -1,6 +1,9 @@
 use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
+use anyhow::anyhow;
 use crate::{get_version, ConnectInfo};
+
+const TABLENAMES: [&str; 2] = ["calendar", "scheduler"];
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Event {
@@ -26,7 +29,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     )?;
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS events (
+        "CREATE TABLE IF NOT EXISTS calendar (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             start_time TEXT NOT NULL,
@@ -47,6 +50,22 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
             day INTEGER NOT NULL,
             professor TEXT,
             description TEXT
+        )",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS combinations (
+            id INTEGER PRIMARY KEY,
+            data TEXT
+        )",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY,
+            data TEXT
         )",
         (),
     )?;
@@ -96,43 +115,56 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
         )?;
         
         Ok(())
-    }).await? // Handle both the JoinError and the Result
+    }).await?
 }
 
 
-pub async fn save_calendar_events(events: Vec<Event>) -> Result<(), anyhow::Error> {
+// TODO pub async fn save_combinations
+
+
+pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
-        
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+        let clear_statement = format!("DELETE FROM {}", TABLENAMES[index]);
+        let insert_statement = format!("INSERT INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", TABLENAMES[index]);
+
         // Clear existing events
-        conn.execute("DELETE FROM events", [])?;
+        conn.execute(&clear_statement, [])?;
         
-        // Insert new events
-        for event in events {
-            conn.execute(
-                "INSERT INTO events (id, title, start_time, end_time, day, professor, description) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    event.id,
-                    event.title,
-                    event.start_time,
-                    event.end_time,
-                    event.day,
-                    event.professor,
-                    event.description
-                ],
-            )?;
-        }
+        // Insert new event
+        conn.execute(
+            &insert_statement,
+            params![
+                event.id,
+                event.title,
+                event.start_time,
+                event.end_time,
+                event.day,
+                event.professor,
+                event.description
+            ],
+        )?;
         
         Ok(())
     }).await?
 }
 
-pub async fn load_calendar_events() -> Result<Vec<Event>, anyhow::Error> {
-    tokio::task::spawn_blocking(|| -> Result<Vec<Event>, anyhow::Error> {
+pub async fn load_events(table: String) -> Result<Vec<Event>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<Event>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+        let statement = format!( "SELECT id, title, start_time, end_time, day, professor, description FROM {}", TABLENAMES[index]);
         let mut stmt = conn.prepare(
-            "SELECT id, title, start_time, end_time, day, professor, description FROM events"
+            &statement
         )?;
         
         let events = stmt.query_map([], |row| {
@@ -152,75 +184,17 @@ pub async fn load_calendar_events() -> Result<Vec<Event>, anyhow::Error> {
     }).await?
 }
 
-pub async fn delete_calendar_events(event_id: String) -> Result<(), anyhow::Error> {
+pub async fn delete_events(table: String, event_id: String) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+        let statement = format!("DELETE FROM {} WHERE id = ?1", TABLENAMES[index]);
         conn.execute(
-            "DELETE FROM events WHERE id = ?1",
-            params![event_id],
-        )?;
-        Ok(())
-    }).await?
-}
-
-
-pub async fn save_scheduler_events(events: Vec<Event>) -> Result<(), anyhow::Error> {
-    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
-        let conn = Connection::open("programData.db")?;
-        
-        // Clear existing events
-        conn.execute("DELETE FROM scheduler", [])?;
-        
-        // Insert new events
-        for event in events {
-            conn.execute(
-                "INSERT INTO scheduler (id, title, start_time, end_time, day, professor, description) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    event.id,
-                    event.title,
-                    event.start_time,
-                    event.end_time,
-                    event.day,
-                    event.professor,
-                    event.description
-                ],
-            )?;
-        }
-        
-        Ok(())
-    }).await?
-}
-
-pub async fn load_scheduler_events() -> Result<Vec<Event>, anyhow::Error> {
-    tokio::task::spawn_blocking(|| -> Result<Vec<Event>, anyhow::Error> {
-        let conn = Connection::open("programData.db")?;
-        let mut stmt = conn.prepare(
-            "SELECT id, title, start_time, end_time, day, professor, description FROM scheduler"
-        )?;
-        
-        let events = stmt.query_map([], |row| {
-            Ok(Event {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                start_time: row.get(2)?,
-                end_time: row.get(3)?,
-                day: row.get(4)?,
-                professor: row.get(5)?,
-                description: row.get(6)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-        
-        Ok(events)
-    }).await?
-}
-
-pub async fn delete_scheduler_events(event_id: String) -> Result<(), anyhow::Error> {
-    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
-        let conn = Connection::open("programData.db")?;
-        conn.execute(
-            "DELETE FROM scheduler WHERE id = ?1",
+            &statement,
             params![event_id],
         )?;
         Ok(())
