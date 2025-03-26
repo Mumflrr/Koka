@@ -4,7 +4,7 @@
     width: 100%;
     display: grid;
     grid-template-columns: 3fr 2fr;
-    overflow: visible; /* CHANGED from hidden to visible */
+    overflow: visible;
 }
 
 /* Top bar containing the dropdown */
@@ -15,7 +15,6 @@
     border-bottom: #e2e8f0 1px solid;
     position: relative;
     overflow: visible; /* Ensure it's set to visible */
-    z-index: 10; /* Higher z-index to ensure proper stacking */
     display: flex;
 }
 
@@ -24,7 +23,7 @@
     margin: 1rem;
     position: relative;
     display: inline-block;
-    z-index: 20; /* Higher than parent elements */
+    z-index: 2; /* Higher than parent elements */
 }
 
 /* Dropdown Button */
@@ -52,7 +51,7 @@
     background-color: #f9f9f9;
     min-width: 160px;
     box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
-    z-index: 9999; /* Ensure it stays above everything */
+    z-index: 3; /* Ensure it stays above everything */
     border-radius: 4px;
 }
 
@@ -66,7 +65,6 @@
     flex-direction: column;
     transition: 0ms;
     position: relative;
-    z-index: 10;
 }
 
 /* Dropdown items */

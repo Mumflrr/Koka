@@ -5,11 +5,9 @@
 * {
     margin:0;
     padding:0;
+    transition:225ms ease;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
-    transition:225ms ease;
-    z-index: 0;
-    overflow: hidden;
 }
 
 :root {
@@ -30,6 +28,8 @@
     -webkit-text-size-adjust: 100%;
 
     overscroll-behavior: none;
+    overflow: hidden;
+    z-index: 0;
 }
 
 h1 {

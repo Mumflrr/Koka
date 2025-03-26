@@ -6,7 +6,7 @@
     flex-direction: column;
     transition: width 225ms ease, border-radius 225ms ease;
     position: absolute;
-    z-index:2;
+    z-index:20000000;
 }
 
 .sidebar-header {
