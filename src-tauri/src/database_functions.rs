@@ -135,8 +135,6 @@ pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error
 
         // Clear existing events
         conn.execute(&clear_statement, [])?;
-
-        println!("HEHEHE");
         
         // Insert new event
         conn.execute(
