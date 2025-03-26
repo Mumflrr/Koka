@@ -7,6 +7,8 @@ import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
+//TODO Responsiveness
+
 const Scheduler = () => {
     // Core state
     const [events, setEvents] = useState([]);
@@ -71,12 +73,15 @@ const Scheduler = () => {
                     scrapedClasses: event.payload
                 }));
                 console.log(event.payload);
+
+                // TODO: Save combinations to database
             }
         });
         
         return () => unlistenPromise.then(unlistenFn => unlistenFn());
     };
 
+    // When dropdown is open, if there is a click outside of it then close the menu
     const setupClickOutsideListener = () => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -92,7 +97,7 @@ const Scheduler = () => {
         try {
             setLoading(true);
             setError(null);
-            const loadedEvents = await invoke('get_events', {eventType: "Scheduler"});
+            const loadedEvents = await invoke('get_events', {table: "scheduler"});
             const processedEvents = processEvents(loadedEvents);
             setEvents(processedEvents);
         } catch (err) {
@@ -113,7 +118,7 @@ const Scheduler = () => {
                 id: uniqueId
             };
             
-            await invoke('create_event', { event: eventToSave, eventType: "Scheduler" });
+            await invoke('create_event', { event: eventToSave, table: "scheduler" });
             setEvents(prevEvents => {
                 const updatedEvents = [...prevEvents, eventToSave];
                 return processEvents(updatedEvents);
@@ -126,7 +131,7 @@ const Scheduler = () => {
 
     const handleDeleteEvent = async (eventId) => {
         try {
-            await invoke('delete_event', { eventId, eventType: "Scheduler" });
+            await invoke('delete_event', { eventId, table: "scheduler" });
             setEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
         } catch (err) {
             console.error('Error deleting event:', err);
@@ -134,10 +139,9 @@ const Scheduler = () => {
         }
     };
 
-    // Add missing update event handler for consistency
     const handleUpdateEvent = async (updatedEvent) => {
         try {
-            await invoke('update_event', { event: updatedEvent, eventType: "Scheduler" });
+            await invoke('update_event', { event: updatedEvent, table: "scheduler" });
             setEvents(prevEvents => {
                 const filtered = prevEvents.filter(e => e.id !== updatedEvent.id);
                 return processEvents([...filtered, updatedEvent]);
