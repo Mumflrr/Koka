@@ -6,7 +6,7 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{delete_events, save_event, load_events, save_combinations_backend, Event};
+use database_functions::{delete_events, save_event, load_events, save_class_sections, save_combinations_backend, Event};
 use program_setup::*;
 use tauri::{Manager, Window};
 use tauri_backend::class_combinations::generate_combinations;
@@ -161,11 +161,9 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
     //TODO compare classes to scarpe vs classes in backend cache, and pass the classes in the back to be scraped
     //     will then necesitate generate_combinations to be with the rejoined grouped (scraped and cached combinations)
-    // TODO add functionality so if a class has a desired section that one will be grabbed
-    // TODO Save class sections to a backend cache
     
     // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
@@ -181,17 +179,14 @@ async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
         let driver = start_chromedriver(&connect_info).await?;
         let classes = perform_schedule_scrape(parameters, driver).await?;
 
+        save_class_sections(&classes).await?;
+
         generate_combinations(classes).await
     }
     .await;
 
-    // Emit the result to the frontend
-    match result {
-        Ok(classes) => window.emit("scrape_result", classes).map_err(|e| e.to_string())?,
-        Err(err) => window.emit("scrape_result", err.to_string()).map_err(|e| e.to_string())?,
-    }
-
-    Ok(())
+    // Convert anyhow::Error to String for Result
+    result.map_err(|err| err.to_string())
 }
 
 #[tauri::command]

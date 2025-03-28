@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::Class;
 
 pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
@@ -20,6 +18,7 @@ pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<C
     // Generate all schedules using backtracking with indices
     let mut results: Vec<Vec<usize>> = Vec::new();
     let mut current_schedule: Vec<usize> = Vec::new();
+    let total_groups = classes.len();
     
     // Start the backtracking process
     backtrack(
@@ -27,10 +26,9 @@ pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<C
         &class_indices,
         &mut current_schedule,
         0,
-        &mut results
+        &mut results,
+        total_groups
     );
-
-    results = sort_classes(results);
     
     // Convert indices back to actual Class objects (clone only at the end)
     let final_results = results
@@ -52,11 +50,12 @@ fn backtrack(
     current_schedule: &mut Vec<usize>,
     current_group: usize,
     results: &mut Vec<Vec<usize>>,
+    total_groups: usize,
 ) {
     // Base case: we've considered all course groups
     if current_group == class_indices.len() {
         // Only add this schedule if it's not empty
-        if !current_schedule.is_empty() {
+        if current_schedule.len() == total_groups {
             results.push(current_schedule.clone());
         }
         return;
@@ -73,7 +72,8 @@ fn backtrack(
                 class_indices,
                 current_schedule,
                 current_group + 1,
-                results
+                results,
+                total_groups
             );
             current_schedule.pop();
         }
@@ -87,7 +87,8 @@ fn backtrack(
             class_indices,
             current_schedule,
             current_group + 1,
-            results
+            results,
+            total_groups
         );
     }
 }
@@ -126,22 +127,4 @@ fn is_compatible(all_classes: &[&Class], new_class_idx: usize, schedule_indices:
     }
     
     true
-}
-
-fn sort_classes(all_classes: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
-    // Use a BTreeMap where the key is the length and the value is a Vec of schedules
-    let mut buckets: BTreeMap<usize, Vec<Vec<usize>>> = BTreeMap::new();
-
-    // Group schedules by length
-    for schedule in all_classes {
-        let len = schedule.len();
-        buckets.entry(len).or_insert_with(Vec::new).push(schedule);
-    }
-
-    // Flatten the map back into a vector, with longer schedules first
-    // (BTreeMap keys are sorted in ascending order)
-    buckets.into_iter()
-           .rev() // Reverse to get descending order (longer schedules first)
-           .flat_map(|(_, schedules)| schedules)
-           .collect()
 }

@@ -3,7 +3,7 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{TimeBlock, Class, EventParam, ScrapeClassesParameters};
+use crate::{Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
 
 // Performs the scraping
 pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
@@ -65,7 +65,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
 
     // For each class we want to scrape
     let mut results: Vec<Vec<Class>> = Vec::new();
-    for class in parameters.classes {
+    for class in &parameters.classes {
         // Click the dropdown to open it
         let subject_select = driver.find(By::Id("subject")).await?;
         subject_select.click().await?;
@@ -126,8 +126,8 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         );
     
         // Now scrape the search results
-        let predetermined_info = vec!(class.code, class.name, full_description);
-        let search_results = scrape_search_results(&parameters.events, &table, &predetermined_info).await?;
+        let predetermined_info = vec!(class.code.clone(), class.name.clone(), class.section.clone(), full_description);
+        let search_results = scrape_search_results(&parameters.classes, &parameters.events, &table, &predetermined_info).await?;
 
         // Add these results to our main results vector
         results.push(search_results);
@@ -144,7 +144,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
 }
 
 // Scrape search results from the page
-async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
+async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
     // Find all instances of the class
@@ -164,6 +164,7 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
 
         // If one timeblock in the section is skipped then the whole section should be skipped
         let mut section_skipped = false;
+        let mut specific_section_found = false;
 
         for time_block in section_time_blocks {   
             // The data per class instance should be able to be found with these tags
@@ -172,6 +173,14 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             // Make array that data will be stored into (section should be always present so pre-initialized)
             let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
             data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
+
+            // If we need a certain section for this class and this is not it, skip
+            for param in classes {
+                if param.code == predetermined_info[0] && param.name == predetermined_info[1] && ((predetermined_info[2] != "" && predetermined_info[2] != data_array[0]) || specific_section_found) {
+                    specific_section_found = true;
+                    continue;
+                }
+            }
 
             let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
             for i in 2..raw_data.len() - 1 {
@@ -211,6 +220,7 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
                 instructor: data_array[4].clone(),
                 days: days,
             });
+
         }
 
         // If a time block for this section was incomptabile, skip the whole section
@@ -221,8 +231,10 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             code: predetermined_info[0].clone(),
             name: predetermined_info[1].clone(),
             classes: class_sections,
-            description: predetermined_info[2].clone(),
+            description: predetermined_info[3].clone(),
         });
+
+        println!("!!{}", results[results.len() - 1]);
     }
 
     Ok(results)

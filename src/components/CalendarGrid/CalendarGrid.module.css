@@ -444,7 +444,7 @@
   .action-buttons {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: calc(100% - 159px);
   }
   
   .full-width {

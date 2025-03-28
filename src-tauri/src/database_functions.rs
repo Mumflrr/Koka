@@ -65,8 +65,6 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS classes (
             id TEXT PRIMARY KEY,
-            scraped INTEGER,
-            locked INTEGER,
             data TEXT
         )",
         (),
@@ -120,6 +118,46 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
     }).await?
 }
 
+pub async fn save_class_sections(classes: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
+        // Clone classes to move into the spawn_blocking closure
+        let classes_clone = classes.clone();
+    
+        tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+            let mut conn = Connection::open("programData.db")?;
+            
+            // Begin a transaction for better performance with batch operations
+            let tx = conn.transaction()?;
+            
+            {
+                // Prepare the statement once outside the loop for efficiency
+                let mut stmt = tx.prepare("INSERT or REPLACE INTO classes (id, data) VALUES (?, ?)")?;
+                
+                // Insert each combination as a separate row
+                for classes in classes_clone.iter() {
+                    for class in classes {
+                        // Serialize the section to JSON
+                        let json_data = serde_json::to_string(class)?;
+                        // Make id name
+                        let id = format!("{}{}{}", class.code, class.name, class.classes[0].section);
+                
+                        // Execute the prepared statement
+                        stmt.execute(params![id, json_data])?;
+                    }
+                }
+            } // The borrow of `tx` by `stmt` ends here
+            
+            // Commit the transaction
+            tx.commit()?;
+            
+            Ok(())
+        }).await?
+}
+
+/* 
+pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error> {
+
+}
+ */
 
 pub async fn save_combinations_backend(combinations: Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
     // Clone combinations to move into the spawn_blocking closure
