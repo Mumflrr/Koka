@@ -9,7 +9,6 @@
     text-rendering: optimizeLegibility;
     transition:225ms ease;
     z-index: 0;
-    overflow: hidden;
 }
 
 :root {
@@ -30,6 +29,7 @@
     -webkit-text-size-adjust: 100%;
 
     overscroll-behavior: none;
+    overflow: hidden;
 }
 
 h1 {

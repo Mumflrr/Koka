@@ -6,7 +6,7 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{delete_events, save_event, load_events, Event};
+use database_functions::{delete_events, save_event, load_events, save_combinations_backend, Event};
 use program_setup::*;
 use tauri::{Manager, Window};
 use tauri_backend::class_combinations::generate_combinations;
@@ -85,8 +85,8 @@ impl fmt::Display for Class {
         write!(f, "{}, {}, <", self.code, self.name).unwrap();
 
         // For each block in that section (for example if a lab is attached)
-        for item in self.classes.clone() {
-            write!(f, "{}, [", item.section)?;
+        for (idx, item) in self.classes.clone().iter().enumerate() {
+            write!(f, "{}{}, [", if idx == 0 { "" } else { " & " }, item.section)?;
             // For each day in that block write the times
             for day in item.days {    
                 if day.1 == true {
@@ -161,47 +161,36 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
-    // Clone the Arc<Mutex<ConnectInfo>> to use within the thread
+async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>, window: tauri::Window) -> Result<(), String> {
+    //TODO compare classes to scarpe vs classes in backend cache, and pass the classes in the back to be scraped
+    //     will then necesitate generate_combinations to be with the rejoined grouped (scraped and cached combinations)
+    // TODO add functionality so if a class has a desired section that one will be grabbed
+    // TODO Save class sections to a backend cache
+    
+    // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
-    // Spawn a new thread for async processing
-    thread::spawn(move || {
-        // Create a Tokio runtime to run async code in this thread
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+    let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
+        // Acquire a lock and clone the connect info for local use
+        let mut connect_info = {
+            let locked_connect_info = connect_info_mutex.lock().await;
+            (*locked_connect_info).clone() // Clone the data to use outside the lock
+        };
 
-        // Run the async task using the runtime
-        let result: Result<Vec<Vec<Class>>, anyhow::Error> = rt.block_on(async {
-            // Acquire a lock and clone the connect info for local use
-            let mut connect_info = {
-                let locked_connect_info = connect_info_mutex.lock().await;
-                (*locked_connect_info).clone() // Clone the data to use outside the lock
-            };
+        chrome_update_check(&mut connect_info).await?;
+        let driver = start_chromedriver(&connect_info).await?;
+        let classes = perform_schedule_scrape(parameters, driver).await?;
 
-            // Use match or map_err to convert errors to String
-            chrome_update_check(&mut connect_info).await?;  
-            let driver = start_chromedriver(&connect_info).await?;
+        generate_combinations(classes).await
+    }
+    .await;
 
-            // Perform the schedule scrape with the initialized driver
-            let classes = perform_schedule_scrape(parameters, driver).await?;
-                
-            // Return the final result
-            generate_combinations(classes).await
+    // Emit the result to the frontend
+    match result {
+        Ok(classes) => window.emit("scrape_result", classes).map_err(|e| e.to_string())?,
+        Err(err) => window.emit("scrape_result", err.to_string()).map_err(|e| e.to_string())?,
+    }
 
-        });
-
-        // Emit the result to the frontend
-        match result {
-            Ok(classes) => {
-                let _ = window.emit("scrape_result", classes);
-            }
-            Err(err) => {
-                let _ = window.emit("scrape_result", err.to_string());
-            }
-        }
-    });
-
-    // Return Ok to indicate the command has run successfully
     Ok(())
 }
 
@@ -221,6 +210,12 @@ async fn get_events(table: String) -> Result<Vec<Event>, String> {
 async fn delete_event(event_id: String, table: String) -> Result<(), String> {
     delete_events(table, event_id).await
         .map_err(|e| format!("Failed to delete event: {}", e))
+}
+
+#[tauri::command]
+async fn save_combinations(combinations: Vec<Vec<Class>>) -> Result<(), String> {
+    save_combinations_backend(combinations).await
+        .map_err(|e| format!("Failed to save combinations: {}", e))
 }
 
 
@@ -258,6 +253,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             create_event,
             get_events,
             delete_event,
+            save_combinations,
         ])
         .run(tauri::generate_context!())?;
 

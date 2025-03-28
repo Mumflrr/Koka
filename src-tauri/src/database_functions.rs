@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
-use crate::{get_version, ConnectInfo};
+use crate::{get_version, Class, ConnectInfo};
 
 const TABLENAMES: [&str; 2] = ["calendar", "scheduler"];
 
@@ -64,7 +64,9 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS classes (
-            id INTEGER PRIMARY KEY,
+            id TEXT PRIMARY KEY,
+            scraped INTEGER,
+            locked INTEGER,
             data TEXT
         )",
         (),
@@ -119,8 +121,40 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
 }
 
 
-// TODO pub async fn save_combinations
+pub async fn save_combinations_backend(combinations: Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
+    // Clone combinations to move into the spawn_blocking closure
+    let combinations_clone = combinations.clone();
+    
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        let mut conn = Connection::open("programData.db")?;
+        
+        // Begin a transaction for better performance with batch operations
+        let tx = conn.transaction()?;
 
+        // Clear existing combinations since if new combinations are being made then everything
+        // will have to be changed
+        tx.execute("DELETE FROM combinations", [])?;
+        
+        {
+            // Prepare the statement once outside the loop for efficiency
+            let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?, ?)")?;
+            
+            // Insert each combination as a separate row
+            for (index, combination) in combinations_clone.iter().enumerate() {
+                // Serialize the combination to JSON
+                let json_data = serde_json::to_string(combination)?;
+                
+                // Execute the prepared statement
+                stmt.execute(params![index as i64, json_data])?;
+            }
+        } // The borrow of `tx` by `stmt` ends here
+        
+        // Commit the transaction
+        tx.commit()?;
+        
+        Ok(())
+    }).await?
+}
 
 pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
