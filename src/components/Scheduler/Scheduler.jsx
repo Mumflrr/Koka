@@ -7,7 +7,12 @@ import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
-//TODO Responsiveness
+// TODO Responsiveness
+// TODO Fix top bar not shadowing on modal opening
+// TODO add a remove button for individual combinations
+// TODO add a button to regenerate combinations (if you remove one for example)
+// TODO add button to cache certain classes even if not in list
+// TODO add button to re-scrape classes in list
 
 const Scheduler = () => {
     // Core state
@@ -16,18 +21,17 @@ const Scheduler = () => {
     const [error, setError] = useState(null);
     
     // UI state
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-    const dropdownRef = useRef(null);
-    
+    const [numCombinations, setNumCombinations] = useState(0);
+    const [numClasses, setNumClasses] = useState(0);
+
     // Scraping state - consolidated into objects for better organization
     const [scrapeState, setScrapeState] = useState({
         isScraping: false,
         status: "",
-        scrapedClasses: [[]]
     });
     
     // Extract values from scrapeState (moved after definition)
-    const { isScraping, status: scrapeStatus, scrapedClasses } = scrapeState;
+    const { isScraping, status: scrapeStatus } = scrapeState;
     
     // Parameters state - consolidated into a single object
     const [scrapeParams, setScrapeParams] = useState({
@@ -38,9 +42,10 @@ const Scheduler = () => {
 
     useEffect(() => {
         loadEvents();
+        loadClasses();
+        
         const cleanupFunctions = [
             setupScrapeListener(),
-            setupClickOutsideListener()
         ];
         
         // Return a cleanup function that calls all cleanup functions
@@ -55,6 +60,25 @@ const Scheduler = () => {
         };
     }, []);
 
+    // Load events
+    const loadEvents = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const loadedEvents = await invoke('get_events', {table: "scheduler"});
+            setEvents(processEvents(loadedEvents));
+        } catch (err) {
+            console.error('Error loading events:', err);
+            setError('Failed to load events. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadClasses = async() => {
+        //TODO Complete
+    }
+
     // Setup listeners in separate functions for better organization
     const setupScrapeListener = () => {
         const unlistenPromise = listen('scrape_result', (event) => {
@@ -65,48 +89,39 @@ const Scheduler = () => {
                     isScraping: false,
                     status: `Error: ${event.payload}`
                 }));
+                setError(`Scraping failed: ${event.payload}`);
             } else {
                 setScrapeState(prev => ({
                     ...prev,
                     isScraping: false,
                     status: "Scrape completed successfully!",
-                    scrapedClasses: event.payload
                 }));
                 console.log(event.payload);
 
-                // TODO: Save combinations to database
+                // Use async IIFE to properly handle the promise
+                (async () => {
+                    try {
+                        await invoke('save_combinations', { combinations: event.payload });
+                        setNumCombinations(event.payload.length);
+                        console.log(event.payload.length);
+                    } catch (err) {
+                        console.error('Error saving schedule combinations:', err);
+                        setError('Failed to save schedules. Please try again.');
+                        setScrapeState(prev => ({
+                            ...prev,
+                            status: "Error: Failed to save schedule combinations"
+                        }));
+                    }
+                })();
             }
         });
         
         return () => unlistenPromise.then(unlistenFn => unlistenFn());
     };
 
-    // When dropdown is open, if there is a click outside of it then close the menu
-    const setupClickOutsideListener = () => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setDropdownOpen(false);
-            }
-        };
-        
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    };
 
-    const loadEvents = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const loadedEvents = await invoke('get_events', {table: "scheduler"});
-            const processedEvents = processEvents(loadedEvents);
-            setEvents(processedEvents);
-        } catch (err) {
-            console.error('Error loading events:', err);
-            setError('Failed to load events. Please try again later.');
-        } finally {
-            setLoading(false);
-        }
-    };
+{/*<!-----------------------------End Setup Functions-----------------------------------------!> */}
+
 
     const handleCreateEvent = async (newEvent) => {
         try {
@@ -167,6 +182,7 @@ const Scheduler = () => {
                     scrapeParams.events
                 ]
             });
+            console.log("HEIDIDOEODHOOH");
         } catch (error) {
             console.error("Failed to start scrape:", error);
             setScrapeState(prev => ({
@@ -175,46 +191,6 @@ const Scheduler = () => {
                 status: `Failed to start scrape: ${error}`
             }));
         }
-    };
-
-    // Toggle dropdown menu
-    const toggleDropdown = (e) => {
-        e.stopPropagation();
-        setDropdownOpen(prevState => !prevState);
-    };
-
-    // Handle link clicks in dropdown - updated to match usage in renderDropdownButtons
-    const handleLinkClick = (e, index) => {
-        e.preventDefault();
-        console.log(`Schedule selected: ${index}`);
-        setDropdownOpen(false);
-        
-        // Add your logic for handling the selected schedule here
-    };
-
-    // Generate dropdown buttons based on scrapedClasses length
-    const renderDropdownButtons = () => {
-        // If scrapedClasses is empty or not an array, return a default message
-        if (!Array.isArray(scrapedClasses) || scrapedClasses.length === 1) {
-            return (
-                <div className={ss['dropdown-item-message']}>
-                    No schedules
-                </div>
-            );
-        }
-
-        // Otherwise, create a button for each class
-        return scrapedClasses.map((classData, index) => {
-            return (
-                <button 
-                    key={`class-${index}`}
-                    onClick={(e) => handleLinkClick(e, index)}
-                    className={ss['dropdown-item']}
-                >
-                    {`Schedule- ${index + 1}`}
-                </button>
-            );
-        });
     };
 
     // If we're loading events, show loading state
@@ -265,26 +241,6 @@ const Scheduler = () => {
             )}
             
             <div className={ss['scheduler-wrapper']}>
-                <div className={ss['scheduler-top-bar']}>
-                    <div className={ss['scheduler-top-bar-dropdown']} ref={dropdownRef}>
-                        <button 
-                            onClick={toggleDropdown} 
-                            className={ss['dropbtn']}
-                            aria-haspopup="true"
-                            aria-expanded={dropdownOpen}
-                        >
-                            Options ▼
-                        </button>
-                        {dropdownOpen && (
-                            <div className={ss['dropdown-content']}>
-                                {renderDropdownButtons()}
-                            </div>
-                        )}
-                    </div>
-                    <div className={ss['scheduler-top-bar-text']}>
-                        <p>Placeholder</p>
-                    </div>
-                </div>
                 <CalendarGrid 
                     events={events} 
                     onEventCreate={handleCreateEvent}
