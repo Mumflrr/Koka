@@ -7,32 +7,6 @@ import ss from "./Courses.module.css";
 
 
 function Courses() {
-    const [scrapeResult, setScrapeStatus] = useState("");
-
-    useEffect(() => {
-        const unsubscribe = listen("scrape_result", (event) => {
-          const result = event.payload;
-          if (result === null) {
-            setScrapeStatus("Scrape completed successfully!");
-          } else {
-            setScrapeStatus(`Error during scrape: ${result}`);
-          }
-          setIsScraping(false);
-        });
-    
-        return () => {
-          unsubscribe.then(f => f());
-        };
-      }, []);
-
-    async function startScrape() {
-        setScrapeStatus("Scraping in progress...");
-        try {
-          await invoke("scheduler_scrape");
-        } catch (error) {
-          setScrapeStatus(`Error starting scrape: ${error}`);
-        }
-      }
 
     return (
         <div>

@@ -10,9 +10,13 @@ import ss from './Scheduler.module.css';
 // TODO Responsiveness
 // TODO Fix top bar not shadowing on modal opening
 // TODO add a remove button for individual combinations
-// TODO add a button to regenerate combinations (if you remove one for example)
 // TODO add button to cache certain classes even if not in list
 // TODO add button to re-scrape classes in list
+// TODO add favorited scheudles (localStorage?)
+// TODO add disclaimer if there are classes in shopping cart will change scrape results if 
+//      'only show classes that fit in schedule' is true
+// TODO determine how to tell if a class has already been scraped or not
+// TODO fix deleting one block of multi-day event not deleting all blocks
 
 const Scheduler = () => {
     // Core state
@@ -35,9 +39,14 @@ const Scheduler = () => {
     
     // Parameters state - consolidated into a single object
     const [scrapeParams, setScrapeParams] = useState({
-        checkBoxes: [false, false, false],
-        classes: [["CSC", "116", "", ""], ["BIO", "181", "", ""]],
-        events: [[[800, 829], [true, false, false, false, false]]]
+        params_checkbox: [false, false, false],
+        classes: [
+            { code: "CSC", name: "116", section: "", instructor: "" },
+            { code: "BIO", name: "181", section: "001", instructor: "" }
+        ],
+        events: [
+            { time: [800, 829], days: [true, false, false, false, false] }
+        ]
     });
 
     useEffect(() => {
@@ -45,7 +54,7 @@ const Scheduler = () => {
         loadClasses();
         
         const cleanupFunctions = [
-            setupScrapeListener(),
+            // If I have listener functions put them here
         ];
         
         // Return a cleanup function that calls all cleanup functions
@@ -79,45 +88,6 @@ const Scheduler = () => {
         //TODO Complete
     }
 
-    // Setup listeners in separate functions for better organization
-    const setupScrapeListener = () => {
-        const unlistenPromise = listen('scrape_result', (event) => {
-            if (event.payload && typeof event.payload === 'string') {
-                console.error("Scrape error:", event.payload);
-                setScrapeState(prev => ({
-                    ...prev,
-                    isScraping: false,
-                    status: `Error: ${event.payload}`
-                }));
-                setError(`Scraping failed: ${event.payload}`);
-            } else {
-                setScrapeState(prev => ({
-                    ...prev,
-                    isScraping: false,
-                    status: "Scrape completed successfully!",
-                }));
-                console.log(event.payload);
-
-                // Use async IIFE to properly handle the promise
-                (async () => {
-                    try {
-                        await invoke('save_combinations', { combinations: event.payload });
-                        setNumCombinations(event.payload.length);
-                        console.log(event.payload.length);
-                    } catch (err) {
-                        console.error('Error saving schedule combinations:', err);
-                        setError('Failed to save schedules. Please try again.');
-                        setScrapeState(prev => ({
-                            ...prev,
-                            status: "Error: Failed to save schedule combinations"
-                        }));
-                    }
-                })();
-            }
-        });
-        
-        return () => unlistenPromise.then(unlistenFn => unlistenFn());
-    };
 
 
 {/*<!-----------------------------End Setup Functions-----------------------------------------!> */}
@@ -167,28 +137,45 @@ const Scheduler = () => {
         }
     };
 
-    const schedulerScrape = async () => {
+    const generateCombinations = async () => {
         setScrapeState(prev => ({
             ...prev,
             isScraping: true,
             status: "Starting scrape... This may take a while."
         }));
-        
+    
         try {
-            await invoke("scheduler_scrape", {
-                parameters: [
-                    scrapeParams.checkBoxes, 
-                    scrapeParams.classes, 
-                    scrapeParams.events
-                ]
+            const result = await invoke("get_combinations", {
+                parameters: {
+                    params_checkbox: scrapeParams.params_checkbox,
+                    classes: scrapeParams.classes,
+                    events: scrapeParams.events
+                }
             });
-            console.log("HEIDIDOEODHOOH");
+
+            if (typeof result === 'string') {
+                console.error("Scrape error:", result);
+                setScrapeState(prev => ({
+                    ...prev,
+                    isScraping: false,
+                    status: `Error: ${result}`
+                }));
+            }
+            else {
+                console.log("Scrape successful:", result);
+                setNumCombinations(result.length || 0);
+                setScrapeState(prev => ({
+                    ...prev,
+                    isScraping: false,
+                    status: `Scrape completed, found ${result.length} combinations`
+                }));
+            }
         } catch (error) {
-            console.error("Failed to start scrape:", error);
+            console.error("Scrape failed:", error);
             setScrapeState(prev => ({
                 ...prev,
                 isScraping: false,
-                status: `Failed to start scrape: ${error}`
+                status: `Scrape failed: ${error}`
             }));
         }
     };
@@ -252,10 +239,10 @@ const Scheduler = () => {
             <div className={ss['scrape-container']}>
                 <button 
                     className={`${ss.button} ${ss['button-primary']}`}
-                    onClick={schedulerScrape} 
+                    onClick={generateCombinations} 
                     disabled={isScraping}
                 >
-                    {isScraping ? "Scraping..." : "Start Scrape"}
+                    {isScraping ? "Scraping..." : "Generate Combinations"}
                 </button>
                 
                 {/* Scrape status is always shown when available */}
