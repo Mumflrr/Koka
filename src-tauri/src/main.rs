@@ -6,15 +6,14 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{delete_events, save_event, load_events, save_class_sections, save_combinations_backend, Event};
+use database_functions::{delete_events, save_event, load_events, save_class_sections, get_class_by_name, save_combinations_backend, Event};
 use program_setup::*;
 use tauri::{Manager, Window};
-use tauri_backend::class_combinations::generate_combinations;
-use tauri_backend::scrape_classes::*;
+use tauri_backend::{scrape_classes::perform_schedule_scrape, class_combinations::generate_combinations};
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
-use std::{env, fmt, thread};
+use std::{env, fmt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -161,14 +160,36 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    //TODO compare classes to scarpe vs classes in backend cache, and pass the classes in the back to be scraped
-    //     will then necesitate generate_combinations to be with the rejoined grouped (scraped and cached combinations)
-    
+async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
+ 
     // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
     let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
+
+        let mut cached_classes = Vec::new();
+        // Check which classes have already been scraped
+        let mut i = 0;
+        while i < parameters.classes.len() {
+            let class = &parameters.classes[i];
+            let name = format!("{}{}", class.code, class.name);
+            
+            // Get classes by name from database
+            let classes = get_class_by_name(name.clone()).await?;
+            
+            // If classes are found in the database
+            if !classes.is_empty() {
+                // Remove the class from parameters.classes
+                parameters.classes.remove(i);
+                // Add the cached classes to our list
+                cached_classes.push(classes);
+                // Don't increment i since we removed an element
+            } else {
+                // Move to the next class if this one wasn't found
+                i += 1;
+            }
+        }
+
         // Acquire a lock and clone the connect info for local use
         let mut connect_info = {
             let locked_connect_info = connect_info_mutex.lock().await;
@@ -177,11 +198,18 @@ async fn scheduler_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
 
         chrome_update_check(&mut connect_info).await?;
         let driver = start_chromedriver(&connect_info).await?;
-        let classes = perform_schedule_scrape(parameters, driver).await?;
+        let mut classes = perform_schedule_scrape(parameters, driver).await?;
+
+        for class in cached_classes {
+            classes.push(class);
+        }
 
         save_class_sections(&classes).await?;
 
-        generate_combinations(classes).await
+        let combinations = generate_combinations(classes).await?;
+        save_combinations_backend(&combinations).await?;
+
+        Ok(combinations)
     }
     .await;
 
@@ -208,7 +236,7 @@ async fn delete_event(event_id: String, table: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn save_combinations(combinations: Vec<Vec<Class>>) -> Result<(), String> {
+async fn save_combinations(combinations: &Vec<Vec<Class>>) -> Result<(), String> {
     save_combinations_backend(combinations).await
         .map_err(|e| format!("Failed to save combinations: {}", e))
 }
@@ -241,14 +269,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            scheduler_scrape,
+            get_combinations,
             close_splashscreen,
             startup_app,
             show_splashscreen,
             create_event,
             get_events,
             delete_event,
-            save_combinations,
         ])
         .run(tauri::generate_context!())?;
 

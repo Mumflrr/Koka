@@ -1,7 +1,8 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Error as RusqliteError};
 use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
 use crate::{get_version, Class, ConnectInfo};
+use std::error::Error as StdError; // Import the standard Error trait
 
 const TABLENAMES: [&str; 2] = ["calendar", "scheduler"];
 
@@ -57,7 +58,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS combinations (
             id INTEGER PRIMARY KEY,
-            data TEXT
+            data TEXT NOT NULL
         )",
         (),
     )?;
@@ -65,7 +66,8 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS classes (
             id TEXT PRIMARY KEY,
-            data TEXT
+            classname TEXT NOT NULL,
+            data TEXT NOT NULL
         )",
         (),
     )?;
@@ -90,7 +92,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
                 "INSERT INTO data (id, os) VALUES (0, ?1)",
                 params![os_info.os],
             )?;
-            
+
             connect_info = os_info;
             get_version(&mut connect_info).await?;
         }
@@ -107,13 +109,13 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         // Open connection to SQLite database
         let conn = Connection::open("programData.db")?;
-        
+
         // Execute the update query with the new version
         conn.execute(
-            "UPDATE data SET version = ?1 WHERE id = 0", 
+            "UPDATE data SET version = ?1 WHERE id = 0",
             params![version]
         )?;
-        
+
         Ok(())
     }).await?
 }
@@ -121,17 +123,17 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
 pub async fn save_class_sections(classes: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
         // Clone classes to move into the spawn_blocking closure
         let classes_clone = classes.clone();
-    
+
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
             let mut conn = Connection::open("programData.db")?;
-            
+
             // Begin a transaction for better performance with batch operations
             let tx = conn.transaction()?;
-            
+
             {
                 // Prepare the statement once outside the loop for efficiency
-                let mut stmt = tx.prepare("INSERT or REPLACE INTO classes (id, data) VALUES (?, ?)")?;
-                
+                let mut stmt = tx.prepare("INSERT OR REPLACE INTO classes (id, classname, data) VALUES (?, ?, ?)")?;
+
                 // Insert each combination as a separate row
                 for classes in classes_clone.iter() {
                     for class in classes {
@@ -139,57 +141,82 @@ pub async fn save_class_sections(classes: &Vec<Vec<Class>>) -> Result<(), anyhow
                         let json_data = serde_json::to_string(class)?;
                         // Make id name
                         let id = format!("{}{}{}", class.code, class.name, class.classes[0].section);
-                
+                        let classname = format!("{}{}", class.code, class.name);
+
                         // Execute the prepared statement
-                        stmt.execute(params![id, json_data])?;
+                        stmt.execute(params![id, classname, json_data])?;
                     }
                 }
             } // The borrow of `tx` by `stmt` ends here
-            
+
             // Commit the transaction
             tx.commit()?;
-            
+
             Ok(())
         }).await?
 }
 
-/* 
+
 pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error> {
+    // Spawn a blocking task since SQLite operations are synchronous
+    let result = tokio::task::spawn_blocking(move || -> Result<Vec<Class>, anyhow::Error> {
+        // Open connection to SQLite database
+        let conn = Connection::open("programData.db")?;
 
+        // Simplified concept
+        let mut stmt = conn.prepare("SELECT data FROM classes WHERE classname = ?1")?;
+        let raw_json_iter = stmt.query_map(params![name], |row| row.get::<usize, String>(0))?; // Get only strings
+
+        let mut classes: Vec<Class> = Vec::new();
+        // This collect forces fetching all strings into memory first
+        let all_raw_json: Vec<String> = raw_json_iter.collect::<Result<Vec<_>, _>>()?;
+
+        // Now, map in Rust after DB interaction is done
+        for json_data in all_raw_json {
+            // Error handling here is simpler - can just use anyhow::Error directly
+            let class: Class = serde_json::from_str(&json_data)?; // Or .map_err(anyhow::Error::from)
+            classes.push(class);
+        }
+        // 'classes' now holds the result
+
+        Ok(classes)
+    }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
+
+    Ok(result)
 }
- */
 
-pub async fn save_combinations_backend(combinations: Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
+
+pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
     // Clone combinations to move into the spawn_blocking closure
     let combinations_clone = combinations.clone();
-    
+
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let mut conn = Connection::open("programData.db")?;
-        
+
         // Begin a transaction for better performance with batch operations
         let tx = conn.transaction()?;
 
         // Clear existing combinations since if new combinations are being made then everything
         // will have to be changed
         tx.execute("DELETE FROM combinations", [])?;
-        
+
         {
             // Prepare the statement once outside the loop for efficiency
             let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?, ?)")?;
-            
+
             // Insert each combination as a separate row
             for (index, combination) in combinations_clone.iter().enumerate() {
                 // Serialize the combination to JSON
                 let json_data = serde_json::to_string(combination)?;
-                
+
                 // Execute the prepared statement
                 stmt.execute(params![index as i64, json_data])?;
             }
         } // The borrow of `tx` by `stmt` ends here
-        
+
         // Commit the transaction
         tx.commit()?;
-        
+
         Ok(())
     }).await?
 }
@@ -202,12 +229,8 @@ pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error
             Some(index) => index,
             None => return Err(anyhow!("Unable to find table")),
         };
-        let clear_statement = format!("DELETE FROM {}", TABLENAMES[index]);
         let insert_statement = format!("INSERT INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", TABLENAMES[index]);
 
-        // Clear existing events
-        conn.execute(&clear_statement, [])?;
-        
         // Insert new event
         conn.execute(
             &insert_statement,
@@ -221,7 +244,7 @@ pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error
                 event.description
             ],
         )?;
-        
+
         Ok(())
     }).await?
 }
@@ -238,7 +261,7 @@ pub async fn load_events(table: String) -> Result<Vec<Event>, anyhow::Error> {
         let mut stmt = conn.prepare(
             &statement
         )?;
-        
+
         let events = stmt.query_map([], |row| {
             Ok(Event {
                 id: row.get(0)?,
@@ -250,8 +273,8 @@ pub async fn load_events(table: String) -> Result<Vec<Event>, anyhow::Error> {
                 description: row.get(6)?,
             })
         })?
-        .collect::<Result<Vec<_>, _>>()?;
-        
+        .collect::<Result<Vec<_>, _>>()?; // This already correctly handles rusqlite::Error
+
         Ok(events)
     }).await?
 }

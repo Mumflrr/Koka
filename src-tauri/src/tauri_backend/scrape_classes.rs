@@ -234,7 +234,7 @@ async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventPara
             description: predetermined_info[3].clone(),
         });
 
-        println!("!!{}", results[results.len() - 1]);
+        //println!("!!{}", results[results.len() - 1]);
     }
 
     Ok(results)

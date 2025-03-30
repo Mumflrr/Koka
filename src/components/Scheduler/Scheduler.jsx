@@ -10,13 +10,13 @@ import ss from './Scheduler.module.css';
 // TODO Responsiveness
 // TODO Fix top bar not shadowing on modal opening
 // TODO add a remove button for individual combinations
-// TODO add a button to regenerate combinations (if you remove one for example)
 // TODO add button to cache certain classes even if not in list
 // TODO add button to re-scrape classes in list
 // TODO add favorited scheudles (localStorage?)
 // TODO add disclaimer if there are classes in shopping cart will change scrape results if 
 //      'only show classes that fit in schedule' is true
 // TODO determine how to tell if a class has already been scraped or not
+// TODO fix deleting one block of multi-day event not deleting all blocks
 
 const Scheduler = () => {
     // Core state
@@ -137,7 +137,7 @@ const Scheduler = () => {
         }
     };
 
-    const schedulerScrape = async () => {
+    const generateCombinations = async () => {
         setScrapeState(prev => ({
             ...prev,
             isScraping: true,
@@ -145,7 +145,7 @@ const Scheduler = () => {
         }));
     
         try {
-            const result = await invoke("scheduler_scrape", {
+            const result = await invoke("get_combinations", {
                 parameters: {
                     params_checkbox: scrapeParams.params_checkbox,
                     classes: scrapeParams.classes,
@@ -239,10 +239,10 @@ const Scheduler = () => {
             <div className={ss['scrape-container']}>
                 <button 
                     className={`${ss.button} ${ss['button-primary']}`}
-                    onClick={schedulerScrape} 
+                    onClick={generateCombinations} 
                     disabled={isScraping}
                 >
-                    {isScraping ? "Scraping..." : "Start Scrape"}
+                    {isScraping ? "Scraping..." : "Generate Combinations"}
                 </button>
                 
                 {/* Scrape status is always shown when available */}
