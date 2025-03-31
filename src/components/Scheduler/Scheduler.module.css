@@ -12,7 +12,6 @@
     padding: 1rem;
     padding-left: calc(var(--sidebar-short-width) + 1rem);
     display: flex;
-    flex-direction: column;
     transition: 0ms;
     position: relative;
 }

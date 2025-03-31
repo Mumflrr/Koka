@@ -45,6 +45,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
     if !parameters.params_checkbox[0] {
         let result = check_boxes[0].click().await;
         if result.is_err() {
+            sleep(Duration::from_secs(1)).await;
             check_boxes[0].click().await?;
         }
     }
@@ -52,6 +53,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         // Attempt retry if fails due to intercepted element -> tends to occur at <div class="search-filter-checkbox
         let result = check_boxes[1].click().await;
         if result.is_err() {
+            sleep(Duration::from_secs(1)).await;
             check_boxes[1].click().await?;
         }
     }
@@ -59,6 +61,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         // Attempt retry if fails due to intercepted element -> tends to occur at <div class="search-filter-checkbox
         let result = check_boxes[2].click().await;
         if result.is_err() {
+            sleep(Duration::from_secs(1)).await;
             check_boxes[2].click().await?;
         }
     }

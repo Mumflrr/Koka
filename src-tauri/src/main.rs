@@ -161,10 +161,13 @@ fn show_splashscreen(window: Window) {
 
 #[tauri::command]
 async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
- 
+    // If no clases passed in then nothing to scrape
+    if parameters.classes.is_empty() {
+        return Err("No classes set to scrape".to_string());
+    }
+
     // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
-
     let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
 
         let mut cached_classes = Vec::new();
@@ -189,22 +192,29 @@ async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri:
                 i += 1;
             }
         }
+        
+        // Classes to generate combinations with
+        let mut classes = Vec::new();
+        // If parameters classes is empty, then no need to scrape as all the classes are cached
+        if !parameters.classes.is_empty() {
+            // Acquire a lock and clone the connect info for local use
+            let mut connect_info = {
+                let locked_connect_info = connect_info_mutex.lock().await;
+                (*locked_connect_info).clone() // Clone the data to use outside the lock
+            };
 
-        // Acquire a lock and clone the connect info for local use
-        let mut connect_info = {
-            let locked_connect_info = connect_info_mutex.lock().await;
-            (*locked_connect_info).clone() // Clone the data to use outside the lock
-        };
+            chrome_update_check(&mut connect_info).await?;
+            let driver = start_chromedriver(&connect_info).await?;
+            classes = perform_schedule_scrape(parameters, driver).await?;
 
-        chrome_update_check(&mut connect_info).await?;
-        let driver = start_chromedriver(&connect_info).await?;
-        let mut classes = perform_schedule_scrape(parameters, driver).await?;
+            // Save the scraped sections of classes
+            save_class_sections(&classes).await?;
+        }
 
+        // If any classes were cached then add them back to contribute to combinations
         for class in cached_classes {
             classes.push(class);
         }
-
-        save_class_sections(&classes).await?;
 
         let combinations = generate_combinations(classes).await?;
         save_combinations_backend(&combinations).await?;
@@ -234,13 +244,6 @@ async fn delete_event(event_id: String, table: String) -> Result<(), String> {
     delete_events(table, event_id).await
         .map_err(|e| format!("Failed to delete event: {}", e))
 }
-
-#[tauri::command]
-async fn save_combinations(combinations: &Vec<Vec<Class>>) -> Result<(), String> {
-    save_combinations_backend(combinations).await
-        .map_err(|e| format!("Failed to save combinations: {}", e))
-}
-
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");

@@ -1,8 +1,7 @@
-use rusqlite::{params, Connection, Error as RusqliteError};
+use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
 use crate::{get_version, Class, ConnectInfo};
-use std::error::Error as StdError; // Import the standard Error trait
 
 const TABLENAMES: [&str; 2] = ["calendar", "scheduler"];
 
@@ -58,6 +57,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS combinations (
             id INTEGER PRIMARY KEY,
+            favorite INTEGER NOT NULL,
             data TEXT NOT NULL
         )",
         (),
@@ -202,7 +202,7 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
 
         {
             // Prepare the statement once outside the loop for efficiency
-            let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?, ?)")?;
+            let mut stmt = tx.prepare("INSERT INTO combinations (id, favorite, data) VALUES (?, ?, ?)")?;
 
             // Insert each combination as a separate row
             for (index, combination) in combinations_clone.iter().enumerate() {
@@ -210,7 +210,7 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
                 let json_data = serde_json::to_string(combination)?;
 
                 // Execute the prepared statement
-                stmt.execute(params![index as i64, json_data])?;
+                stmt.execute(params![index as i64, 0, json_data])?;
             }
         } // The borrow of `tx` by `stmt` ends here
 

@@ -1,10 +1,10 @@
 // Scheduler.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { invoke } from "@tauri-apps/api/tauri";
-import { listen } from "@tauri-apps/api/event";
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
+import ScrollSelector from "./ScrollSelector";
 import ss from './Scheduler.module.css';
 
 // TODO Responsiveness
@@ -23,6 +23,7 @@ const Scheduler = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [schedules, setSchedules] = useState([[]]);
     
     // UI state
     const [numCombinations, setNumCombinations] = useState(0);
@@ -33,8 +34,6 @@ const Scheduler = () => {
         isScraping: false,
         status: "",
     });
-    
-    // Extract values from scrapeState (moved after definition)
     const { isScraping, status: scrapeStatus } = scrapeState;
     
     // Parameters state - consolidated into a single object
@@ -169,6 +168,7 @@ const Scheduler = () => {
                     isScraping: false,
                     status: `Scrape completed, found ${result.length} combinations`
                 }));
+                setSchedules(result);
             }
         } catch (error) {
             console.error("Scrape failed:", error);
@@ -179,6 +179,11 @@ const Scheduler = () => {
             }));
         }
     };
+
+
+    const getSchedule = async (idx) => {
+        // Display schedules[idx]
+    }
 
     // If we're loading events, show loading state
     if (loading) {
@@ -233,6 +238,10 @@ const Scheduler = () => {
                     onEventCreate={handleCreateEvent}
                     onEventDelete={handleDeleteEvent}
                     onEventUpdate={handleUpdateEvent}
+                />
+                <ScrollSelector
+                    items={schedules.length}
+                    handleItemClick={getSchedule}
                 />
             </div>
             

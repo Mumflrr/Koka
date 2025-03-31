@@ -1,0 +1,18 @@
+.wrapper {
+    background-color: white;
+    display: grid;
+    overflow-y: scroll;
+}
+
+.item-slot {
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.item-slot-first {
+    border-bottom: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
+}
+
+.item-button {
+    
+}
