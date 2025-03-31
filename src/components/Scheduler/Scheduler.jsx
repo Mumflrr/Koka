@@ -4,12 +4,11 @@ import { invoke } from "@tauri-apps/api/tauri";
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
-import ScrollSelector from "./ScrollSelector";
 import ss from './Scheduler.module.css';
 
 // TODO Responsiveness
 // TODO Fix top bar not shadowing on modal opening
-// TODO add a remove button for individual combinations
+// TODO add a remove button for individual schedules
 // TODO add button to cache certain classes even if not in list
 // TODO add button to re-scrape classes in list
 // TODO add favorited scheudles (localStorage?)
@@ -24,24 +23,23 @@ const Scheduler = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [schedules, setSchedules] = useState([[]]);
+    const [favoritedSchedules, setFavoritedSchedules] = useState(new Set());
     
     // UI state
-    const [numCombinations, setNumCombinations] = useState(0);
+    const [numSchedules, setNumSchedules] = useState(0);
     const [numClasses, setNumClasses] = useState(0);
 
-    // Scraping state - consolidated into objects for better organization
+    // Scraping state
     const [scrapeState, setScrapeState] = useState({
         isScraping: false,
         status: "",
     });
     const { isScraping, status: scrapeStatus } = scrapeState;
-    
-    // Parameters state - consolidated into a single object
     const [scrapeParams, setScrapeParams] = useState({
         params_checkbox: [false, false, false],
         classes: [
             { code: "CSC", name: "116", section: "", instructor: "" },
-            { code: "BIO", name: "181", section: "001", instructor: "" }
+            { code: "BIO", name: "181", section: "", instructor: "" }
         ],
         events: [
             { time: [800, 829], days: [true, false, false, false, false] }
@@ -84,13 +82,48 @@ const Scheduler = () => {
     };
 
     const loadClasses = async() => {
-        //TODO Complete
+        //TODO Complete (include setLoading())
     }
 
 
 
-{/*<!-----------------------------End Setup Functions-----------------------------------------!> */}
+{/*<!-----------------------------------End Setup Functions-----------------------------------!> */}
+{/*<!----------------------------------Start Render Functions---------------------------------!> */}
+    const renderScrollbar = () => {
+        // If items is empty or undefined, render nothing or a placeholder
+        if (!numSchedules || numSchedules === 0) {
+            return (
+                <div className={ss['scrollbar-wrapper']}>
+                    <div className={ss['empty-message']}>No schedules</div>
+                </div>
+            );
+        }
+    
+        return (
+            <div className={ss['scrollbar-wrapper']}>
+                {Array.from({length: numSchedules}).map((_, i) => (
+                    <div key = {i} 
+                        className={i === 0 ? ss['item-slot'] : ss['item-slot-first']}
+                        onClick={() => scheduleMenuClick(i)}
+                    >
+                        <button 
+                        className={`${ss['favorite-button']} ${favoritedSchedules.has(i) ? ss['favorited'] : ''}`} 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            favoriteSchedule(i);
+                        }}
+                        >
+                        {favoritedSchedules.has(i) ? '★' : '☆'}
+                    </button>
+                        <p>Schedule {i}</p>
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
+{/*<!-----------------------------------End Render Functions----------------------------------!> */}
+{/*<!---------------------------------Start Runtime Functions---------------------------------!> */}
 
     const handleCreateEvent = async (newEvent) => {
         try {
@@ -136,7 +169,7 @@ const Scheduler = () => {
         }
     };
 
-    const generateCombinations = async () => {
+    const generateSchedules = async () => {
         setScrapeState(prev => ({
             ...prev,
             isScraping: true,
@@ -144,7 +177,7 @@ const Scheduler = () => {
         }));
     
         try {
-            const result = await invoke("get_combinations", {
+            const result = await invoke("generate_schedules", {
                 parameters: {
                     params_checkbox: scrapeParams.params_checkbox,
                     classes: scrapeParams.classes,
@@ -162,11 +195,11 @@ const Scheduler = () => {
             }
             else {
                 console.log("Scrape successful:", result);
-                setNumCombinations(result.length || 0);
+                setNumSchedules(result.length || 0);
                 setScrapeState(prev => ({
                     ...prev,
                     isScraping: false,
-                    status: `Scrape completed, found ${result.length} combinations`
+                    status: `Scrape completed, found ${result.length} schedules`
                 }));
                 setSchedules(result);
             }
@@ -180,12 +213,23 @@ const Scheduler = () => {
         }
     };
 
-
-    const getSchedule = async (idx) => {
-        // Display schedules[idx]
+    const favoriteSchedule = (scheduleIndex) => {
+        setFavoritedSchedules(prevFavorites => {
+            const newFavorites = new Set(prevFavorites);
+            if (newFavorites.has(scheduleIndex)) {
+                newFavorites.delete(scheduleIndex);
+            } else {
+                newFavorites.add(scheduleIndex);
+            }
+            return newFavorites;
+        });
     }
 
-    // If we're loading events, show loading state
+    const scheduleMenuClick = () => {
+
+    }
+
+    // If we're loading something, show loading state
     if (loading) {
         return (
             <div className={ss['scheduler']}>
@@ -239,19 +283,16 @@ const Scheduler = () => {
                     onEventDelete={handleDeleteEvent}
                     onEventUpdate={handleUpdateEvent}
                 />
-                <ScrollSelector
-                    items={schedules.length}
-                    handleItemClick={getSchedule}
-                />
+                {renderScrollbar()}
             </div>
             
             <div className={ss['scrape-container']}>
                 <button 
                     className={`${ss.button} ${ss['button-primary']}`}
-                    onClick={generateCombinations} 
+                    onClick={generateSchedules} 
                     disabled={isScraping}
                 >
-                    {isScraping ? "Scraping..." : "Generate Combinations"}
+                    {isScraping ? "Scraping..." : "Generate Schedules"}
                 </button>
                 
                 {/* Scrape status is always shown when available */}

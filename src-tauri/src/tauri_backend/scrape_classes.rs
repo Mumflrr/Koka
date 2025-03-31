@@ -6,7 +6,7 @@ use tokio::time::{sleep, Instant};
 use crate::{Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
 
 // Performs the scraping
-pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
+pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     
@@ -83,13 +83,6 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
         catalog_input.clear().await?;
         catalog_input.send_keys(&class.name).await?;
 
-        // Clear and input professor name if available
-        let instructor_input = driver.find(By::Id("instructorName")).await?;
-        instructor_input.clear().await?;
-        if !class.instructor.is_empty() {
-            instructor_input.send_keys(&class.instructor).await?;
-        }
-
         // Click the search button
         let search_button = driver.find(By::Id("class-search-btn")).await?;
         search_button.click().await?;
@@ -130,7 +123,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
     
         // Now scrape the search results
         let predetermined_info = vec!(class.code.clone(), class.name.clone(), class.section.clone(), full_description);
-        let search_results = scrape_search_results(&parameters.classes, &parameters.events, &table, &predetermined_info).await?;
+        let search_results = scrape_search_results(&parameters.events, &table, &predetermined_info).await?;
 
         // Add these results to our main results vector
         results.push(search_results);
@@ -147,7 +140,7 @@ pub async fn perform_schedule_scrape(parameters: ScrapeClassesParameters, driver
 }
 
 // Scrape search results from the page
-async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
+async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
     // Find all instances of the class
@@ -167,7 +160,6 @@ async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventPara
 
         // If one timeblock in the section is skipped then the whole section should be skipped
         let mut section_skipped = false;
-        let mut specific_section_found = false;
 
         for time_block in section_time_blocks {   
             // The data per class instance should be able to be found with these tags
@@ -176,14 +168,6 @@ async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventPara
             // Make array that data will be stored into (section should be always present so pre-initialized)
             let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
             data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
-
-            // If we need a certain section for this class and this is not it, skip
-            for param in classes {
-                if param.code == predetermined_info[0] && param.name == predetermined_info[1] && ((predetermined_info[2] != "" && predetermined_info[2] != data_array[0]) || specific_section_found) {
-                    specific_section_found = true;
-                    continue;
-                }
-            }
 
             let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
             for i in 2..raw_data.len() - 1 {
@@ -204,7 +188,7 @@ async fn scrape_search_results(classes: &Vec<ClassParam>, events: &Vec<EventPara
             let days = convert_time(data_array[2].as_str(), days_bool);
 
             // If invalid time then skip
-            if !validate_time_ok(&events, &days) {section_skipped = true; continue;};
+            if !validate_time_ok(&events, &days) {section_skipped = true; break;};
 
             // Get location
             data_array[3] = temp;

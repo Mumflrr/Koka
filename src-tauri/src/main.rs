@@ -160,7 +160,7 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
+async fn generate_schedules(mut parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
     // If no clases passed in then nothing to scrape
     if parameters.classes.is_empty() {
         return Err("No classes set to scrape".to_string());
@@ -171,6 +171,7 @@ async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri:
     let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
 
         let mut cached_classes = Vec::new();
+
         // Check which classes have already been scraped
         let mut i = 0;
         while i < parameters.classes.len() {
@@ -178,14 +179,14 @@ async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri:
             let name = format!("{}{}", class.code, class.name);
             
             // Get classes by name from database
-            let classes = get_class_by_name(name.clone()).await?;
+            let database_classes = get_class_by_name(name.clone()).await?;
             
             // If classes are found in the database
-            if !classes.is_empty() {
+            if !database_classes.is_empty() {
                 // Remove the class from parameters.classes
                 parameters.classes.remove(i);
                 // Add the cached classes to our list
-                cached_classes.push(classes);
+                cached_classes.push(database_classes);
                 // Don't increment i since we removed an element
             } else {
                 // Move to the next class if this one wasn't found
@@ -205,10 +206,42 @@ async fn get_combinations(mut parameters: ScrapeClassesParameters, state: tauri:
 
             chrome_update_check(&mut connect_info).await?;
             let driver = start_chromedriver(&connect_info).await?;
-            classes = perform_schedule_scrape(parameters, driver).await?;
+            classes = perform_schedule_scrape(&parameters, driver).await?;
 
             // Save the scraped sections of classes
             save_class_sections(&classes).await?;
+
+            // Filter classes based on instructor and section requirements
+            let mut class_idx = 0;
+            while class_idx < classes.len() {
+                let mut section_idx = 0;
+                
+                // Process each section in the current class
+                while section_idx < classes[class_idx].len() {
+                    let class_section = &classes[class_idx][section_idx].classes[0];
+                    let desired_class = &parameters.classes[class_idx];
+                    
+                    // If this section doesn't match our requirements, remove it
+                    if class_section.instructor != desired_class.instructor || 
+                    (desired_class.section != "" && class_section.section != desired_class.section) {
+                        // Remove the section that doesn't match
+                        classes[class_idx].remove(section_idx);
+                        // Don't increment section_idx since we removed an element
+                    } else {
+                        // Move to the next section if this one matches
+                        section_idx += 1;
+                    }
+                }
+                
+                // If all sections were removed, remove the entire class
+                if classes[class_idx].is_empty() {
+                    classes.remove(class_idx);
+                    // Don't increment class_idx since we removed an element
+                } else {
+                    // Move to the next class if this one has sections
+                    class_idx += 1;
+                }
+            }
         }
 
         // If any classes were cached then add them back to contribute to combinations
@@ -272,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_combinations,
+            generate_schedules,
             close_splashscreen,
             startup_app,
             show_splashscreen,

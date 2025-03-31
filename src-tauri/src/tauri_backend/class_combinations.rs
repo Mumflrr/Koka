@@ -1,6 +1,7 @@
 use crate::Class;
 
 pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
+
     // Create indices for each class to avoid cloning during backtracking
     let mut class_indices: Vec<Vec<usize>> = Vec::with_capacity(classes.len());
     let mut flattened_classes: Vec<&Class> = Vec::new();

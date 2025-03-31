@@ -1,9 +1,50 @@
+/* <---- Scroll Selector ---->*/
+.scrollbar-wrapper {
+    background-color: white;
+    display: grid;
+    overflow-y: scroll;
+    color:black;
+    margin-left:2rem;
+    height: 80%;
+}
+
+.item-slot {
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.item-slot-first {
+    border-bottom: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
+}
+
+.favorite-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem; /* Adjust size as needed */
+    color: #ccc; /* Default gray color */
+    transition: color 0.2s ease;
+    outline: none; /* Remove button outline */
+    padding: 4px; /* Add some padding for better clickability */
+}
+
+.favorite-button:hover {
+    color: #ffd700; /* Gold color on hover */
+}
+
+.favorite-button.favorited {
+    color: #ffd700; /* Gold color when favorited */
+}
+
+
+/* <---- Scheduler ----> */
+
 /* Main scheduler container - change overflow to visible */
 .scheduler {
     height: 100%;
     width: 100%;
     display: grid;
-    grid-template-columns: 3fr 2fr;
+    grid-template-columns: 4fr 2fr;
 }
 
 /* Main content wrapper - change overflow to visible */
@@ -11,9 +52,11 @@
     height: calc(100vh - 2rem);
     padding: 1rem;
     padding-left: calc(var(--sidebar-short-width) + 1rem);
-    display: flex;
+    display: grid;
     transition: 0ms;
     position: relative;
+    grid-template-columns: 5fr 2fr;
+    align-items: center;
 }
 
 /* Top bar containing the dropdown */
