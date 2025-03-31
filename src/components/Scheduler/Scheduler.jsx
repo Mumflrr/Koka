@@ -11,10 +11,9 @@ import ss from './Scheduler.module.css';
 // TODO add a remove button for individual schedules
 // TODO add button to cache certain classes even if not in list
 // TODO add button to re-scrape classes in list
-// TODO add favorited scheudles (localStorage?)
+// TODO work on favorited schedules
 // TODO add disclaimer if there are classes in shopping cart will change scrape results if 
 //      'only show classes that fit in schedule' is true
-// TODO determine how to tell if a class has already been scraped or not
 // TODO fix deleting one block of multi-day event not deleting all blocks
 
 const Scheduler = () => {
@@ -39,7 +38,7 @@ const Scheduler = () => {
         params_checkbox: [false, false, false],
         classes: [
             { code: "CSC", name: "116", section: "", instructor: "" },
-            { code: "BIO", name: "181", section: "", instructor: "" }
+            { code: "BIO", name: "181", section: "", instructor: "me" }
         ],
         events: [
             { time: [800, 829], days: [true, false, false, false, false] }
@@ -47,9 +46,7 @@ const Scheduler = () => {
     });
 
     useEffect(() => {
-        loadEvents();
-        loadClasses();
-        
+        loadPage();
         const cleanupFunctions = [
             // If I have listener functions put them here
         ];
@@ -66,25 +63,22 @@ const Scheduler = () => {
         };
     }, []);
 
-    // Load events
-    const loadEvents = async () => {
-        try {
+    const loadPage = async() => {
+       try {
             setLoading(true);
             setError(null);
             const loadedEvents = await invoke('get_events', {table: "scheduler"});
             setEvents(processEvents(loadedEvents));
-        } catch (err) {
+            // TODO Load classes
+            // TODO Load schedules (including favorites)
+            setLoading(false);
+       } catch (err) {
             console.error('Error loading events:', err);
             setError('Failed to load events. Please try again later.');
         } finally {
             setLoading(false);
         }
-    };
-
-    const loadClasses = async() => {
-        //TODO Complete (include setLoading())
     }
-
 
 
 {/*<!-----------------------------------End Setup Functions-----------------------------------!> */}
@@ -115,7 +109,7 @@ const Scheduler = () => {
                         >
                         {favoritedSchedules.has(i) ? '★' : '☆'}
                     </button>
-                        <p>Schedule {i}</p>
+                        <p>Schedule {i + 1}</p>
                     </div>
                 ))}
             </div>

@@ -9,7 +9,7 @@ mod database_functions;
 use database_functions::{delete_events, save_event, load_events, save_class_sections, get_class_by_name, save_combinations_backend, Event};
 use program_setup::*;
 use tauri::{Manager, Window};
-use tauri_backend::{scrape_classes::perform_schedule_scrape, class_combinations::generate_combinations};
+use tauri_backend::{scrape_classes::{perform_schedule_scrape, filter_classes}, class_combinations::generate_combinations};
 use chrome_functions::*;
 
 use serde::{Serialize, Deserialize};
@@ -17,8 +17,10 @@ use std::{env, fmt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use std::time::Duration;
+use std::collections::HashMap;
+
 
 //TODO: Work on splashscreen when updating chrome
 //TODO: Add custom menu items
@@ -61,13 +63,13 @@ struct ScrapeClassesParameters {
     events: Vec<EventParam>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct EventParam {
     time: (i32, i32),
     days: [bool; 5],
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct ClassParam {
     code: String, // Look for this code
     name: String, // Look for this name
@@ -160,104 +162,143 @@ fn show_splashscreen(window: Window) {
 }
 
 #[tauri::command]
-async fn generate_schedules(mut parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    // If no clases passed in then nothing to scrape
+async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
+    // If no classes passed in then nothing to scrape
     if parameters.classes.is_empty() {
         return Err("No classes set to scrape".to_string());
     }
 
     // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
+
+    // --- Keep the original parameters intact ---
+    // parameters is already owned, no need to clone unless modifying locally and need original later
+    // Let's rename it to be clear it's the original set.
+    let original_parameters = parameters;
+
     let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
 
-        let mut cached_classes = Vec::new();
+        // --- Determine which classes to scrape vs. use cache ---
+        let mut classes_to_scrape_params: Vec<ClassParam> = Vec::new();
+        let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new(); // Store original index and cached data
+        let mut scrape_indices: Vec<usize> = Vec::new(); // Store original indices of classes to scrape
 
-        // Check which classes have already been scraped
-        let mut i = 0;
-        while i < parameters.classes.len() {
-            let class = &parameters.classes[i];
-            let name = format!("{}{}", class.code, class.name);
-            
-            // Get classes by name from database
-            let database_classes = get_class_by_name(name.clone()).await?;
-            
-            // If classes are found in the database
+        for (index, class_param) in original_parameters.classes.iter().enumerate() {
+            let name = format!("{}{}", class_param.code, class_param.name);
+            // Consider adding error handling for get_class_by_name if it can fail critically
+            let database_classes = get_class_by_name(name.clone()).await.unwrap_or_else(|e| {
+                 eprintln!("Warning: Failed to query cache for {}: {}", name, e);
+                 Vec::new() // Treat as not cached if DB query fails
+            });
+
             if !database_classes.is_empty() {
-                // Remove the class from parameters.classes
-                parameters.classes.remove(i);
-                // Add the cached classes to our list
-                cached_classes.push(database_classes);
-                // Don't increment i since we removed an element
+                // Found in cache
+                cached_results.insert(index, database_classes);
             } else {
-                // Move to the next class if this one wasn't found
-                i += 1;
+                // Not in cache, need to scrape
+                classes_to_scrape_params.push(class_param.clone());
+                scrape_indices.push(index);
             }
         }
-        
-        // Classes to generate combinations with
-        let mut classes = Vec::new();
-        // If parameters classes is empty, then no need to scrape as all the classes are cached
-        if !parameters.classes.is_empty() {
-            // Acquire a lock and clone the connect info for local use
+        println!("Need to scrape {} classes.", classes_to_scrape_params.len());
+        println!("Found {} classes in cache.", cached_results.len());
+
+        // --- Perform scraping only if needed ---
+        let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
+        if !classes_to_scrape_params.is_empty() {
+            println!("Starting scrape...");
             let mut connect_info = {
                 let locked_connect_info = connect_info_mutex.lock().await;
-                (*locked_connect_info).clone() // Clone the data to use outside the lock
+                (*locked_connect_info).clone()
             };
-
             chrome_update_check(&mut connect_info).await?;
             let driver = start_chromedriver(&connect_info).await?;
-            classes = perform_schedule_scrape(&parameters, driver).await?;
 
-            // Save the scraped sections of classes
-            save_class_sections(&classes).await?;
+            // Create temporary parameters for scraping
+            let scrape_params_for_call = ScrapeClassesParameters {
+                 params_checkbox: original_parameters.params_checkbox, // Use original checkboxes
+                 classes: classes_to_scrape_params, // Only classes needing scraping
+                 events: original_parameters.events.clone(), // Use original events
+            };
 
-            // Filter classes based on instructor and section requirements
-            let mut class_idx = 0;
-            while class_idx < classes.len() {
-                let mut section_idx = 0;
-                
-                // Process each section in the current class
-                while section_idx < classes[class_idx].len() {
-                    let class_section = &classes[class_idx][section_idx].classes[0];
-                    let desired_class = &parameters.classes[class_idx];
-                    
-                    // If this section doesn't match our requirements, remove it
-                    if class_section.instructor != desired_class.instructor || 
-                    (desired_class.section != "" && class_section.section != desired_class.section) {
-                        // Remove the section that doesn't match
-                        classes[class_idx].remove(section_idx);
-                        // Don't increment section_idx since we removed an element
-                    } else {
-                        // Move to the next section if this one matches
-                        section_idx += 1;
-                    }
+            // Perform the scrape
+            let scraped_data = perform_schedule_scrape(&scrape_params_for_call, driver).await?;
+            println!("Scrape finished, got {} results.", scraped_data.len());
+
+            // Save scraped data (consider error handling)
+            if let Err(e) = save_class_sections(&scraped_data).await {
+                 eprintln!("Warning: Failed to save scraped class sections: {}", e);
+            }
+
+            // Map scraped results back to their original indices
+            if scraped_data.len() == scrape_indices.len() {
+                for (i, data) in scraped_data.into_iter().enumerate() {
+                    let original_index = scrape_indices[i];
+                    scraped_results_map.insert(original_index, data);
                 }
-                
-                // If all sections were removed, remove the entire class
-                if classes[class_idx].is_empty() {
-                    classes.remove(class_idx);
-                    // Don't increment class_idx since we removed an element
-                } else {
-                    // Move to the next class if this one has sections
-                    class_idx += 1;
-                }
+            } else {
+                 // This case indicates an internal error or mismatch in scraping results
+                 eprintln!(
+                    "Error: Mismatch between scraped results count ({}) and requested scrape count ({}).",
+                    scraped_data.len(), scrape_indices.len()
+                 );
+                 return Err(anyhow!("Mismatch between scraped results and requested classes"));
             }
         }
 
-        // If any classes were cached then add them back to contribute to combinations
-        for class in cached_classes {
-            classes.push(class);
+        // --- Combine cached and scraped results in the original order ---
+        let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); original_parameters.classes.len()];
+        for (index, cached_data) in cached_results {
+             if index < combined_classes.len() {
+                 combined_classes[index] = cached_data;
+             } else {
+                  eprintln!("Warning: Cached index {} out of bounds (len {})", index, combined_classes.len());
+             }
+        }
+        for (index, scraped_data) in scraped_results_map {
+             if index < combined_classes.len() { // Bounds check
+                combined_classes[index] = scraped_data;
+             } else {
+                 // This should ideally not happen if indexing is correct
+                 eprintln!("Warning: Scraped index {} out of bounds for combined_classes (len {})", index, combined_classes.len());
+             }
         }
 
-        let combinations = generate_combinations(classes).await?;
-        save_combinations_backend(&combinations).await?;
+        // --- Filter the combined classes using the *original* parameters ---
+        println!("Filtering {} combined class groups...", combined_classes.len());
+        let filtered_classes = filter_classes(combined_classes, &original_parameters)?; // Pass original parameters
+        println!("Filtering done, {} groups remaining.", filtered_classes.len());
+
+
+        // --- Generate combinations ---
+         if filtered_classes.is_empty() && !original_parameters.classes.is_empty() {
+            println!("No classes remained after filtering. Returning empty combinations.");
+            // Return Ok with an empty Vec if filtering removed everything, but scraping was requested.
+            // This avoids trying to generate combinations from nothing.
+            return Ok(Vec::new());
+        } else if filtered_classes.is_empty() {
+             println!("No classes to generate combinations from.");
+             return Ok(Vec::new());
+        }
+
+        println!("Generating combinations from {} filtered groups...", filtered_classes.len());
+        let combinations = generate_combinations(filtered_classes).await?; // Use filtered classes
+        println!("Generated {} combinations.", combinations.len());
+
+        // Save combinations (consider error handling)
+        if let Err(e) = save_combinations_backend(&combinations).await {
+             eprintln!("Warning: Failed to save generated combinations: {}", e);
+        }
 
         Ok(combinations)
     }
     .await;
 
     // Convert anyhow::Error to String for Result
-    result.map_err(|err| err.to_string())
+    result.map_err(|err| {
+        eprintln!("Error in generate_schedules async block: {:?}", err); // Log the detailed error
+        err.to_string() // Return the stringified error to the frontend
+    })
 }
 
 #[tauri::command]

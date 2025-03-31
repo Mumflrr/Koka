@@ -3,7 +3,7 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
+use crate::{Class, EventParam, ScrapeClassesParameters, TimeBlock};
 
 // Performs the scraping
 pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
@@ -123,7 +123,7 @@ pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, drive
     
         // Now scrape the search results
         let predetermined_info = vec!(class.code.clone(), class.name.clone(), class.section.clone(), full_description);
-        let search_results = scrape_search_results(&parameters.events, &table, &predetermined_info).await?;
+        let search_results = scrape_search_results(&table, &predetermined_info).await?;
 
         // Add these results to our main results vector
         results.push(search_results);
@@ -139,17 +139,96 @@ pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, drive
     Ok(results)
 }
 
-// Scrape search results from the page
-async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
+pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClassesParameters) -> Result<Vec<Vec<Class>>, anyhow::Error> {
+
+    if input_classes.is_empty() {
+        println!("FilterClasses: Input classes vector is empty. Returning empty vector.");
+        return Ok(Vec::new());
+    }
+
+    if parameters.classes.len() != input_classes.len() {
+         eprintln!(
+            "Warning: Parameter count ({}) doesn't match input class group count ({}). Filtering based on available parameters.",
+            parameters.classes.len(),
+            input_classes.len()
+         );
+    }
+
+    // Initialize result vector with the same capacity as the input
+    let mut filtered_result: Vec<Vec<Class>> = Vec::with_capacity(input_classes.len());
+
+    println!("Filtering {} course groups...", input_classes.len());
+
+    for (i, (course_sections, desired_class)) in input_classes.into_iter().zip(parameters.classes.iter()).enumerate() {
+
+        println!("Filtering sections for course request {}: {} {} (Filter: Sec={}, Instr={})",
+                 i + 1, desired_class.code, desired_class.name,
+                 if desired_class.section.is_empty() { "Any" } else { &desired_class.section },
+                 if desired_class.instructor.is_empty() { "Any" } else { &desired_class.instructor });
+
+        // Filter the sections within the current course group
+        let filtered_sections: Vec<Class> = course_sections
+            .into_iter()
+            .filter(|section| {
+                // --- Section Filter Logic ---
+                if section.classes.is_empty() {
+                     println!("  -> Section (Code: {}) has no time blocks, filtering out.", section.code);
+                     return false;
+                }
+
+                let representative_section_num = section.classes.first().map_or("N/A", |b| &b.section);
+                let representative_instructor = section.classes.first().map_or("N/A", |b| &b.instructor);
+                // Slightly reduced logging verbosity inside the filter closure
+                // println!("  -> Evaluating Section: {} (Instructor: {})", representative_section_num, representative_instructor);
+
+                // 2. Check Section Number Match
+                let section_match = desired_class.section.is_empty() ||
+                    section.classes.iter().any(|block| block.section == desired_class.section);
+                if !section_match { return false; }
+
+                // 3. Check Instructor Match
+                let instructor_match = desired_class.instructor.is_empty() ||
+                    section.classes.iter().any(|block| block.instructor.eq_ignore_ascii_case(&desired_class.instructor));
+                if !instructor_match { return false; }
+
+                // 4. Check Time Validity (Stricter): All blocks must be valid
+                let all_time_blocks_valid = section.classes.iter().all(|time_block| {
+                    validate_time_ok(&parameters.events, &time_block.days)
+                });
+                if !all_time_blocks_valid { return false; }
+
+                // If all checks passed...
+                true
+            })
+            .collect();
+
+        // --- CHANGE HERE ---
+        // Always push the resulting vector (filtered_sections) to the final result.
+        // It will be empty if all sections were filtered out.
+        if filtered_sections.is_empty() {
+             println!(" -> Course group {} finished filtering. No sections remaining (keeping empty group).", i + 1);
+        } else {
+             println!(" -> Course group {} finished filtering. Kept {} sections.", i + 1, filtered_sections.len());
+        }
+        filtered_result.push(filtered_sections);
+        // --- END CHANGE ---
+    }
+
+    println!("Filtering complete. Result contains {} groups (some might be empty).", filtered_result.len());
+    Ok(filtered_result)
+}
+
+
+async fn scrape_search_results(driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
     // Find all instances of the class
     let sections = driver.find_all(By::Css("td.child")).await?;
     for individual_section in sections.iter() {
-
+    
         let mut class_sections: Vec<TimeBlock> = Vec::new();
         let mut section_time_blocks = individual_section.find_all(By::Tag("tr")).await?;
-
+    
         // The first //tr WebElement for each section is not needed, therefore calculate how many
         // "classes" per section there is (for example if a lab is attached to the section then 
         // there would be two "classes" in that section and therefore should skip over 2 elments
@@ -157,24 +236,21 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
         // Then remove the //tr every nth spot, skipping over the //tr elements that actually
         // contain information we want
         section_time_blocks.remove(0);
-
-        // If one timeblock in the section is skipped then the whole section should be skipped
-        let mut section_skipped = false;
-
+    
         for time_block in section_time_blocks {   
             // The data per class instance should be able to be found with these tags
             let raw_data = time_block.find_all(By::Tag("td")).await?; 
-
+    
             // Make array that data will be stored into (section should be always present so pre-initialized)
             let mut data_array: [String; 5] = std::array::from_fn(|_| String::new());
             data_array[0] = raw_data[0].find_all(By::Css("span.classDetailValue")).await?[2].inner_html().await?; 
-
+    
             let temp = raw_data[0].find(By::Css("span.locationValue")).await?.inner_html().await?;  
             for i in 2..raw_data.len() - 1 {
                 let element = raw_data[i].inner_html().await;
                 data_array[i - 1] = element.unwrap_or("".to_string());
             }
-
+    
             // Convert days from Vec<String> to Vec<bool>
             let day_string = &data_array[1];
             let mut days_bool = [false; 5];
@@ -183,13 +259,10 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             days_bool[2] = day_string.contains("Wed");
             days_bool[3] = day_string.contains("Thu");
             days_bool[4] = day_string.contains("Fri");
-
+    
             // Time handling
             let days = convert_time(data_array[2].as_str(), days_bool);
-
-            // If invalid time then skip
-            if !validate_time_ok(&events, &days) {section_skipped = true; break;};
-
+    
             // Get location
             data_array[3] = temp;
             let location_result: String;
@@ -199,7 +272,7 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             else {
                 location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
             }
-
+    
             // Push time block to this section
             class_sections.push(TimeBlock {
                 section: data_array[0].clone(),
@@ -207,12 +280,9 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
                 instructor: data_array[4].clone(),
                 days: days,
             });
-
+    
         }
-
-        // If a time block for this section was incomptabile, skip the whole section
-        if section_skipped {continue;}
-
+    
         // Else push the section to the class Vec
         results.push(Class {
             code: predetermined_info[0].clone(),
@@ -220,10 +290,10 @@ async fn scrape_search_results(events: &Vec<EventParam>, driver: &WebElement, pr
             classes: class_sections,
             description: predetermined_info[3].clone(),
         });
-
+    
         //println!("!!{}", results[results.len() - 1]);
     }
-
+    
     Ok(results)
 }
 

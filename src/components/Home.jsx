@@ -21,17 +21,8 @@ function Home() {
 
     return (
         <div className='container'>
+            <Sidebar/>
             <h1>Welcome to Plover!</h1>
-
-            <div className='row'>
-                <button onClick={schedulerScrape} disabled={isScraping}>
-                    {isScraping ? "Scraping..." : "Start Scrape"}
-                </button>
-
-                <Sidebar/>
-            </div>
-
-            <p>{scrapeStatus}</p>
         </div>
     );
 }
