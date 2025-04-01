@@ -170,17 +170,17 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
         let filtered_sections: Vec<Class> = course_sections
             .into_iter()
             .filter(|section| {
-                // --- Section Filter Logic ---
+                // Section Filter Logic
                 if section.classes.is_empty() {
                      println!("  -> Section (Code: {}) has no time blocks, filtering out.", section.code);
                      return false;
                 }
-
+/* 
                 let representative_section_num = section.classes.first().map_or("N/A", |b| &b.section);
                 let representative_instructor = section.classes.first().map_or("N/A", |b| &b.instructor);
                 // Slightly reduced logging verbosity inside the filter closure
                 // println!("  -> Evaluating Section: {} (Instructor: {})", representative_section_num, representative_instructor);
-
+ */
                 // 2. Check Section Number Match
                 let section_match = desired_class.section.is_empty() ||
                     section.classes.iter().any(|block| block.section == desired_class.section);
@@ -202,7 +202,6 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
             })
             .collect();
 
-        // --- CHANGE HERE ---
         // Always push the resulting vector (filtered_sections) to the final result.
         // It will be empty if all sections were filtered out.
         if filtered_sections.is_empty() {
@@ -211,7 +210,6 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
              println!(" -> Course group {} finished filtering. Kept {} sections.", i + 1, filtered_sections.len());
         }
         filtered_result.push(filtered_sections);
-        // --- END CHANGE ---
     }
 
     println!("Filtering complete. Result contains {} groups (some might be empty).", filtered_result.len());

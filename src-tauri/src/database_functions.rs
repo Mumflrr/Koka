@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
 use crate::{get_version, Class, ConnectInfo};
 
-const TABLENAMES: [&str; 2] = ["calendar", "scheduler"];
+const TABLENAMES: [&str; 4] = ["calendar", "scheduler", "combinations", "favorites"];
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Event {
@@ -24,7 +24,13 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     // Create table if need be
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS data (id SMALLINT, version TINYTEXT, os TINYTEXT)",
+        "CREATE TABLE IF NOT EXISTS data (
+            id SMALLINT, 
+            version TINYTEXT, 
+            os TINYTEXT, 
+            schedule SMALLINT, 
+            classes BLOB
+        )",
         (),
     )?;
 
@@ -55,9 +61,15 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     )?;
 
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT NOT NULL
+        )", ()
+    )?;
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS combinations (
             id INTEGER PRIMARY KEY,
-            favorite INTEGER NOT NULL,
             data TEXT NOT NULL
         )",
         (),
@@ -88,10 +100,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         Ok(result_struct) => connect_info = result_struct,
         Err(_) => {
             // Save OS information to the database
-            conn.execute(
-                "INSERT INTO data (id, os) VALUES (0, ?1)",
-                params![os_info.os],
-            )?;
+            conn.execute("INSERT INTO data (id, os) VALUES (0, ?1)", params![os_info.os])?;
 
             connect_info = os_info;
             get_version(&mut connect_info).await?;
@@ -111,10 +120,7 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
         let conn = Connection::open("programData.db")?;
 
         // Execute the update query with the new version
-        conn.execute(
-            "UPDATE data SET version = ?1 WHERE id = 0",
-            params![version]
-        )?;
+        conn.execute("UPDATE data SET version = ?1 WHERE id = 0", params![version])?;
 
         Ok(())
     }).await?
@@ -140,7 +146,12 @@ pub async fn save_class_sections(classes: &Vec<Vec<Class>>) -> Result<(), anyhow
                         // Serialize the section to JSON
                         let json_data = serde_json::to_string(class)?;
                         // Make id name
-                        let id = format!("{}{}{}", class.code, class.name, class.classes[0].section);
+                        let mut id = format!("{}{}", class.code, class.name);
+
+                        for section in &class.classes {
+                            id = format!("{}/{}", id, section.section);
+                        }
+
                         let classname = format!("{}{}", class.code, class.name);
 
                         // Execute the prepared statement
@@ -185,6 +196,36 @@ pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error
     Ok(result)
 }
 
+pub async fn get_combinations(table: String) -> Result<Vec<Vec<Class>>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<Vec<Class>>, anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+
+        let prepared_statement = format!("SELECT data FROM {}", TABLENAMES[index]);
+        let mut stmt = conn.prepare(&prepared_statement)?;
+
+        // Query rows and map each row to a Vec<Class>
+        let rows = stmt.query_map([], |row| {
+            let data: String = row.get(0)?;
+            Ok(data) // Just return the string for now
+        })?;
+
+        // Collect the results and handle deserialization separately
+        let mut result = Vec::new();
+        for row in rows {
+            let data = row?;
+            let classes: Vec<Class> = serde_json::from_str(&data)
+                .map_err(|e| anyhow::anyhow!("Unable to deserialize combinations: {}", e))?;
+            result.push(classes);
+        }
+
+        Ok(result)
+    }).await?
+}
 
 pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
     // Clone combinations to move into the spawn_blocking closure
@@ -196,13 +237,12 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
         // Begin a transaction for better performance with batch operations
         let tx = conn.transaction()?;
 
-        // Clear existing combinations since if new combinations are being made then everything
-        // will have to be changed
+        // Clear existing combinations that are not favorited
         tx.execute("DELETE FROM combinations", [])?;
 
         {
             // Prepare the statement once outside the loop for efficiency
-            let mut stmt = tx.prepare("INSERT INTO combinations (id, favorite, data) VALUES (?, ?, ?)")?;
+            let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?, ?)")?;
 
             // Insert each combination as a separate row
             for (index, combination) in combinations_clone.iter().enumerate() {
@@ -210,7 +250,7 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
                 let json_data = serde_json::to_string(combination)?;
 
                 // Execute the prepared statement
-                stmt.execute(params![index as i64, 0, json_data])?;
+                stmt.execute(params![index as i64, json_data])?;
             }
         } // The borrow of `tx` by `stmt` ends here
 
@@ -232,8 +272,7 @@ pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error
         let insert_statement = format!("INSERT INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", TABLENAMES[index]);
 
         // Insert new event
-        conn.execute(
-            &insert_statement,
+        conn.execute(&insert_statement,
             params![
                 event.id,
                 event.title,
@@ -288,10 +327,31 @@ pub async fn delete_events(table: String, event_id: String) -> Result<(), anyhow
             None => return Err(anyhow!("Unable to find table")),
         };
         let statement = format!("DELETE FROM {} WHERE id = ?1", TABLENAMES[index]);
-        conn.execute(
-            &statement,
-            params![event_id],
-        )?;
+        conn.execute(&statement, params![event_id],)?;
         Ok(())
     }).await?
+}
+
+pub async fn change_favorite_status(id: i32, schedule: Option<Vec<Class>>) -> Result<(), anyhow::Error> {
+    // Spawn a blocking task since SQLite operations are synchronous
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        // Open connection to SQLite database
+        let conn = Connection::open("programData.db")?;
+
+        match schedule{
+            Some(schedule_unwrapped) => {
+                let json_data = serde_json::to_string(&schedule_unwrapped)?;
+                let mut stmt = conn.prepare("INSERT INTO favorites (data) VALUES (?1)")?;
+                stmt.execute(params![json_data])?;
+            },
+            None => {
+                let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = ?1")?;
+                stmt.execute(params![id])?;
+            },
+        };
+       
+        Ok(())
+    }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
+
+    Ok(())
 }

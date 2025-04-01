@@ -1,32 +1,54 @@
 // Scheduler.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Import useMemo
 import { invoke } from "@tauri-apps/api/tauri";
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
+// Helper function to consistently stringify a schedule
+// NOTE: Assumes schedule is JSON-serializable and order is consistent or doesn't matter.
+// If order matters but isn't guaranteed, you'd need a more complex function
+// to sort properties/elements before stringifying.
+const stringifySchedule = (schedule) => {
+    try {
+        // Simple stringify, good for arrays of primitives or consistent objects
+        return JSON.stringify(schedule);
+        // Example for sorting if schedule is an array of objects with an 'id':
+        // return JSON.stringify([...schedule].sort((a, b) => a.id.localeCompare(b.id)));
+    } catch (e) {
+        console.error("Failed to stringify schedule:", schedule, e);
+        return null; // Handle error case
+    }
+};
+
+
 // TODO Responsiveness
-// TODO Fix top bar not shadowing on modal opening
 // TODO add a remove button for individual schedules
 // TODO add button to cache certain classes even if not in list
-// TODO add button to re-scrape classes in list
-// TODO work on favorited schedules
-// TODO add disclaimer if there are classes in shopping cart will change scrape results if 
+// TODO work on favorited schedules - Currently using stringified Set for lookup
+// TODO add disclaimer if there are classes in shopping cart will change scrape results if
 //      'only show classes that fit in schedule' is true
 // TODO fix deleting one block of multi-day event not deleting all blocks
+// TODO how to handle partial professor names
 
 const Scheduler = () => {
     // Core state
     const [events, setEvents] = useState([]);
+    const [schedules, setSchedules] = useState([[]]); // Array of generated schedule objects/arrays
+    const [classes, setClasses] = useState([[]]);
+
+    // UI State
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [schedules, setSchedules] = useState([[]]);
-    const [favoritedSchedules, setFavoritedSchedules] = useState(new Set());
-    
-    // UI state
-    const [numSchedules, setNumSchedules] = useState(0);
-    const [numClasses, setNumClasses] = useState(0);
+    const [renderFavorites, setRenderFavorites] = useState(false);
+
+    // Store favorite schedules as the actual objects/arrays
+    const [favoritedSchedules, setFavoritedSchedules] = useState([]); // Initialize as empty array
+    // Derived state: A Set of stringified favorites for efficient lookups
+    const favoritedScheduleStrings = useMemo(() => {
+        return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
+    }, [favoritedSchedules]); // Recalculate only when favoritedSchedules changes
 
     // Scraping state
     const [scrapeState, setScrapeState] = useState({
@@ -38,43 +60,52 @@ const Scheduler = () => {
         params_checkbox: [false, false, false],
         classes: [
             { code: "CSC", name: "116", section: "", instructor: "" },
-            { code: "BIO", name: "181", section: "", instructor: "me" }
+            { code: "BIO", name: "181", section: "", instructor: "" }
         ],
-        events: [
-            { time: [800, 829], days: [true, false, false, false, false] }
-        ]
+        events: [ ]
     });
 
     useEffect(() => {
         loadPage();
-        const cleanupFunctions = [
-            // If I have listener functions put them here
-        ];
-        
-        // Return a cleanup function that calls all cleanup functions
-        return () => {
-            cleanupFunctions.forEach(cleanup => {
-                if (typeof cleanup === 'function') {
-                    cleanup();
-                } else if (cleanup && typeof cleanup.then === 'function') {
-                    cleanup.then(fn => typeof fn === 'function' && fn());
-                }
-            });
-        };
+        return () => { };
     }, []);
 
     const loadPage = async() => {
+        //TODO make the load go into the Store.jsx
        try {
             setLoading(true);
             setError(null);
+
             const loadedEvents = await invoke('get_events', {table: "scheduler"});
-            setEvents(processEvents(loadedEvents));
-            // TODO Load classes
-            // TODO Load schedules (including favorites)
-            setLoading(false);
+            setEvents(processEvents(loadedEvents || []));
+
+            //TODO load classes
+
+            // Load favorite schedules (assuming backend returns array of schedule objects/arrays)
+            const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
+            if (Array.isArray(loadedFavoriteSchedules)) {
+                 setFavoritedSchedules(loadedFavoriteSchedules);
+                 // The useMemo hook will automatically update favoritedScheduleStrings
+            } else {
+                console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
+                setFavoritedSchedules([]);
+            }
+
+            // Load generated schedules
+            const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
+             if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0 && loadedSchedules[0].length > 0) {
+                 setSchedules(loadedSchedules);
+             } else {
+                 console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
+                 setSchedules([[]]); // Default placeholder
+             }
+
        } catch (err) {
-            console.error('Error loading events:', err);
-            setError('Failed to load events. Please try again later.');
+            console.error('Error loading page data:', err);
+            setError('Failed to load schedule data. Please try again later.');
+            setEvents([]);
+            setSchedules([[]]);
+            setFavoritedSchedules([]);
         } finally {
             setLoading(false);
         }
@@ -84,34 +115,80 @@ const Scheduler = () => {
 {/*<!-----------------------------------End Setup Functions-----------------------------------!> */}
 {/*<!----------------------------------Start Render Functions---------------------------------!> */}
     const renderScrollbar = () => {
-        // If items is empty or undefined, render nothing or a placeholder
-        if (!numSchedules || numSchedules === 0) {
+        const hasSchedules = schedules.length > 0 && schedules[0].length > 0;
+
+        if (!hasSchedules) {
             return (
                 <div className={ss['scrollbar-wrapper']}>
-                    <div className={ss['empty-message']}>No schedules</div>
+                    <div className={ss['empty-message']}>No schedules generated yet.</div>
                 </div>
             );
         }
-    
+
+        if (renderFavorites) {
+            return (
+                <div className={ss['scrollbar-wrapper']}>
+                {favoritedSchedules.map((schedule, i) => {
+                    return (
+                        <div key={i}
+                            className={ss['item-slot']}
+                            onClick={() => scheduleMenuClick(i)}
+                        >
+                            <button
+                                className={`${ss['favorite-button']} ${ss['favorited']}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Pass the actual schedule object and its index
+                                    changeFavoriteStatus(schedule, favoriteIndex, isFavorite);
+                                }}
+                                aria-label={`Unfavorite Schedule ${i + 1}`}
+                            >
+                                {'★'}
+                            </button>
+                            <p>Schedule {i + 1}</p>
+                        </div>
+                    );
+                })}
+            </div>
+            )
+        }
+
         return (
             <div className={ss['scrollbar-wrapper']}>
-                {Array.from({length: numSchedules}).map((_, i) => (
-                    <div key = {i} 
-                        className={i === 0 ? ss['item-slot'] : ss['item-slot-first']}
-                        onClick={() => scheduleMenuClick(i)}
-                    >
-                        <button 
-                        className={`${ss['favorite-button']} ${favoritedSchedules.has(i) ? ss['favorited'] : ''}`} 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            favoriteSchedule(i);
-                        }}
+                {schedules.map((schedule, i) => {
+                    // Stringify the current schedule being rendered
+                    const currentScheduleString = stringifySchedule(schedule);
+
+                    // Check if its string representation exists in the Set of favorite strings
+                    const isFavorite = currentScheduleString !== null && favoritedScheduleStrings.has(currentScheduleString);
+                    // Find the index in favoritedScheduleStrings if it's a favorite
+                    let favoriteIndex = -1;
+                    if (isFavorite && currentScheduleString !== null) {
+                        // Convert Set to Array to find the index
+                        const favoritesArray = Array.from(favoritedScheduleStrings);
+                        favoriteIndex = favoritesArray.indexOf(currentScheduleString);
+                    }
+
+                    return (
+                        <div key={i}
+                            className={ss['item-slot']}
+                            onClick={() => scheduleMenuClick(i)}
                         >
-                        {favoritedSchedules.has(i) ? '★' : '☆'}
-                    </button>
-                        <p>Schedule {i + 1}</p>
-                    </div>
-                ))}
+                            <button
+                                className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Pass the actual schedule object and its index
+                                    changeFavoriteStatus(schedule, favoriteIndex, isFavorite);
+                                }}
+                                aria-label={isFavorite ? `Unfavorite Schedule ${i + 1}` : `Favorite Schedule ${i + 1}`}
+                            >
+                                {isFavorite ? '★' : '☆'}
+                            </button>
+                            <p>Schedule {i + 1}</p>
+                        </div>
+                    );
+                })}
             </div>
         );
     }
@@ -121,19 +198,10 @@ const Scheduler = () => {
 
     const handleCreateEvent = async (newEvent) => {
         try {
-            // Create a truly unique ID using timestamp and random string
             const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            
-            const eventToSave = {
-                ...newEvent,
-                id: uniqueId
-            };
-            
+            const eventToSave = { ...newEvent, id: uniqueId };
             await invoke('create_event', { event: eventToSave, table: "scheduler" });
-            setEvents(prevEvents => {
-                const updatedEvents = [...prevEvents, eventToSave];
-                return processEvents(updatedEvents);
-            });
+            setEvents(prevEvents => processEvents([...prevEvents, eventToSave]));
         } catch (err) {
             console.error('Error saving event:', err);
             setError('Failed to save event. Please try again.');
@@ -141,112 +209,141 @@ const Scheduler = () => {
     };
 
     const handleDeleteEvent = async (eventId) => {
+        const originalEvents = events;
+        setEvents(prevEvents => processEvents(prevEvents.filter(e => e.id !== eventId)));
         try {
             await invoke('delete_event', { eventId, table: "scheduler" });
-            setEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
         } catch (err) {
             console.error('Error deleting event:', err);
             setError('Failed to delete event. Please try again.');
+            setEvents(originalEvents);
         }
     };
 
     const handleUpdateEvent = async (updatedEvent) => {
+        const originalEvents = events;
+        setEvents(prevEvents => {
+            const filtered = prevEvents.filter(e => e.id !== updatedEvent.id);
+            return processEvents([...filtered, updatedEvent]);
+        });
         try {
             await invoke('update_event', { event: updatedEvent, table: "scheduler" });
-            setEvents(prevEvents => {
-                const filtered = prevEvents.filter(e => e.id !== updatedEvent.id);
-                return processEvents([...filtered, updatedEvent]);
-            });
         } catch (err) {
             console.error('Error updating event:', err);
             setError('Failed to update event. Please try again.');
+            setEvents(originalEvents);
         }
     };
 
     const generateSchedules = async () => {
-        setScrapeState(prev => ({
-            ...prev,
-            isScraping: true,
-            status: "Starting scrape... This may take a while."
-        }));
-    
+        setScrapeState({ isScraping: true, status: "Starting scrape..." });
+
         try {
+             const formattedUserEvents = events.map(event => ({
+                 time: [event.start, event.end],
+                 days: event.days
+             }));
+
             const result = await invoke("generate_schedules", {
                 parameters: {
                     params_checkbox: scrapeParams.params_checkbox,
                     classes: scrapeParams.classes,
-                    events: scrapeParams.events
+                    events: formattedUserEvents
                 }
             });
 
             if (typeof result === 'string') {
                 console.error("Scrape error:", result);
-                setScrapeState(prev => ({
-                    ...prev,
-                    isScraping: false,
-                    status: `Error: ${result}`
-                }));
-            }
-            else {
+                setScrapeState({ isScraping: false, status: `Error: ${result}` });
+                setSchedules([[]]);
+                setFavoritedSchedules([]); // Clear favorites as schedules changed
+            } else if (Array.isArray(result)) {
                 console.log("Scrape successful:", result);
-                setNumSchedules(result.length || 0);
-                setScrapeState(prev => ({
-                    ...prev,
+                const numSchedules = result.length;
+                setScrapeState({
                     isScraping: false,
-                    status: `Scrape completed, found ${result.length} schedules`
-                }));
-                setSchedules(result);
+                    status: numSchedules > 0 ? `Scrape completed, found ${numSchedules} schedules.` : "Scrape completed. No matching schedules found."
+                });
+                 setSchedules(numSchedules > 0 && result[0].length > 0 ? result : [[]]);
+                // Clear existing favorites when new schedules are generated
+                // because the identity/meaning of favorites is tied to the *current* list
+                setFavoritedSchedules([]);
+            } else {
+                 console.error("Scrape returned unexpected data:", result);
+                 setScrapeState({ isScraping: false, status: `Error: Received unexpected data from backend.` });
+                 setSchedules([[]]);
+                 setFavoritedSchedules([]);
             }
         } catch (error) {
-            console.error("Scrape failed:", error);
-            setScrapeState(prev => ({
-                ...prev,
-                isScraping: false,
-                status: `Scrape failed: ${error}`
-            }));
+            console.error("Scrape invocation failed:", error);
+            setScrapeState({ isScraping: false, status: `Scrape failed: ${error.message || 'Unknown error'}` });
+            setSchedules([[]]);
+            setFavoritedSchedules([]);
         }
     };
 
-    const favoriteSchedule = (scheduleIndex) => {
-        setFavoritedSchedules(prevFavorites => {
-            const newFavorites = new Set(prevFavorites);
-            if (newFavorites.has(scheduleIndex)) {
-                newFavorites.delete(scheduleIndex);
+    // Toggles the favorite status of a schedule
+    // Takes the schedule object, its index, and current status
+    const changeFavoriteStatus = async (scheduleData, scheduleIndex, isCurrentlyFavorite) => {
+        const scheduleString = stringifySchedule(scheduleData);
+        if (scheduleString === null) {
+             setError("Failed to process schedule for favoriting.");
+             return;
+        }
+
+        try {
+            await invoke("change_favorite_schedule", {
+                scheduleIndex,
+                isCurrentlyFavorite,
+                scheduleData
+            });
+
+            // Change state values
+            if (isCurrentlyFavorite) {
+                // Remove from favorites
+                setFavoritedSchedules(prevFavorites =>
+                    prevFavorites.filter(fav => stringifySchedule(fav) !== scheduleString)
+                );
             } else {
-                newFavorites.add(scheduleIndex);
+                // Add to favorites
+                setFavoritedSchedules(prevFavorites => [...prevFavorites, scheduleData]);
             }
-            return newFavorites;
-        });
+            console.log(`Updated favorite status for schedule index: ${scheduleIndex} to ${!isCurrentlyFavorite}`);
+
+        } catch (error) {
+            console.error("Failed to update favorite status:", error);
+            setError(`Failed to update favorite status for schedule ${scheduleIndex + 1}.`);
+        }
     }
 
-    const scheduleMenuClick = () => {
-
+    const scheduleMenuClick = (index) => {
+        console.log("Selected schedule index:", index);
+        // TODO: Implement logic to display schedules[index]
     }
 
-    // If we're loading something, show loading state
     if (loading) {
+        // ... loading indicator ...
         return (
             <div className={ss['scheduler']}>
                 <Sidebar />
                 <div className={ss['message-container']}>
-                    <div className={ss['message']}>Loading events...</div>
+                    <div className={ss['message']}>Loading schedule data...</div>
                 </div>
             </div>
         );
     }
 
-    // If there's a critical error that prevents the app from functioning
-    if (error && !events.length) {
-        return (
+    if (error) {
+         return (
             <div className={ss['scheduler']}>
                 <Sidebar />
                 <div className={ss['message-container']}>
                     <div className={ss['message']}>{error}</div>
-                    <button 
+                    <button
                         className={`${ss.button} ${ss['button-primary']}`}
-                        onClick={loadEvents}
+                        onClick={loadPage}
                     >
-                        Retry
+                        Retry Load
                     </button>
                 </div>
             </div>
@@ -256,19 +353,6 @@ const Scheduler = () => {
     return (
         <div className={ss['scheduler']}>
             <Sidebar />
-            
-            {/* Show non-critical errors as dismissable notifications */}
-            {error && (
-                <div className={ss['error-container']}>
-                    <div className={ss['error-message']}>{error}</div>
-                    <button 
-                        className={`${ss.button} ${ss['button-secondary']}`}
-                        onClick={() => setError(null)}
-                    >
-                        Dismiss
-                    </button>
-                </div>
-            )}
             
             <div className={ss['scheduler-wrapper']}>
                 <CalendarGrid 

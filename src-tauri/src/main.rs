@@ -6,7 +6,7 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{delete_events, save_event, load_events, save_class_sections, get_class_by_name, save_combinations_backend, Event};
+use database_functions::{change_favorite_status, delete_events, get_class_by_name, get_combinations, load_events, save_class_sections, save_combinations_backend, save_event, Event};
 use program_setup::*;
 use tauri::{Manager, Window};
 use tauri_backend::{scrape_classes::{perform_schedule_scrape, filter_classes}, class_combinations::generate_combinations};
@@ -171,19 +171,15 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
     // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
 
-    // --- Keep the original parameters intact ---
-    // parameters is already owned, no need to clone unless modifying locally and need original later
-    // Let's rename it to be clear it's the original set.
-    let original_parameters = parameters;
-
+    // Inner closure to capture all Results that could propagate due to '?'
     let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
 
-        // --- Determine which classes to scrape vs. use cache ---
+        // Determine which classes to scrape vs. use cache
         let mut classes_to_scrape_params: Vec<ClassParam> = Vec::new();
         let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new(); // Store original index and cached data
         let mut scrape_indices: Vec<usize> = Vec::new(); // Store original indices of classes to scrape
 
-        for (index, class_param) in original_parameters.classes.iter().enumerate() {
+        for (index, class_param) in parameters.classes.iter().enumerate() {
             let name = format!("{}{}", class_param.code, class_param.name);
             // Consider adding error handling for get_class_by_name if it can fail critically
             let database_classes = get_class_by_name(name.clone()).await.unwrap_or_else(|e| {
@@ -203,7 +199,7 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
         println!("Need to scrape {} classes.", classes_to_scrape_params.len());
         println!("Found {} classes in cache.", cached_results.len());
 
-        // --- Perform scraping only if needed ---
+        // Perform scraping only if needed
         let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
         if !classes_to_scrape_params.is_empty() {
             println!("Starting scrape...");
@@ -216,9 +212,9 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 
             // Create temporary parameters for scraping
             let scrape_params_for_call = ScrapeClassesParameters {
-                 params_checkbox: original_parameters.params_checkbox, // Use original checkboxes
+                 params_checkbox: parameters.params_checkbox, // Use original checkboxes
                  classes: classes_to_scrape_params, // Only classes needing scraping
-                 events: original_parameters.events.clone(), // Use original events
+                 events: parameters.events.clone(), // Use original events
             };
 
             // Perform the scrape
@@ -246,8 +242,8 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
             }
         }
 
-        // --- Combine cached and scraped results in the original order ---
-        let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); original_parameters.classes.len()];
+        // Combine cached and scraped results in the original order
+        let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); parameters.classes.len()];
         for (index, cached_data) in cached_results {
              if index < combined_classes.len() {
                  combined_classes[index] = cached_data;
@@ -264,14 +260,11 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
              }
         }
 
-        // --- Filter the combined classes using the *original* parameters ---
-        println!("Filtering {} combined class groups...", combined_classes.len());
-        let filtered_classes = filter_classes(combined_classes, &original_parameters)?; // Pass original parameters
-        println!("Filtering done, {} groups remaining.", filtered_classes.len());
+        // Filter the combined classes using the *original* parameters
+        let filtered_classes = filter_classes(combined_classes, &parameters)?;
 
-
-        // --- Generate combinations ---
-         if filtered_classes.is_empty() && !original_parameters.classes.is_empty() {
+        // Generate combinations
+        if filtered_classes.is_empty() && !parameters.classes.is_empty() {
             println!("No classes remained after filtering. Returning empty combinations.");
             // Return Ok with an empty Vec if filtering removed everything, but scraping was requested.
             // This avoids trying to generate combinations from nothing.
@@ -281,16 +274,11 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
              return Ok(Vec::new());
         }
 
-        println!("Generating combinations from {} filtered groups...", filtered_classes.len());
-        let combinations = generate_combinations(filtered_classes).await?; // Use filtered classes
-        println!("Generated {} combinations.", combinations.len());
+        // Generate new combinations and save them
+        let combinations_generated = generate_combinations(filtered_classes).await?;
+        save_combinations_backend(&combinations_generated).await?;
 
-        // Save combinations (consider error handling)
-        if let Err(e) = save_combinations_backend(&combinations).await {
-             eprintln!("Warning: Failed to save generated combinations: {}", e);
-        }
-
-        Ok(combinations)
+        Ok(combinations_generated)
     }
     .await;
 
@@ -317,6 +305,26 @@ async fn get_events(table: String) -> Result<Vec<Event>, String> {
 async fn delete_event(event_id: String, table: String) -> Result<(), String> {
     delete_events(table, event_id).await
         .map_err(|e| format!("Failed to delete event: {}", e))
+}
+
+#[tauri::command]
+async fn change_favorite_schedule(id: i32, is_favorited: i32, schedule: Vec<Class>) -> Result<(), String> {
+    let schedule_option: Option<Vec<Class>>;
+    if is_favorited == 0 {
+        schedule_option = Some(schedule);
+    }
+    else {
+        schedule_option = None;
+    }
+
+    change_favorite_status(id, schedule_option).await
+        .map_err(|e| format!("Failed to change favorite status: {}", e))
+}
+
+#[tauri::command]
+async fn get_schedules(table: String) -> Result<Vec<Vec<Class>>, String> {
+    get_combinations(table).await
+        .map_err(|e| format!("Failed to get favorite schedules: {}", e))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -353,6 +361,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             create_event,
             get_events,
             delete_event,
+            change_favorite_schedule,
+            get_schedules,
         ])
         .run(tauri::generate_context!())?;
 
