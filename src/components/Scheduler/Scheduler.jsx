@@ -114,6 +114,7 @@ const Scheduler = () => {
 
 {/*<!-----------------------------------End Setup Functions-----------------------------------!> */}
 {/*<!----------------------------------Start Render Functions---------------------------------!> */}
+    //FIXME duplication error when re-favoriting, possibly due to not removing the schedule when un-favoriting
     const renderScrollbar = () => {
         const hasSchedules = schedules.length > 0 && schedules[0].length > 0;
 
@@ -129,6 +130,15 @@ const Scheduler = () => {
             return (
                 <div className={ss['scrollbar-wrapper']}>
                 {favoritedSchedules.map((schedule, i) => {
+                    // Stringify the current schedule being rendered
+                    const currentScheduleString = stringifySchedule(schedule);
+
+                    let favoriteIndex = -1;
+                    if (currentScheduleString !== null) {
+                        // Convert Set to Array to find the index
+                        const favoritesArray = Array.from(favoritedScheduleStrings);
+                        favoriteIndex = favoritesArray.indexOf(currentScheduleString);
+                    }
                     return (
                         <div key={i}
                             className={ss['item-slot']}
@@ -139,7 +149,7 @@ const Scheduler = () => {
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     // Pass the actual schedule object and its index
-                                    changeFavoriteStatus(schedule, favoriteIndex, isFavorite);
+                                    changeFavoriteStatus(schedule, favoriteIndex, true);
                                 }}
                                 aria-label={`Unfavorite Schedule ${i + 1}`}
                             >
@@ -167,6 +177,10 @@ const Scheduler = () => {
                         // Convert Set to Array to find the index
                         const favoritesArray = Array.from(favoritedScheduleStrings);
                         favoriteIndex = favoritesArray.indexOf(currentScheduleString);
+
+                        if (favoriteIndex == -1) {
+                            favoriteIndex = favoritesArray.length;
+                        }
                     }
 
                     return (
@@ -293,9 +307,9 @@ const Scheduler = () => {
 
         try {
             await invoke("change_favorite_schedule", {
-                scheduleIndex,
-                isCurrentlyFavorite,
-                scheduleData
+                id: scheduleIndex,
+                isFavorited: isCurrentlyFavorite,
+                schedule: scheduleData
             });
 
             // Change state values

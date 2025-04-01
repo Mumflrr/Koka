@@ -308,13 +308,13 @@ async fn delete_event(event_id: String, table: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn change_favorite_schedule(id: i32, is_favorited: i32, schedule: Vec<Class>) -> Result<(), String> {
+async fn change_favorite_schedule(id: i32, is_favorited: bool, schedule: Vec<Class>) -> Result<(), String> {
     let schedule_option: Option<Vec<Class>>;
-    if is_favorited == 0 {
-        schedule_option = Some(schedule);
+    if is_favorited {
+        schedule_option = None;  
     }
     else {
-        schedule_option = None;
+        schedule_option = Some(schedule);
     }
 
     change_favorite_status(id, schedule_option).await

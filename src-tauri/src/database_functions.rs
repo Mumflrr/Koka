@@ -62,7 +62,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS favorites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             data TEXT NOT NULL
         )", ()
     )?;
@@ -341,11 +341,12 @@ pub async fn change_favorite_status(id: i32, schedule: Option<Vec<Class>>) -> Re
         match schedule{
             Some(schedule_unwrapped) => {
                 let json_data = serde_json::to_string(&schedule_unwrapped)?;
-                let mut stmt = conn.prepare("INSERT INTO favorites (data) VALUES (?1)")?;
-                stmt.execute(params![json_data])?;
+                let mut stmt = conn.prepare("INSERT INTO favorites (id, data) VALUES (?1, ?2)")?;
+                stmt.execute(params![id, json_data])?;
             },
             None => {
-                let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = ?1")?;
+                // Delete by row given by id + 1 (since id starts at 0)
+                let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = (SELECT id FROM favorites ORDER BY id LIMIT 1 OFFSET ?1)")?;
                 stmt.execute(params![id])?;
             },
         };
