@@ -1,5 +1,5 @@
-// Scheduler.js
-import React, { useState, useEffect, useMemo } from 'react'; // Import useMemo
+import React, { useState, useEffect, useMemo } from 'react'; 
+import {Trash2} from 'lucide-react';
 import { invoke } from "@tauri-apps/api/tauri";
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
@@ -7,41 +7,34 @@ import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
 // Helper function to consistently stringify a schedule
-// NOTE: Assumes schedule is JSON-serializable and order is consistent or doesn't matter.
-// If order matters but isn't guaranteed, you'd need a more complex function
-// to sort properties/elements before stringifying.
 const stringifySchedule = (schedule) => {
     try {
-        // Simple stringify, good for arrays of primitives or consistent objects
         return JSON.stringify(schedule);
-        // Example for sorting if schedule is an array of objects with an 'id':
-        // return JSON.stringify([...schedule].sort((a, b) => a.id.localeCompare(b.id)));
     } catch (e) {
         console.error("Failed to stringify schedule:", schedule, e);
         return null; // Handle error case
     }
 };
 
-
-// TODO Responsiveness
-// TODO add a remove button for individual schedules
-// TODO add button to cache certain classes even if not in list
-// TODO work on favorited schedules - Currently using stringified Set for lookup
-// TODO add disclaimer if there are classes in shopping cart will change scrape results if
-//      'only show classes that fit in schedule' is true
-// TODO fix deleting one block of multi-day event not deleting all blocks
-// TODO how to handle partial professor names
-
 const Scheduler = () => {
     // Core state
     const [events, setEvents] = useState([]);
-    const [schedules, setSchedules] = useState([[]]); // Array of generated schedule objects/arrays
-    const [classes, setClasses] = useState([[]]);
+    const [schedules, setSchedules] = useState([]);
+    const [classes, setClasses] = useState([]);
+    
+    const scheduleStrings = useMemo(() => {
+        return new Set(schedules.map(stringifySchedule).filter(s => s !== null));
+    }, [schedules]); // Recalculate only when schedules changes
 
     // UI State
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [renderFavorites, setRenderFavorites] = useState(false);
+    const [seed, setSeed] = useState(1);
+    const reset = () => {
+        updateSchedulePage();
+        setSeed(Math.random());
+    }
 
     // Store favorite schedules as the actual objects/arrays
     const [favoritedSchedules, setFavoritedSchedules] = useState([]); // Initialize as empty array
@@ -49,6 +42,7 @@ const Scheduler = () => {
     const favoritedScheduleStrings = useMemo(() => {
         return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
     }, [favoritedSchedules]); // Recalculate only when favoritedSchedules changes
+    const [favoriteSchedulesMap, setFavoriteSchedulesMap] = useState([[]]);
 
     // Scraping state
     const [scrapeState, setScrapeState] = useState({
@@ -60,7 +54,7 @@ const Scheduler = () => {
         params_checkbox: [false, false, false],
         classes: [
             { code: "CSC", name: "116", section: "", instructor: "" },
-            { code: "BIO", name: "181", section: "", instructor: "" }
+            { code: "BIO", name: "183", section: "", instructor: "" }
         ],
         events: [ ]
     });
@@ -71,34 +65,14 @@ const Scheduler = () => {
     }, []);
 
     const loadPage = async() => {
-        //TODO make the load go into the Store.jsx
-       try {
+        try {
             setLoading(true);
             setError(null);
 
-            const loadedEvents = await invoke('get_events', {table: "scheduler"});
-            setEvents(processEvents(loadedEvents || []));
-
-            //TODO load classes
-
-            // Load favorite schedules (assuming backend returns array of schedule objects/arrays)
-            const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
-            if (Array.isArray(loadedFavoriteSchedules)) {
-                 setFavoritedSchedules(loadedFavoriteSchedules);
-                 // The useMemo hook will automatically update favoritedScheduleStrings
-            } else {
-                console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
-                setFavoritedSchedules([]);
-            }
-
-            // Load generated schedules
-            const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
-             if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0 && loadedSchedules[0].length > 0) {
-                 setSchedules(loadedSchedules);
-             } else {
-                 console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
-                 setSchedules([[]]); // Default placeholder
-             }
+            updateSchedulePage();
+            const loadedClasses = await invoke('get_classes');
+            console.log(loadedClasses);
+            setClasses(loadedClasses);
 
        } catch (err) {
             console.error('Error loading page data:', err);
@@ -111,14 +85,66 @@ const Scheduler = () => {
         }
     }
 
+    const updateSchedulePage = async() => {
+        const loadedEvents = await invoke('get_events', {table: "scheduler"});
+        setEvents(processEvents(loadedEvents || []));
+
+        // Load favorite schedules (assuming backend returns array of schedule objects/arrays)
+        const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
+        if (Array.isArray(loadedFavoriteSchedules)) {
+                setFavoritedSchedules(loadedFavoriteSchedules);
+                // The useMemo hook will automatically update favoritedScheduleStrings
+        } else {
+            console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
+            setFavoritedSchedules([]);
+        }
+
+        // Load generated schedules
+        const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
+        if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0 && loadedSchedules[0].length > 0) {
+            setSchedules(loadedSchedules);
+            
+            // Update favoriteSchedulesMap to map favorite indices to their positions in the full schedules array
+            if (Array.isArray(loadedFavoriteSchedules) && loadedFavoriteSchedules.length > 0) {
+                const newFavoriteSchedulesMap = [];
+                
+                // For each favorite schedule, find its index in the full schedules array
+                loadedFavoriteSchedules.forEach((favoriteSchedule, favoriteIndex) => {
+                    const favoriteString = stringifySchedule(favoriteSchedule);
+                    if (favoriteString !== null) {
+                        // Find the index of this favorite schedule in the full schedules array
+                        const scheduleIndex = loadedSchedules.findIndex(schedule => 
+                            stringifySchedule(schedule) === favoriteString
+                        );
+                        
+                        // If found, add the mapping
+                        if (scheduleIndex !== -1) {
+                            newFavoriteSchedulesMap[favoriteIndex] = scheduleIndex;
+                        } else {
+                            // If not found in the full schedules, mark with -1 or handle as needed
+                            newFavoriteSchedulesMap[favoriteIndex] = -1;
+                        }
+                    }
+                });
+                
+                setFavoriteSchedulesMap(newFavoriteSchedulesMap);
+                console.log("Updated favoriteSchedulesMap:", newFavoriteSchedulesMap);
+            } else {
+                setFavoriteSchedulesMap([]);
+            }
+        } else {
+            console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
+            setSchedules([[]]); // Default placeholder
+            setFavoriteSchedulesMap([]);
+        }
+    }
 
 {/*<!-----------------------------------End Setup Functions-----------------------------------!> */}
 {/*<!----------------------------------Start Render Functions---------------------------------!> */}
-    //FIXME duplication error when re-favoriting, possibly due to not removing the schedule when un-favoriting
-    const renderScrollbar = () => {
-        const hasSchedules = schedules.length > 0 && schedules[0].length > 0;
 
-        if (!hasSchedules) {
+    const renderScrollbar = () => {
+        // Early return if no schedules
+        if (!schedules.length || !schedules[0].length) {
             return (
                 <div className={ss['scrollbar-wrapper']}>
                     <div className={ss['empty-message']}>No schedules generated yet.</div>
@@ -126,65 +152,33 @@ const Scheduler = () => {
             );
         }
 
-        if (renderFavorites) {
-            return (
-                <div className={ss['scrollbar-wrapper']}>
-                {favoritedSchedules.map((schedule, i) => {
-                    // Stringify the current schedule being rendered
-                    const currentScheduleString = stringifySchedule(schedule);
-
-                    let favoriteIndex = -1;
-                    if (currentScheduleString !== null) {
-                        // Convert Set to Array to find the index
-                        const favoritesArray = Array.from(favoritedScheduleStrings);
-                        favoriteIndex = favoritesArray.indexOf(currentScheduleString);
-                    }
-                    return (
-                        <div key={i}
-                            className={ss['item-slot']}
-                            onClick={() => scheduleMenuClick(i)}
-                        >
-                            <button
-                                className={`${ss['favorite-button']} ${ss['favorited']}`}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Pass the actual schedule object and its index
-                                    changeFavoriteStatus(schedule, favoriteIndex, true);
-                                }}
-                                aria-label={`Unfavorite Schedule ${i + 1}`}
-                            >
-                                {'★'}
-                            </button>
-                            <p>Schedule {i + 1}</p>
-                        </div>
-                    );
-                })}
-            </div>
-            )
-        }
-
+        // Determine which schedules to display
+        const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
+        
         return (
-            <div className={ss['scrollbar-wrapper']}>
-                {schedules.map((schedule, i) => {
-                    // Stringify the current schedule being rendered
+            <div className={ss['scrollbar-wrapper']} key={renderFavorites ? 'favorites' : seed}>
+                {schedulesToRender.map((schedule, i) => {
+                    // Get schedule information
                     const currentScheduleString = stringifySchedule(schedule);
-
-                    // Check if its string representation exists in the Set of favorite strings
                     const isFavorite = currentScheduleString !== null && favoritedScheduleStrings.has(currentScheduleString);
-                    // Find the index in favoritedScheduleStrings if it's a favorite
-                    let favoriteIndex = -1;
-                    if (isFavorite && currentScheduleString !== null) {
-                        // Convert Set to Array to find the index
-                        const favoritesArray = Array.from(favoritedScheduleStrings);
-                        favoriteIndex = favoritesArray.indexOf(currentScheduleString);
-
-                        if (favoriteIndex == -1) {
-                            favoriteIndex = favoritesArray.length;
-                        }
-                    }
+                    
+                    // Get indices for operations
+                    const scheduleIndex = currentScheduleString !== null 
+                        ? Array.from(scheduleStrings).indexOf(currentScheduleString)
+                        : -1;
+                        
+                    const favoriteIndex = (currentScheduleString !== null && isFavorite)
+                        ? Array.from(favoritedScheduleStrings).indexOf(currentScheduleString)
+                        : -1;
+                    
+                    // Calculate display number (different for favorites vs regular view)
+                    const displayNumber = renderFavorites 
+                        ? favoriteSchedulesMap[i] + 1 
+                        : i + 1;
 
                     return (
-                        <div key={i}
+                        <div 
+                            key={i}
                             className={ss['item-slot']}
                             onClick={() => scheduleMenuClick(i)}
                         >
@@ -192,20 +186,150 @@ const Scheduler = () => {
                                 className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    // Pass the actual schedule object and its index
                                     changeFavoriteStatus(schedule, favoriteIndex, isFavorite);
                                 }}
-                                aria-label={isFavorite ? `Unfavorite Schedule ${i + 1}` : `Favorite Schedule ${i + 1}`}
+                                aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNumber}`}
                             >
                                 {isFavorite ? '★' : '☆'}
                             </button>
-                            <p>Schedule {i + 1}</p>
+                            <p>Schedule {displayNumber}</p>
+                            <button
+                                className={ss['delete-button']}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteSchedule(scheduleIndex, favoriteIndex, isFavorite);
+                                }}
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
                     );
                 })}
             </div>
         );
-    }
+    };
+
+    //FIXME Standardize modules css use
+    const ClassCard = ({ classData, onUpdate }) => {
+        const [formData, setFormData] = useState({
+          number: classData.number,
+          section: classData.section,
+          professor: classData.professor
+        });
+      
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setFormData(prev => ({
+            ...prev,
+            [name]: value
+          }));
+        };
+      
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          onUpdate(classData.id, formData);
+          setIsEditing(false);
+        };
+      
+        return (
+          <div className={ss.classCard}>
+            <form onSubmit={handleSubmit}>
+              <div className={ss.cardHeader}>
+                <div className={ss.classTitle}>
+                  <input
+                    type="text"
+                    name="number"
+                    value={formData.number}
+                    onChange={handleChange}
+                    className={ss.inputField}
+                    placeholder="Course Number"
+                  />
+                  <span> | Section: </span>
+                  <input
+                    type="text"
+                    name="section"
+                    value={formData.section}
+                    onChange={handleChange}
+                    className={ss.inputField}
+                    placeholder="Section"
+                  />
+                </div>
+                <button type="button" className={ss.menuButton}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="19" cy="12" r="1" />
+                    <circle cx="5" cy="12" r="1" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className={ss.classInfo}>
+                <p>001: Days + Time</p>
+                {classData.number === "CSC 116" && <p className={ss.location}>Location</p>}
+                <div className={ss.professorWrapper}>
+                  <div className={ss.avatarCircle}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    name="professor"
+                    value={formData.professor}
+                    onChange={handleChange}
+                    className={ss.inputField}
+                    placeholder="Professor Name"
+                  />
+                </div>
+              </div>
+            </form>
+          </div>
+        );
+      };
+      
+    const AddClassCard = ({ onClick }) => {
+      return (
+        <div className={ss.addClassCard} onClick={onClick}>
+          <button className={ss.addButtonCard}>
+            <div className={ss.addIconCircle}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <span>Add Class</span>
+          </button>
+        </div>
+      );
+    };
+    
+    const handleAddClass = (newClass) => {
+      setClasses(prev => [...prev, { ...newClass, id: Date.now() }]);
+    };
+    
+    const handleUpdateClass = (id, updatedData) => {
+      setClasses(prev => 
+        prev.map(item => item.id === id ? { ...item, ...updatedData } : item)
+      );
+    };
+    
+    const renderClasses = () => {
+      return (
+        <div className={ss.container}>
+          <div className={ss.classesWrapper}>
+            {classes.map((classItem) => (
+              <ClassCard 
+                key={classItem.id} 
+                classData={classItem} 
+                onUpdate={handleUpdateClass} 
+              />
+            ))}
+            <AddClassCard onClick={() => handleAddClass(true)} />
+          </div>
+        </div>
+      );
+    };
 
 {/*<!-----------------------------------End Render Functions----------------------------------!> */}
 {/*<!---------------------------------Start Runtime Functions---------------------------------!> */}
@@ -330,13 +454,23 @@ const Scheduler = () => {
         }
     }
 
-    const scheduleMenuClick = (index) => {
+    const deleteSchedule = async (scheduleIndex, favoriteIndex, isCurrentlyFavorite) => {
+        try {
+            console.log(scheduleIndex);
+            await invoke("delete_schedule", {idSchedule: scheduleIndex, idFavorite: favoriteIndex, isFavorited: isCurrentlyFavorite});
+            reset();
+        } catch (error) {
+            console.error("Failed to update favorite status:", error);
+            setError(`Failed to update favorite status for schedule ${scheduleIndex + 1}.`);
+        }
+    }
+
+    const scheduleMenuClick = async (index) => {
         console.log("Selected schedule index:", index);
         // TODO: Implement logic to display schedules[index]
     }
 
     if (loading) {
-        // ... loading indicator ...
         return (
             <div className={ss['scheduler']}>
                 <Sidebar />
@@ -402,6 +536,8 @@ const Scheduler = () => {
                         <p>Scraping in progress. This may take a minute or two. Please don't close this window.</p>
                     </div>
                 )}
+
+                {renderClasses()}
             </div>
         </div>
     );

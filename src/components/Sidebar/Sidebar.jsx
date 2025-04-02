@@ -11,7 +11,10 @@ const SidebarItem = ({ icon: Icon, label, to }) => {
       to={to}
       className={({ isActive }) => `${ss['sidebar-item']} ${isActive ? ss.active : ''}`}>
       <span className={ss['sidebar-item-bar']}></span>
-      <Icon className={ss['sidebar-item-icon']} />
+
+        {/* FIXME change active to be oblong around icon and not whole square? */}
+        <Icon className={ss['sidebar-item-icon']} />
+
       <span className={ss['sidebar-item-label']}>{label}</span>
     </NavLink>
   );

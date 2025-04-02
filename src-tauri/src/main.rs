@@ -6,7 +6,7 @@ mod tauri_backend;
 mod chrome_functions;
 mod database_functions;
 
-use database_functions::{change_favorite_status, delete_events, get_class_by_name, get_combinations, load_events, save_class_sections, save_combinations_backend, save_event, Event};
+use database_functions::*;
 use program_setup::*;
 use tauri::{Manager, Window};
 use tauri_backend::{scrape_classes::{perform_schedule_scrape, filter_classes}, class_combinations::generate_combinations};
@@ -290,6 +290,18 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 }
 
 #[tauri::command]
+async fn delete_schedule(id_schedule: i32, id_favorite: i32, is_favorited: bool) -> Result<(), String> {
+    if is_favorited {
+        let result = change_favorite_status(id_favorite, None).await;
+        if result.is_err() {
+            return result.map_err(|e| format!("Failed to change favorite when deleting schedule:{}", e));
+        }
+    }
+    delete_combination_backend(id_schedule).await
+        .map_err(|e| format!("Failed to change favorite status: {}", e))
+}
+
+#[tauri::command]
 async fn create_event(event: Event, table: String) -> Result<(), String> {
     save_event(table, event).await
         .map_err(|e| format!("Failed to save event: {}", e))
@@ -319,6 +331,12 @@ async fn change_favorite_schedule(id: i32, is_favorited: bool, schedule: Vec<Cla
 
     change_favorite_status(id, schedule_option).await
         .map_err(|e| format!("Failed to change favorite status: {}", e))
+}
+
+#[tauri::command]
+async fn get_classes() -> Result<Vec<Class>, String> {
+    get_parameter_classes().await
+        .map_err(|e| format!("Failed to get classes: {}", e))
 }
 
 #[tauri::command]
@@ -363,6 +381,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             delete_event,
             change_favorite_schedule,
             get_schedules,
+            delete_schedule,
+            get_classes,
         ])
         .run(tauri::generate_context!())?;
 

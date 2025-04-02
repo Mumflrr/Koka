@@ -28,8 +28,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
             id SMALLINT, 
             version TINYTEXT, 
             os TINYTEXT, 
-            schedule SMALLINT, 
-            classes BLOB
+            schedule SMALLINT
         )",
         (),
     )?;
@@ -64,7 +63,8 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         "CREATE TABLE IF NOT EXISTS favorites (
             id INTEGER PRIMARY KEY,
             data TEXT NOT NULL
-        )", ()
+        )",
+        ()
     )?;
 
     conn.execute(
@@ -73,6 +73,14 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
             data TEXT NOT NULL
         )",
         (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS class_parameters (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL
+        )",
+        ()
     )?;
 
     conn.execute(
@@ -196,6 +204,32 @@ pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error
     Ok(result)
 }
 
+pub async fn get_parameter_classes() -> Result<Vec<Class>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<Class>, anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+
+        let prepared_statement = format!("SELECT data FROM class_parameters");
+        let mut stmt = conn.prepare(&prepared_statement)?;
+
+        // Query rows and map each row to a Vec<Class>
+        let rows = stmt.query_map([], |row| {
+            let data: String = row.get(0)?;
+            Ok(data) // Just return the string for now
+        })?;
+
+        // Collect the results and handle deserialization separately
+        let mut result = Vec::new();
+        for row in rows {
+            let data = row?;
+            let class: Class = serde_json::from_str(&data)
+                .map_err(|e| anyhow::anyhow!("Unable to deserialize class: {}", e))?;
+            result.push(class);
+        }
+
+        Ok(result)
+    }).await?
+}
+
 pub async fn get_combinations(table: String) -> Result<Vec<Vec<Class>>, anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<Vec<Vec<Class>>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
@@ -259,6 +293,21 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
 
         Ok(())
     }).await?
+}
+
+pub async fn delete_combination_backend(idx: i32) -> Result<(), anyhow::Error> {
+    // Spawn a blocking task since SQLite operations are synchronous
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        // Open connection to SQLite database
+        let conn = Connection::open("programData.db")?;
+
+        let mut stmt = conn.prepare("DELETE FROM combinations WHERE id = (SELECT id FROM combinations ORDER BY id LIMIT 1 OFFSET ?1)")?;
+        stmt.execute(params![idx])?;
+       
+        Ok(())
+    }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
+
+    Ok(())
 }
 
 pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error> {

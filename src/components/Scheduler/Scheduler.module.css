@@ -37,6 +37,270 @@
 }
 
 
+/* <---- Classes Selector ----> */
+
+
+/* ClassSchedule.module.css */
+.container {
+    min-height: 100vh;
+    margin: 2rem;
+  }
+  
+  .title {
+    color: white;
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+  }
+  
+  .classesWrapper {
+    background: white;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    overflow: visible;
+  }
+  
+  .classCard {
+    background-color: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+  
+  .cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .classTitle {
+    font-size: 1.125rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  .menuButton {
+    color: #6b7280;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .classInfo {
+    color: #374151;
+  }
+  
+  .location {
+    margin-bottom: 0.5rem;
+  }
+  
+  .professorWrapper {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  
+  .avatarCircle {
+    background-color: #e5e7eb;
+    border-radius: 9999px;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.5rem;
+  }
+  
+  .inputField {
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0.25rem;
+    margin: -0.25rem;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
+    width: auto;
+  }
+  
+  .inputField:focus {
+    outline: none;
+    border-color: #d1d5db;
+    background-color: #f9fafb;
+    border-radius: 0.25rem;
+  }
+  
+  .formButtons {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  
+  .editButton, .saveButton, .cancelButton {
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  
+  .editButton {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+  
+  .saveButton {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+  }
+  
+  .cancelButton {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+  
+  .addClassCard {
+    border: 2px dashed #9ca3af;
+    border-radius: 0.5rem;
+    padding-bottom: 1rem;
+    margin: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(249, 250, 251, 0.7);
+    min-height: 8rem;
+    opacity: 0.7;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  .addClassCard:hover {
+    opacity: 0.9;
+  }
+  
+  .addButtonCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #6b7280;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .addIconCircle {
+    background-color: #d1d5db;
+    border-radius: 9999px;
+    width: 3rem;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Modal styles */
+  .modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .modalContent {
+    background-color: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  .modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  
+  .modalHeader h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+  }
+  
+  .closeButton {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6b7280;
+    cursor: pointer;
+  }
+  
+  .formGroup {
+    margin-bottom: 1rem;
+  }
+  
+  .formGroup label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #374151;
+  }
+  
+  .modalInput {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    font-size: 1rem;
+  }
+  
+  .modalInput:focus {
+    outline: none;
+    border-color: #3b82f6;
+    border: 2px rgba(59, 130, 246, 0.5);
+  }
+  
+  .modalFooter {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  
+  .modalFooter button {
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+  }
+  
+  .modalFooter .addButton {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+  }
+  
+  .modalFooter .cancelButton {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+
 /* <---- Scheduler ----> */
 
 /* Main scheduler container - change overflow to visible */
