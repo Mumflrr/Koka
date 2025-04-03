@@ -69,7 +69,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS combinations (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             data TEXT NOT NULL
         )",
         (),
@@ -314,15 +314,15 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
 
         {
             // Prepare the statement once outside the loop for efficiency
-            let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?, ?)")?;
+            let mut stmt = tx.prepare("INSERT INTO combinations (data) VALUES (?)")?;
 
             // Insert each combination as a separate row
-            for (index, combination) in combinations_clone.iter().enumerate() {
+            for combination in combinations_clone.iter() {
                 // Serialize the combination to JSON
                 let json_data = serde_json::to_string(combination)?;
 
                 // Execute the prepared statement
-                stmt.execute(params![index as i64, json_data])?;
+                stmt.execute(params![json_data])?;
             }
         } // The borrow of `tx` by `stmt` ends here
 

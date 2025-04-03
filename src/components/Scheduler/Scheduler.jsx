@@ -54,7 +54,9 @@ const Scheduler = () => {
     const favoritedScheduleStrings = useMemo(() => {
         return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
     }, [favoritedSchedules]); // Recalculate only when favoritedSchedules changes
-    const [favoriteSchedulesMap, setFavoriteSchedulesMap] = useState([[]]);
+    
+    // Map to track the index of each favorited schedule in the main schedules array
+    const [favoriteSchedulesMap, setFavoriteSchedulesMap] = useState({});
 
     // Scraping state
     const [scrapeState, setScrapeState] = useState({
@@ -96,30 +98,29 @@ const Scheduler = () => {
     }
 
     const updateSchedulePage = async() => {
-        const loadedEvents = await invoke('get_events', {table: "scheduler"});
-        setEvents(processEvents(loadedEvents || []));
+        try {
+            const loadedEvents = await invoke('get_events', {table: "scheduler"});
+            setEvents(processEvents(loadedEvents || []));
 
-        // Load favorite schedules (assuming backend returns array of schedule objects/arrays)
-        const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
-        if (Array.isArray(loadedFavoriteSchedules)) {
+            // Load generated schedules first
+            const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
+            if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) {
+                setSchedules(loadedSchedules);
+            } else {
+                console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
+                setSchedules([[]]); // Default placeholder
+            }
+
+            // Then load favorite schedules
+            const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
+            if (Array.isArray(loadedFavoriteSchedules)) {
                 setFavoritedSchedules(loadedFavoriteSchedules);
-                // The useMemo hook will automatically update favoritedScheduleStrings
-        } else {
-            console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
-            setFavoritedSchedules([]);
-        }
-
-        // Load generated schedules
-        const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
-        if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0 && loadedSchedules[0].length > 0) {
-            setSchedules(loadedSchedules);
-            
-            // Update favoriteSchedulesMap to map favorite indices to their positions in the full schedules array
-            if (Array.isArray(loadedFavoriteSchedules) && loadedFavoriteSchedules.length > 0) {
-                const newFavoriteSchedulesMap = [];
+                
+                // Create a new map to track favorite indices
+                const newFavoriteSchedulesMap = {};
                 
                 // For each favorite schedule, find its index in the full schedules array
-                loadedFavoriteSchedules.forEach((favoriteSchedule, favoriteIndex) => {
+                loadedFavoriteSchedules.forEach((favoriteSchedule) => {
                     const favoriteString = stringifySchedule(favoriteSchedule);
                     if (favoriteString !== null) {
                         // Find the index of this favorite schedule in the full schedules array
@@ -127,12 +128,9 @@ const Scheduler = () => {
                             stringifySchedule(schedule) === favoriteString
                         );
                         
-                        // If found, add the mapping
+                        // If found, add the mapping using the favoriteString as key
                         if (scheduleIndex !== -1) {
-                            newFavoriteSchedulesMap[favoriteIndex] = scheduleIndex;
-                        } else {
-                            // If not found in the full schedules, mark with -1 or handle as needed
-                            newFavoriteSchedulesMap[favoriteIndex] = -1;
+                            newFavoriteSchedulesMap[favoriteString] = scheduleIndex;
                         }
                     }
                 });
@@ -140,12 +138,13 @@ const Scheduler = () => {
                 setFavoriteSchedulesMap(newFavoriteSchedulesMap);
                 console.log("Updated favoriteSchedulesMap:", newFavoriteSchedulesMap);
             } else {
-                setFavoriteSchedulesMap([]);
+                console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
+                setFavoritedSchedules([]);
+                setFavoriteSchedulesMap({});
             }
-        } else {
-            console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
-            setSchedules([[]]); // Default placeholder
-            setFavoriteSchedulesMap([]);
+        } catch (err) {
+            console.error('Error in updateSchedulePage:', err);
+            throw err; // Rethrow to be caught by loadPage
         }
     }
 
@@ -154,7 +153,7 @@ const Scheduler = () => {
 
     const renderScrollbar = () => {
         // Early return if no schedules
-        if (!schedules.length || !schedules[0].length) {
+        if (!schedules.length || (schedules.length === 1 && !schedules[0].length)) {
             return (
                 <div className={ss['scrollbar-wrapper']}>
                     <div className={ss['empty-message']}>No schedules generated yet.</div>
@@ -172,18 +171,28 @@ const Scheduler = () => {
                     const currentScheduleString = stringifySchedule(schedule);
                     const isFavorite = currentScheduleString !== null && favoritedScheduleStrings.has(currentScheduleString);
                     
-                    // Get indices for operations
-                    const scheduleIndex = currentScheduleString !== null 
-                        ? Array.from(scheduleStrings).indexOf(currentScheduleString)
-                        : -1;
-                        
-                    const favoriteIndex = (currentScheduleString !== null && isFavorite)
-                        ? Array.from(favoritedScheduleStrings).indexOf(currentScheduleString)
-                        : -1;
+                    // Get the relevant indices for this schedule
+                    let scheduleIndex = i;
+                    let favoriteIndex = -1;
                     
-                    // Calculate display number (different for favorites vs regular view)
+                    if (renderFavorites) {
+                        // We're in favorites view, find the main schedule index
+                        scheduleIndex = favoriteSchedulesMap[currentScheduleString] !== undefined 
+                            ? favoriteSchedulesMap[currentScheduleString] 
+                            : -1;
+                        favoriteIndex = i;
+                    } else if (isFavorite) {
+                        // We're in regular view, find the favorite index
+                        favoriteIndex = favoritedSchedules.findIndex(fav => 
+                            stringifySchedule(fav) === currentScheduleString
+                        );
+                    }
+                    
+                    // Calculate display number
                     const displayNumber = renderFavorites 
-                        ? favoriteSchedulesMap[i] + 1 
+                        ? (favoriteSchedulesMap[currentScheduleString] !== undefined 
+                            ? favoriteSchedulesMap[currentScheduleString] + 1 
+                            : i + 1)
                         : i + 1;
 
                     return (
@@ -196,7 +205,7 @@ const Scheduler = () => {
                                 className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    changeFavoriteStatus(schedule, favoriteIndex, isFavorite);
+                                    changeFavoriteStatus(schedule, scheduleIndex, isFavorite);
                                 }}
                                 aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNumber}`}
                             >
@@ -609,6 +618,7 @@ const Scheduler = () => {
                 setScrapeState({ isScraping: false, status: `Error: ${result}` });
                 setSchedules([[]]);
                 setFavoritedSchedules([]); // Clear favorites as schedules changed
+                setFavoriteSchedulesMap({});
             } else if (Array.isArray(result)) {
                 console.log("Scrape successful:", result);
                 const numSchedules = result.length;
@@ -618,13 +628,14 @@ const Scheduler = () => {
                 });
                  setSchedules(numSchedules > 0 && result[0].length > 0 ? result : [[]]);
                 // Clear existing favorites when new schedules are generated
-                // because the identity/meaning of favorites is tied to the *current* list
                 setFavoritedSchedules([]);
+                setFavoriteSchedulesMap({});
             } else {
                  console.error("Scrape returned unexpected data:", result);
                  setScrapeState({ isScraping: false, status: `Error: Received unexpected data from backend.` });
                  setSchedules([[]]);
                  setFavoritedSchedules([]);
+                 setFavoriteSchedulesMap({});
             }
         } catch (error) {
             console.error("Scrape invocation failed:", error);
@@ -632,11 +643,12 @@ const Scheduler = () => {
             setScrapeState({ isScraping: false, status: `Scrape failed: ${error.message || 'Unknown error'}` });
             setSchedules([[]]);
             setFavoritedSchedules([]);
+            setFavoriteSchedulesMap({});
         }
     };
 
+
     // Toggles the favorite status of a schedule
-    // Takes the schedule object, its index, and current status
     const changeFavoriteStatus = async (scheduleData, scheduleIndex, isCurrentlyFavorite) => {
         const scheduleString = stringifySchedule(scheduleData);
         if (scheduleString === null) {
@@ -645,23 +657,52 @@ const Scheduler = () => {
         }
 
         try {
+            // Generate a unique ID for each favorite schedule
+            // We'll use a hash of the schedule data + timestamp to ensure uniqueness
+            let favoriteId = -1;
+            
+            if (isCurrentlyFavorite) {
+                // Find the index in favoritedSchedules array
+                favoriteId = favoritedSchedules.findIndex(fav => 
+                    stringifySchedule(fav) === scheduleString
+                );
+            } else {
+                // We're adding a new favorite, so generate a unique ID based on timestamp
+                // This avoids ID conflicts with existing favorites
+                favoriteId = Math.floor(Math.random() * 2147483647) + 1;
+            }
+
             await invoke("change_favorite_schedule", {
-                id: scheduleIndex,
+                id: favoriteId,
                 isFavorited: isCurrentlyFavorite,
                 schedule: scheduleData
             });
 
-            // Change state values
             if (isCurrentlyFavorite) {
                 // Remove from favorites
                 setFavoritedSchedules(prevFavorites =>
                     prevFavorites.filter(fav => stringifySchedule(fav) !== scheduleString)
                 );
+                
+                // Remove from map
+                setFavoriteSchedulesMap(prev => {
+                    const newMap = { ...prev };
+                    delete newMap[scheduleString];
+                    return newMap;
+                });
             } else {
                 // Add to favorites
                 setFavoritedSchedules(prevFavorites => [...prevFavorites, scheduleData]);
+                
+                // Update map
+                setFavoriteSchedulesMap(prev => ({
+                    ...prev,
+                    [scheduleString]: scheduleIndex
+                }));
             }
+            
             console.log(`Updated favorite status for schedule index: ${scheduleIndex} to ${!isCurrentlyFavorite}`);
+            console.log("Updated favoriteSchedulesMap:", favoriteSchedulesMap);
 
         } catch (error) {
             console.error("Failed to update favorite status:", error);
@@ -671,12 +712,74 @@ const Scheduler = () => {
 
     const deleteSchedule = async (scheduleIndex, favoriteIndex, isCurrentlyFavorite) => {
         try {
-            console.log(scheduleIndex);
-            await invoke("delete_schedule", {idSchedule: scheduleIndex, idFavorite: favoriteIndex, isFavorited: isCurrentlyFavorite});
-            reset();
+            console.log(`Deleting schedule: scheduleIndex=${scheduleIndex}, favoriteIndex=${favoriteIndex}, isFavorited=${isCurrentlyFavorite}`);
+            
+            // Determine which schedule we're deleting
+            let scheduleToDelete;
+            
+            if (renderFavorites) {
+                // In favorites view, we're deleting from the favorites array
+                scheduleToDelete = favoritedSchedules[favoriteIndex];
+            } else {
+                // In regular view, we're deleting from the main schedules array
+                scheduleToDelete = schedules[scheduleIndex];
+            }
+            
+            const scheduleString = stringifySchedule(scheduleToDelete);
+            
+            // Call backend to delete the schedule
+            await invoke("delete_schedule", {
+                idSchedule: scheduleIndex, 
+                idFavorite: isCurrentlyFavorite ? favoriteIndex : -1, 
+                isFavorited: isCurrentlyFavorite
+            });
+            
+            // Update local state
+            if (isCurrentlyFavorite) {
+                // Remove from favorites
+                setFavoritedSchedules(prev => 
+                    prev.filter((_, i) => i !== favoriteIndex)
+                );
+                
+                // Remove from map if it exists
+                if (scheduleString) {
+                    setFavoriteSchedulesMap(prev => {
+                        const newMap = { ...prev };
+                        delete newMap[scheduleString];
+                        return newMap;
+                    });
+                }
+            }
+            
+            // If we're deleting from the main schedules array
+            if (!renderFavorites) {
+                setSchedules(prev => 
+                    prev.filter((_, i) => i !== scheduleIndex)
+                );
+                
+                // Update all mappings that point to schedules after this one
+                setFavoriteSchedulesMap(prev => {
+                    const newMap = {};
+                    Object.entries(prev).forEach(([key, value]) => {
+                        if (value > scheduleIndex) {
+                            // Decrement indices that come after the deleted one
+                            newMap[key] = value - 1;
+                        } else if (value < scheduleIndex) {
+                            // Keep indices that come before the deleted one
+                            newMap[key] = value;
+                        }
+                        // Skip the one that matches the deleted index
+                    });
+                    return newMap;
+                });
+            }
+            
+            // Refresh the UI
+            await updateSchedulePage();
+            setSeed(Math.random());
         } catch (error) {
-            console.error("Failed to update favorite status:", error);
-            setError(`Failed to update favorite status for schedule ${scheduleIndex + 1}.`);
+            console.error("Failed to delete schedule:", error);
+            setError(`Failed to delete schedule ${scheduleIndex + 1}.`);
         }
     }
 
@@ -685,16 +788,14 @@ const Scheduler = () => {
         // TODO: Implement logic to display schedules[index]
     }
 
-    if (loading) {
-        return (
-            <div className={ss['scheduler']}>
-                <Sidebar />
-                <div className={ss['message-container']}>
-                    <div className={ss['message']}>Loading schedule data...</div>
-                </div>
-            </div>
-        );
-    }
+    // Toggle parameter checkboxes
+    const toggleParamCheckbox = (boxName) => {
+        setParamCheckboxes(prev => ({
+            ...prev,
+            [boxName]: !prev[boxName]
+        }));
+    };
+
 
     if (error) {
          return (
