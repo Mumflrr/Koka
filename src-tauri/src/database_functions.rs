@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
-use crate::{get_version, Class, ConnectInfo};
+use crate::{get_version, Class, ClassParam, ConnectInfo};
 
 const TABLENAMES: [&str; 4] = ["calendar", "scheduler", "combinations", "favorites"];
 
@@ -204,8 +204,8 @@ pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error
     Ok(result)
 }
 
-pub async fn get_parameter_classes() -> Result<Vec<Class>, anyhow::Error> {
-    tokio::task::spawn_blocking(move || -> Result<Vec<Class>, anyhow::Error> {
+pub async fn get_parameter_classes() -> Result<Vec<ClassParam>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<ClassParam>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
 
         let prepared_statement = format!("SELECT data FROM class_parameters");
@@ -221,13 +221,51 @@ pub async fn get_parameter_classes() -> Result<Vec<Class>, anyhow::Error> {
         let mut result = Vec::new();
         for row in rows {
             let data = row?;
-            let class: Class = serde_json::from_str(&data)
+            let class: ClassParam = serde_json::from_str(&data)
                 .map_err(|e| anyhow::anyhow!("Unable to deserialize class: {}", e))?;
             result.push(class);
         }
 
         Ok(result)
     }).await?
+}
+
+pub async fn update_parameter_classes(id: String, class: ClassParam) -> Result<(), anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+            let mut conn = Connection::open("programData.db")?;
+
+            // Begin a transaction for better performance with batch operations
+            let tx = conn.transaction()?;
+
+            {
+                // Prepare the statement once outside the loop for efficiency
+                let mut stmt = tx.prepare("INSERT OR REPLACE INTO class_parameters (id, data) VALUES (?, ?)")?;
+
+                // Serialize the section to JSON
+                let json_data = serde_json::to_string(&class)?;
+                // Execute the prepared statement
+                stmt.execute(params![id, json_data])?;
+            } // The borrow of `tx` by `stmt` ends here
+
+            // Commit the transaction
+            tx.commit()?;
+
+            Ok(())
+        }).await?
+}
+
+pub async fn remove_parameter_class(id: String) -> Result<(), anyhow::Error> {
+    // Spawn a blocking task since SQLite operations are synchronous
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        // Open connection to SQLite database
+        let conn = Connection::open("programData.db")?;
+        let mut stmt = conn.prepare("DELETE FROM class_parameters WHERE id=?1")?;
+        stmt.execute(params![id])?;
+       
+        Ok(())
+    }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
+
+    Ok(())
 }
 
 pub async fn get_combinations(table: String) -> Result<Vec<Vec<Class>>, anyhow::Error> {

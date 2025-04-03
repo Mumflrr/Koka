@@ -6,13 +6,25 @@ import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
+
+ // TODO Responsiveness
+ // TODO Fix top bar not shadowing on modal opening
+ // TODO add button to cache certain classes even if not in list
+ // TODO add button to re-scrape classes in list
+ // TODO fix deleting one block of multi-day event not deleting all blocks
+ // TODO how to handle partial instructor names
+ // FIXME make section and classname fields required for add class modal
+ // FIXME update error handling consistency
+ // TODO update loading animation when scraping
+ // TODO Check if works if we navigate away
+
 // Helper function to consistently stringify a schedule
 const stringifySchedule = (schedule) => {
     try {
         return JSON.stringify(schedule);
     } catch (e) {
         console.error("Failed to stringify schedule:", schedule, e);
-        return null; // Handle error case
+        return null; // TODO Handle error case
     }
 };
 
@@ -50,14 +62,12 @@ const Scheduler = () => {
         status: "",
     });
     const { isScraping, status: scrapeStatus } = scrapeState;
-    const [scrapeParams, setScrapeParams] = useState({
-        params_checkbox: [false, false, false],
-        classes: [
-            { code: "CSC", name: "116", section: "", instructor: "" },
-            { code: "BIO", name: "183", section: "", instructor: "" }
-        ],
-        events: [ ]
+    const [paramCheckboxes, setParamCheckboxes] = useState({
+        box1: false,
+        box2: false,
+        // 'Only fit in calendar' should always be false
     });
+    const {box1, box2} = paramCheckboxes;
 
     useEffect(() => {
         loadPage();
@@ -210,50 +220,222 @@ const Scheduler = () => {
     };
 
     //FIXME Standardize modules css use
-    const ClassCard = ({ classData, onUpdate }) => {
+    const ClassCard = ({ classData, onUpdate, onDelete }) => {
+        // Add a new state for the displayed course code
+        const [displayedCourseCode, setDisplayedCourseCode] = useState(
+            // If we have both code and name, combine them, otherwise use whatever is in classData.code
+            (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
+        );
+        
         const [formData, setFormData] = useState({
-          number: classData.number,
-          section: classData.section,
-          professor: classData.professor
+            code: classData.code || '',
+            name: classData.name || '',
+            section: classData.section || '',
+            instructor: classData.instructor || ''
         });
-      
-        const handleChange = (e) => {
-          const { name, value } = e.target;
-          setFormData(prev => ({
-            ...prev,
-            [name]: value
-          }));
+        
+        // Track which fields have been modified
+        const [modified, setModified] = useState({
+            code: false,
+            name: false,
+            section: false,
+            instructor: false
+        });
+        
+        // Update local state when props change (important for initial load)
+        useEffect(() => {
+            setFormData({
+                code: classData.code || '',
+                name: classData.name || '',
+                section: classData.section || '',
+                instructor: classData.instructor || ''
+            });
+            
+            // Also update the displayed course code
+            setDisplayedCourseCode(
+                (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
+            );
+        }, [classData]);
+    
+        const handleDelete = () => {
+            onDelete(classData);
         };
-      
-        const handleSubmit = (e) => {
-          e.preventDefault();
-          onUpdate(classData.id, formData);
-          setIsEditing(false);
+        
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+            
+            // Special handling for course code input
+            if (name === 'code') {
+                // Update the displayed value immediately
+                setDisplayedCourseCode(value);
+                
+                // Remove any whitespace and convert to uppercase
+                const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
+                
+                // Regular expression to match a valid course code pattern (e.g., CSC116)
+                const courseCodeRegex = /^([A-Z]{1,3})(\d{3})$/;
+                const match = cleanedValue.match(courseCodeRegex);
+                
+                if (match || value === '') {
+                    // If it's a valid format or empty, update the form data with separated values
+                    setFormData(prev => ({
+                        ...prev,
+                        // Split into separate code and name fields
+                        code: match ? match[1] : '',  // The letters part (e.g., "CSC")
+                        name: match ? match[2] : '',  // The numbers part (e.g., "116")
+                        courseCodeValid: true
+                    }));
+                    
+                    setModified(prev => ({
+                        ...prev,
+                        code: true,
+                        name: true
+                    }));
+                } else {
+                    // If invalid format, still update the backend values but mark as invalid
+                    setFormData(prev => ({
+                        ...prev,
+                        code: value, // Store the entire value in code field temporarily
+                        name: '',     // Clear the name field
+                        courseCodeValid: false
+                    }));
+                    
+                    setModified(prev => ({
+                        ...prev,
+                        code: true,
+                        name: false
+                    }));
+                }
+            } 
+            // Special handling for section input
+            else if (name === 'section') {
+                // Remove any whitespace
+                const cleanedValue = value.replace(/\s+/g, '');
+                
+                // Regular expression to match exactly 3 digits followed by an optional uppercase letter
+                const sectionRegex = /^\d{3}([A-Z])?$/;
+                const isValid = sectionRegex.test(cleanedValue) || value === '';
+                
+                // Update form data
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value,
+                    sectionValid: isValid
+                }));
+                
+                setModified(prev => ({
+                    ...prev,
+                    [name]: true
+                }));
+            } else {
+                // Original behavior for other fields
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+                
+                setModified(prev => ({
+                    ...prev,
+                    [name]: true
+                }));
+            }
+        };
+    
+        const handleBlur = async (e) => {
+            const { name } = e.target;
+        
+            // Only submit if a field was modified
+            if (modified[name]) {
+                // Check if both code and section are valid
+                const isCodeValid = formData.courseCodeValid !== false && formData.code !== '';
+                const isSectionValid = formData.sectionValid !== false;
+                
+                if (isCodeValid && isSectionValid) {
+                    // Create updated class data with the current ID
+                    const updatedClassData = {
+                        ...formData,
+                        id: classData.id, // Ensure we keep the original ID
+                        // If id is null or undefined, generate a new one
+                        ...((!classData.id) && { id: Date.now().toString() })
+                    };
+                    
+                    console.log("Class ID before update:", classData.id);
+                    console.log("Updated class data:", updatedClassData);
+                    
+                    // Call the parent component's update function with the ID
+                    onUpdate(classData.id || updatedClassData.id, updatedClassData);
+        
+                    try {
+                        await invoke('update_classes', {
+                            id: updatedClassData.id, // Use the potentially new ID
+                            class: updatedClassData
+                        });
+                    } catch (err) {
+                        console.error("Error updating classes:", err);
+                    }
+        
+                    // Reset modified flags
+                    setModified(prev => ({
+                        ...prev,
+                        [name]: false
+                    }));
+                } else {
+                    if (!isCodeValid) {
+                        console.error("Valid course code required (e.g., CSC116)");
+                    }
+                    if (!isSectionValid) {
+                        console.error("Valid section required (3 digits with optional letter)");
+                    }
+                }
+            }
         };
       
         return (
           <div className={ss.classCard}>
-            <form onSubmit={handleSubmit}>
+            <form>
               <div className={ss.cardHeader}>
                 <div className={ss.classTitle}>
-                  <input
+                <input
+                    required
                     type="text"
-                    name="number"
-                    value={formData.number}
+                    name="code"
+                    value={displayedCourseCode}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     className={ss.inputField}
-                    placeholder="Course Number"
-                  />
+                    placeholder="Course (ex. CSC116)"
+                />
                   <span> | Section: </span>
                   <input
+                    required
                     type="text"
                     name="section"
                     value={formData.section}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     className={ss.inputField}
-                    placeholder="Section"
+                    placeholder="Section (ex. 001 or 001A)"
                   />
                 </div>
+
+
+                <div className={ss.menuActions}>
+                        <button 
+                            type="button" 
+                            className={ss.deleteButton}
+                            onClick={handleDelete}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                        </button>
+                </div>
+
+
+
                 <button type="button" className={ss.menuButton}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="1" />
@@ -265,8 +447,8 @@ const Scheduler = () => {
               
               <div className={ss.classInfo}>
                 <p>001: Days + Time</p>
-                {classData.number === "CSC 116" && <p className={ss.location}>Location</p>}
-                <div className={ss.professorWrapper}>
+                {classData.name === "116" && <p className={ss.location}>Location</p>}
+                <div className={ss.instructorWrapper}>
                   <div className={ss.avatarCircle}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -275,9 +457,10 @@ const Scheduler = () => {
                   </div>
                   <input
                     type="text"
-                    name="professor"
-                    value={formData.professor}
+                    name="instructor"
+                    value={formData.instructor}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     className={ss.inputField}
                     placeholder="Professor Name"
                   />
@@ -286,7 +469,7 @@ const Scheduler = () => {
             </form>
           </div>
         );
-      };
+    };
       
     const AddClassCard = ({ onClick }) => {
       return (
@@ -304,31 +487,58 @@ const Scheduler = () => {
       );
     };
     
-    const handleAddClass = (newClass) => {
-      setClasses(prev => [...prev, { ...newClass, id: Date.now() }]);
+    // When creating a new class
+    const handleAddClass = () => {
+        const newClass = {
+            id: Date.now().toString(), // Convert to string for consistency
+            code: '',
+            name: '',
+            section: '',
+            instructor: ''
+        };
+        setClasses(prev => [...prev, newClass]);
     };
     
     const handleUpdateClass = (id, updatedData) => {
-      setClasses(prev => 
-        prev.map(item => item.id === id ? { ...item, ...updatedData } : item)
-      );
+        console.log("Updating class with ID:", id);
+        console.log("Updated data:", updatedData);
+        
+        setClasses(prev => 
+            prev.map(item => 
+                item.id === id ? { ...updatedData, id } : item
+            )
+        );
+    };
+
+    const handleDeleteClass = async (classObj) => {
+        try {            
+            // Remove from database
+            await invoke('remove_class', { id: classObj.id });
+
+            // Remove from state
+            setClasses(prev => prev.filter(item => item.id !== classObj.id));
+        } catch (err) {
+            console.error("Error deleting class:", err);
+            // Optionally revert state change if database operation fails
+        }
     };
     
     const renderClasses = () => {
-      return (
-        <div className={ss.container}>
-          <div className={ss.classesWrapper}>
-            {classes.map((classItem) => (
-              <ClassCard 
-                key={classItem.id} 
-                classData={classItem} 
-                onUpdate={handleUpdateClass} 
-              />
-            ))}
-            <AddClassCard onClick={() => handleAddClass(true)} />
-          </div>
-        </div>
-      );
+        return (
+            <div className={ss.container}>
+                <div className={ss.classesWrapper}>
+                    {classes.map((classItem) => (
+                        <ClassCard 
+                            key={classItem.id} 
+                            classData={classItem} 
+                            onUpdate={handleUpdateClass}
+                            onDelete={handleDeleteClass}
+                        />
+                    ))}
+                    <AddClassCard onClick={handleAddClass} />
+                </div>
+            </div>
+        );
     };
 
 {/*<!-----------------------------------End Render Functions----------------------------------!> */}
@@ -382,10 +592,14 @@ const Scheduler = () => {
                  days: event.days
              }));
 
-            const result = await invoke("generate_schedules", {
+             const result = await invoke("generate_schedules", {
                 parameters: {
-                    params_checkbox: scrapeParams.params_checkbox,
-                    classes: scrapeParams.classes,
+                    params_checkbox: [
+                        paramCheckboxes.box1,
+                        paramCheckboxes.box2,
+                        false // "Only fit in calendar" is always false as per your comment
+                    ],
+                    classes: classes,
                     events: formattedUserEvents
                 }
             });
@@ -414,6 +628,7 @@ const Scheduler = () => {
             }
         } catch (error) {
             console.error("Scrape invocation failed:", error);
+            setError("Unable to scrape: {}", error);
             setScrapeState({ isScraping: false, status: `Scrape failed: ${error.message || 'Unknown error'}` });
             setSchedules([[]]);
             setFavoritedSchedules([]);
@@ -509,6 +724,7 @@ const Scheduler = () => {
                     onEventDelete={handleDeleteEvent}
                     onEventUpdate={handleUpdateEvent}
                 />
+
                 {renderScrollbar()}
             </div>
             
@@ -529,6 +745,17 @@ const Scheduler = () => {
                         {scrapeStatus}
                     </div>
                 )}
+
+
+                <button onClick={e => (setRenderFavorites(!renderFavorites))}>
+                    Change favorite render
+                </button>
+                <button onClick={e => (setRenderFavorites(!box1))}>
+                    Scrape open sections only
+                </button>
+                <button onClick={e => (setRenderFavorites(!box2))}>
+                    Waitlist ok
+                </button>
                 
                 {isScraping && (
                     <div className={ss['loading-indicator']}>

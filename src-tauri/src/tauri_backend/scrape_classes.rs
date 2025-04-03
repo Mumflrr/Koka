@@ -175,12 +175,7 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
                      println!("  -> Section (Code: {}) has no time blocks, filtering out.", section.code);
                      return false;
                 }
-/* 
-                let representative_section_num = section.classes.first().map_or("N/A", |b| &b.section);
-                let representative_instructor = section.classes.first().map_or("N/A", |b| &b.instructor);
-                // Slightly reduced logging verbosity inside the filter closure
-                // println!("  -> Evaluating Section: {} (Instructor: {})", representative_section_num, representative_instructor);
- */
+
                 // 2. Check Section Number Match
                 let section_match = desired_class.section.is_empty() ||
                     section.classes.iter().any(|block| block.section == desired_class.section);
@@ -191,7 +186,7 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
                     section.classes.iter().any(|block| block.instructor.eq_ignore_ascii_case(&desired_class.instructor));
                 if !instructor_match { return false; }
 
-                // 4. Check Time Validity (Stricter): All blocks must be valid
+                // 4. Check Time Validity: All blocks must be valid
                 let all_time_blocks_valid = section.classes.iter().all(|time_block| {
                     validate_time_ok(&parameters.events, &time_block.days)
                 });

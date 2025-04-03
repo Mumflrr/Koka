@@ -152,7 +152,6 @@ fn close_splashscreen(window: Window) {
     window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
 }
 
-//TODO: Show splashscreen not working if updating?
 #[tauri::command]
 fn show_splashscreen(window: Window) {
     std::thread::sleep(Duration::from_millis(500));
@@ -334,9 +333,21 @@ async fn change_favorite_schedule(id: i32, is_favorited: bool, schedule: Vec<Cla
 }
 
 #[tauri::command]
-async fn get_classes() -> Result<Vec<Class>, String> {
+async fn get_classes() -> Result<Vec<ClassParam>, String> {
     get_parameter_classes().await
         .map_err(|e| format!("Failed to get classes: {}", e))
+}
+
+#[tauri::command]
+async fn update_classes(id: String, class: ClassParam) -> Result<(), String> {
+    update_parameter_classes(id, class).await
+        .map_err(|e| format!("Failed to update classes: {}", e))
+}
+
+#[tauri::command]
+async fn remove_class(id: String) -> Result<(), String> {
+    remove_parameter_class(id).await
+        .map_err(|e| format!("Failed to remove class: {}", e))
 }
 
 #[tauri::command]
@@ -383,6 +394,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             get_schedules,
             delete_schedule,
             get_classes,
+            update_classes,
+            remove_class,
         ])
         .run(tauri::generate_context!())?;
 
