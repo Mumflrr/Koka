@@ -71,6 +71,7 @@ struct EventParam {
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ClassParam {
+    id: String, // Used for database operations
     code: String, // Look for this code
     name: String, // Look for this name
     section: String, // Look for this section
@@ -289,14 +290,14 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 }
 
 #[tauri::command]
-async fn delete_schedule(id_schedule: i32, id_favorite: i32, is_favorited: bool) -> Result<(), String> {
+async fn delete_schedule(id: i32, is_favorited: bool) -> Result<(), String> {
     if is_favorited {
-        let result = change_favorite_status(id_favorite, None).await;
+        let result = change_favorite_status(id, None).await;
         if result.is_err() {
             return result.map_err(|e| format!("Failed to change favorite when deleting schedule:{}", e));
         }
     }
-    delete_combination_backend(id_schedule).await
+    delete_combination_backend(id).await
         .map_err(|e| format!("Failed to change favorite status: {}", e))
 }
 
@@ -339,8 +340,8 @@ async fn get_classes() -> Result<Vec<ClassParam>, String> {
 }
 
 #[tauri::command]
-async fn update_classes(id: String, class: ClassParam) -> Result<(), String> {
-    update_parameter_classes(id, class).await
+async fn update_classes(class: ClassParam) -> Result<(), String> {
+    update_parameter_classes(class).await
         .map_err(|e| format!("Failed to update classes: {}", e))
 }
 

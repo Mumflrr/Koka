@@ -204,20 +204,21 @@ pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error
     Ok(result)
 }
 
+// TODO invert get order
 pub async fn get_parameter_classes() -> Result<Vec<ClassParam>, anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<Vec<ClassParam>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
 
-        let prepared_statement = format!("SELECT data FROM class_parameters");
-        let mut stmt = conn.prepare(&prepared_statement)?;
+        let prepared_statement = "SELECT data FROM class_parameters";
+        let mut stmt = conn.prepare(prepared_statement)?;
 
-        // Query rows and map each row to a Vec<Class>
+        // Query rows and map each row directly to the serialized data
         let rows = stmt.query_map([], |row| {
             let data: String = row.get(0)?;
-            Ok(data) // Just return the string for now
+            Ok(data)
         })?;
 
-        // Collect the results and handle deserialization separately
+        // Collect the results and deserialize
         let mut result = Vec::new();
         for row in rows {
             let data = row?;
@@ -230,28 +231,32 @@ pub async fn get_parameter_classes() -> Result<Vec<ClassParam>, anyhow::Error> {
     }).await?
 }
 
-pub async fn update_parameter_classes(id: String, class: ClassParam) -> Result<(), anyhow::Error> {
+pub async fn update_parameter_classes(class: ClassParam) -> Result<(), anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
-            let mut conn = Connection::open("programData.db")?;
+        let mut conn = Connection::open("programData.db")?;
 
-            // Begin a transaction for better performance with batch operations
-            let tx = conn.transaction()?;
+        // Begin a transaction for better performance with batch operations
+        let tx = conn.transaction()?;
 
-            {
-                // Prepare the statement once outside the loop for efficiency
-                let mut stmt = tx.prepare("INSERT OR REPLACE INTO class_parameters (id, data) VALUES (?, ?)")?;
+        {
+            // Extract id from the class struct for use as the primary key
+            let id = class.id.clone();
+            
+            // Serialize the entire class object including the id
+            let json_data = serde_json::to_string(&class)?;
+            
+            // Prepare the statement once outside the loop for efficiency
+            let mut stmt = tx.prepare("INSERT OR REPLACE INTO class_parameters (id, data) VALUES (?, ?)")?;
+            
+            // Execute the prepared statement
+            stmt.execute(params![id, json_data])?;
+        } // The borrow of `tx` by `stmt` ends here
 
-                // Serialize the section to JSON
-                let json_data = serde_json::to_string(&class)?;
-                // Execute the prepared statement
-                stmt.execute(params![id, json_data])?;
-            } // The borrow of `tx` by `stmt` ends here
+        // Commit the transaction
+        tx.commit()?;
 
-            // Commit the transaction
-            tx.commit()?;
-
-            Ok(())
-        }).await?
+        Ok(())
+    }).await?
 }
 
 pub async fn remove_parameter_class(id: String) -> Result<(), anyhow::Error> {
@@ -333,14 +338,14 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
     }).await?
 }
 
-pub async fn delete_combination_backend(idx: i32) -> Result<(), anyhow::Error> {
+pub async fn delete_combination_backend(id: i32) -> Result<(), anyhow::Error> {
     // Spawn a blocking task since SQLite operations are synchronous
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         // Open connection to SQLite database
         let conn = Connection::open("programData.db")?;
 
-        let mut stmt = conn.prepare("DELETE FROM combinations WHERE id = (SELECT id FROM combinations ORDER BY id LIMIT 1 OFFSET ?1)")?;
-        stmt.execute(params![idx])?;
+        let mut stmt = conn.prepare("DELETE FROM combinations WHERE id = ?1")?;
+        stmt.execute(params![id])?;
        
         Ok(())
     }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
@@ -433,7 +438,7 @@ pub async fn change_favorite_status(id: i32, schedule: Option<Vec<Class>>) -> Re
             },
             None => {
                 // Delete by row given by id + 1 (since id starts at 0)
-                let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = (SELECT id FROM favorites ORDER BY id LIMIT 1 OFFSET ?1)")?;
+                let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = ?1")?;
                 stmt.execute(params![id])?;
             },
         };
