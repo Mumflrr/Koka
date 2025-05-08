@@ -61,7 +61,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS favorites (
-            id INTEGER PRIMARY KEY,
+            id STRING PRIMARY KEY,
             data TEXT NOT NULL
         )",
         ()
@@ -69,7 +69,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS combinations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id STRING PRIMARY KEY,
             data TEXT NOT NULL
         )",
         (),
@@ -204,7 +204,6 @@ pub async fn get_class_by_name(name: String) -> Result<Vec<Class>, anyhow::Error
     Ok(result)
 }
 
-// TODO invert get order
 pub async fn get_parameter_classes() -> Result<Vec<ClassParam>, anyhow::Error> {
     tokio::task::spawn_blocking(move || -> Result<Vec<ClassParam>, anyhow::Error> {
         let conn = Connection::open("programData.db")?;
@@ -304,9 +303,10 @@ pub async fn get_combinations(table: String) -> Result<Vec<Vec<Class>>, anyhow::
     }).await?
 }
 
-pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
+pub async fn save_combinations_backend(ids: Vec<String>, combinations: &Vec<Vec<Class>>) -> Result<(), anyhow::Error> {
     // Clone combinations to move into the spawn_blocking closure
     let combinations_clone = combinations.clone();
+    let ids_clone = ids.clone();
 
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         let mut conn = Connection::open("programData.db")?;
@@ -319,15 +319,15 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
 
         {
             // Prepare the statement once outside the loop for efficiency
-            let mut stmt = tx.prepare("INSERT INTO combinations (data) VALUES (?)")?;
+            let mut stmt = tx.prepare("INSERT INTO combinations (id, data) VALUES (?1, ?2)")?;
 
             // Insert each combination as a separate row
-            for combination in combinations_clone.iter() {
+            for (i, combination) in combinations_clone.iter().enumerate() {
                 // Serialize the combination to JSON
                 let json_data = serde_json::to_string(combination)?;
 
                 // Execute the prepared statement
-                stmt.execute(params![json_data])?;
+                stmt.execute(params![ids_clone[i], json_data])?;
             }
         } // The borrow of `tx` by `stmt` ends here
 
@@ -338,7 +338,7 @@ pub async fn save_combinations_backend(combinations: &Vec<Vec<Class>>) -> Result
     }).await?
 }
 
-pub async fn delete_combination_backend(id: i32) -> Result<(), anyhow::Error> {
+pub async fn delete_combination_backend(id: String) -> Result<(), anyhow::Error> {
     // Spawn a blocking task since SQLite operations are synchronous
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         // Open connection to SQLite database
@@ -424,20 +424,20 @@ pub async fn delete_events(table: String, event_id: String) -> Result<(), anyhow
     }).await?
 }
 
-pub async fn change_favorite_status(id: i32, schedule: Option<Vec<Class>>) -> Result<(), anyhow::Error> {
+pub async fn change_favorite_status(id: String, schedule: Option<Vec<Class>>) -> Result<(), anyhow::Error> {
     // Spawn a blocking task since SQLite operations are synchronous
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
         // Open connection to SQLite database
         let conn = Connection::open("programData.db")?;
 
-        match schedule{
+        match schedule {
             Some(schedule_unwrapped) => {
                 let json_data = serde_json::to_string(&schedule_unwrapped)?;
                 let mut stmt = conn.prepare("INSERT INTO favorites (id, data) VALUES (?1, ?2)")?;
                 stmt.execute(params![id, json_data])?;
             },
             None => {
-                // Delete by row given by id + 1 (since id starts at 0)
+                // Delete the row with the specified index directly
                 let mut stmt = conn.prepare("DELETE FROM favorites WHERE id = ?1")?;
                 stmt.execute(params![id])?;
             },
