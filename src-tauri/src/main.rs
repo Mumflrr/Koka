@@ -26,7 +26,7 @@ use std::collections::HashMap;
 //TODO: Add custom menu items
 
 
-// AppState to allow for this struct to be passed into functions via Tauri without needing 
+// AppState to allow for this struct to be passed into functions via Tauri without needing
 // Global variable. Arc makes it read-only across threads, and mutex makes it writeable on
 // one thread at a time. Acts like a singleton
 struct AppState {
@@ -71,6 +71,7 @@ struct EventParam {
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ClassParam {
+    id: String, // Used for database operations
     code: String, // Look for this code
     name: String, // Look for this name
     section: String, // Look for this section
@@ -89,7 +90,7 @@ impl fmt::Display for Class {
         for (idx, item) in self.classes.clone().iter().enumerate() {
             write!(f, "{}{}, [", if idx == 0 { "" } else { " & " }, item.section)?;
             // For each day in that block write the times
-            for day in item.days {    
+            for day in item.days {
                 if day.1 == true {
                     write!(f, "{} - {} ",day.0.0, day.0.1).unwrap();
                 }
@@ -275,7 +276,15 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 
         // Generate new combinations and save them
         let combinations_generated = generate_combinations(filtered_classes).await?;
-        save_combinations_backend(&combinations_generated).await?;
+        let mut ids = Vec::with_capacity(combinations_generated.len());
+
+        for combination in combinations_generated.iter() {
+            // Use serde_json to stringify the combination for a unique ID
+            ids.push(serde_json::to_string(&combination).map_err(|e| anyhow!("Failed to stringify combination for ID: {}", e))?);
+        }
+
+        // Clear old combinations and save new ones
+        save_combinations_backend(ids, &combinations_generated).await?;
 
         Ok(combinations_generated)
     }
@@ -289,15 +298,16 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 }
 
 #[tauri::command]
-async fn delete_schedule(id_schedule: i32, id_favorite: i32, is_favorited: bool) -> Result<(), String> {
+async fn delete_schedule(id: String, is_favorited: bool) -> Result<(), String> {
+    // If it's currently favorited, remove it from the favorites table
+    // We pass `None` for the schedule data to indicate deletion
     if is_favorited {
-        let result = change_favorite_status(id_favorite, None).await;
-        if result.is_err() {
-            return result.map_err(|e| format!("Failed to change favorite when deleting schedule:{}", e));
-        }
+        change_favorite_status(id.clone(), None).await
+            .map_err(|e| format!("Failed to remove from favorites when deleting schedule: {}", e))?;
     }
-    delete_combination_backend(id_schedule).await
-        .map_err(|e| format!("Failed to change favorite status: {}", e))
+    // Always delete from the combinations table (if it exists there)
+    delete_combination_backend(id).await
+        .map_err(|e| format!("Failed to delete from combinations: {}", e))
 }
 
 #[tauri::command]
@@ -319,14 +329,10 @@ async fn delete_event(event_id: String, table: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn change_favorite_schedule(id: i32, is_favorited: bool, schedule: Vec<Class>) -> Result<(), String> {
-    let schedule_option: Option<Vec<Class>>;
-    if is_favorited {
-        schedule_option = None;  
-    }
-    else {
-        schedule_option = Some(schedule);
-    }
+async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>) -> Result<(), String> {
+    // If it *is* currently favorited, the action is to *unfavorite* it (delete from favorites DB)
+    // If it's *not* currently favorited, the action is to *favorite* it (add to favorites DB)
+    let schedule_option = if is_favorited { None } else { Some(schedule) };
 
     change_favorite_status(id, schedule_option).await
         .map_err(|e| format!("Failed to change favorite status: {}", e))
@@ -339,8 +345,8 @@ async fn get_classes() -> Result<Vec<ClassParam>, String> {
 }
 
 #[tauri::command]
-async fn update_classes(id: String, class: ClassParam) -> Result<(), String> {
-    update_parameter_classes(id, class).await
+async fn update_classes(class: ClassParam) -> Result<(), String> {
+    update_parameter_classes(class).await
         .map_err(|e| format!("Failed to update classes: {}", e))
 }
 
@@ -369,13 +375,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             app.manage(Mutex::new(Vec::<Event>::new()));
 
-            let ascii = r#" 
-  ____    ___                                   
- /\  _`\ /\_ \                                  
- \ \ \L\ \//\ \     ___   __  __     __   _ __  
+            let ascii = r#"
+  ____    ___
+ /\  _`\ /\_ \
+ \ \ \L\ \//\ \     ___   __  __     __   _ __
   \ \ ,__/ \ \ \   / __`\/\ \/\ \  /'__`\/\`'__\
-   \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/ 
-    \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\ 
+   \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/
+    \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\
      \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
 
             println!("{ascii}");

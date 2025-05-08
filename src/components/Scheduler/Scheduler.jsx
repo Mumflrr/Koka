@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; 
+import React, { useState, useEffect, useMemo } from 'react';
 import {Trash2} from 'lucide-react';
 import { invoke } from "@tauri-apps/api/tauri";
 import processEvents from '../CalendarGrid/processEvents';
@@ -7,14 +7,9 @@ import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
 
- // TODO Responsiveness
- // TODO Fix top bar not shadowing on modal opening
- // TODO add button to cache certain classes even if not in list
  // TODO add button to re-scrape classes in list
- // TODO fix deleting one block of multi-day event not deleting all blocks
  // TODO how to handle partial instructor names
  // FIXME make section and classname fields required for add class modal
- // FIXME update error handling consistency
  // TODO update loading animation when scraping
  // TODO Check if works if we navigate away
 
@@ -33,9 +28,9 @@ const Scheduler = () => {
     const [events, setEvents] = useState([]);
     const [schedules, setSchedules] = useState([]);
     const [classes, setClasses] = useState([]);
-    
-    const scheduleStrings = useMemo(() => {
-        return new Set(schedules.map(stringifySchedule).filter(s => s !== null));
+    const schedulesStringArray = useMemo(() => {
+        // Simply return the result of map and filter
+        return schedules.map(stringifySchedule).filter(s => s !== null);
     }, [schedules]); // Recalculate only when schedules changes
 
     // UI State
@@ -54,9 +49,6 @@ const Scheduler = () => {
     const favoritedScheduleStrings = useMemo(() => {
         return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
     }, [favoritedSchedules]); // Recalculate only when favoritedSchedules changes
-    
-    // Map to track the index of each favorited schedule in the main schedules array
-    const [favoriteSchedulesMap, setFavoriteSchedulesMap] = useState({});
 
     // Scraping state
     const [scrapeState, setScrapeState] = useState({
@@ -103,45 +95,21 @@ const Scheduler = () => {
             setEvents(processEvents(loadedEvents || []));
 
             // Load generated schedules first
-            const loadedSchedules = await invoke('get_schedules', {table: "combinations"});
+            let loadedSchedules = await invoke('get_schedules', {table: "combinations"});
             if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) {
                 setSchedules(loadedSchedules);
             } else {
-                console.warn("Loaded schedules is not a non-empty array:", loadedSchedules);
-                setSchedules([[]]); // Default placeholder
+                setSchedules([[]]); // Ensure it's an array containing an empty array if no schedules
             }
 
-            // Then load favorite schedules
-            const loadedFavoriteSchedules = await invoke('get_schedules', {table: "favorites"});
-            if (Array.isArray(loadedFavoriteSchedules)) {
-                setFavoritedSchedules(loadedFavoriteSchedules);
-                
-                // Create a new map to track favorite indices
-                const newFavoriteSchedulesMap = {};
-                
-                // For each favorite schedule, find its index in the full schedules array
-                loadedFavoriteSchedules.forEach((favoriteSchedule) => {
-                    const favoriteString = stringifySchedule(favoriteSchedule);
-                    if (favoriteString !== null) {
-                        // Find the index of this favorite schedule in the full schedules array
-                        const scheduleIndex = loadedSchedules.findIndex(schedule => 
-                            stringifySchedule(schedule) === favoriteString
-                        );
-                        
-                        // If found, add the mapping using the favoriteString as key
-                        if (scheduleIndex !== -1) {
-                            newFavoriteSchedulesMap[favoriteString] = scheduleIndex;
-                        }
-                    }
-                });
-                
-                setFavoriteSchedulesMap(newFavoriteSchedulesMap);
-                console.log("Updated favoriteSchedulesMap:", newFavoriteSchedulesMap);
+            // Load favorite schedules
+            loadedSchedules = await invoke('get_schedules', {table: "favorites"});
+            if (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) {
+                setFavoritedSchedules(loadedSchedules);
             } else {
-                console.warn("Loaded favorite schedules is not an array:", loadedFavoriteSchedules);
-                setFavoritedSchedules([]);
-                setFavoriteSchedulesMap({});
+                setFavoritedSchedules([]); // Ensure it's an empty array if no favorites
             }
+
         } catch (err) {
             console.error('Error in updateSchedulePage:', err);
             throw err; // Rethrow to be caught by loadPage
@@ -152,71 +120,60 @@ const Scheduler = () => {
 {/*<!----------------------------------Start Render Functions---------------------------------!> */}
 
     const renderScrollbar = () => {
-        // Early return if no schedules
-        if (!schedules.length || (schedules.length === 1 && !schedules[0].length)) {
+        // Determine which schedules to display *first*
+        const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
+        // Check if the list *we intend to render* is effectively empty
+        // Handles both empty array and array containing only an empty array (initial state)
+        const isEmpty = !schedulesToRender.length || (schedulesToRender.length === 1 && !schedulesToRender[0]?.length);
+
+        // Early return if the list being rendered is empty
+        if (isEmpty) {
+            const message = renderFavorites
+                ? "No favorited schedules."
+                : "No schedules generated yet.";
             return (
                 <div className={ss['scrollbar-wrapper']}>
-                    <div className={ss['empty-message']}>No schedules generated yet.</div>
+                    <div className={ss['empty-message']}>{message}</div>
                 </div>
             );
         }
 
-        // Determine which schedules to display
-        const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
-        
         return (
-            <div className={ss['scrollbar-wrapper']} key={renderFavorites ? 'favorites' : seed}>
+            <div className={ss['scrollbar-wrapper']} key={seed}>
                 {schedulesToRender.map((schedule, i) => {
                     // Get schedule information
                     const currentScheduleString = stringifySchedule(schedule);
                     const isFavorite = currentScheduleString !== null && favoritedScheduleStrings.has(currentScheduleString);
-                    
-                    // Get the relevant indices for this schedule
-                    let scheduleIndex = i;
-                    let favoriteIndex = -1;
-                    
-                    if (renderFavorites) {
-                        // We're in favorites view, find the main schedule index
-                        scheduleIndex = favoriteSchedulesMap[currentScheduleString] !== undefined 
-                            ? favoriteSchedulesMap[currentScheduleString] 
-                            : -1;
-                        favoriteIndex = i;
-                    } else if (isFavorite) {
-                        // We're in regular view, find the favorite index
-                        favoriteIndex = favoritedSchedules.findIndex(fav => 
-                            stringifySchedule(fav) === currentScheduleString
-                        );
-                    }
-                    
-                    // Calculate display number
-                    const displayNumber = renderFavorites 
-                        ? (favoriteSchedulesMap[currentScheduleString] !== undefined 
-                            ? favoriteSchedulesMap[currentScheduleString] + 1 
-                            : i + 1)
-                        : i + 1;
+
+                    // Find the original index in the *generated* schedules list for display numbering consistency
+                    // If not found (e.g., favorite from a previous generation), use '?' or maybe index within favorites?
+                    // For now, stick to index from generated list if possible.
+                    const displayIndex = schedulesStringArray.indexOf(currentScheduleString);
+                    // Use displayIndex + 1 if found, otherwise maybe just 'Fav' or '?' when showing favorites?
+                    // Let's keep it simple: use the index from the main list if available.
+                    const displayNum = displayIndex !== -1 ? displayIndex + 1 : "?";
 
                     return (
-                        <div 
-                            key={i}
+                        <div
+                            key={currentScheduleString} // Use the unique stringified schedule as the key
                             className={ss['item-slot']}
-                            onClick={() => scheduleMenuClick(i)}
+                            onClick={() => scheduleMenuClick(schedule)} // Pass the actual schedule object if needed
                         >
                             <button
                                 className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    changeFavoriteStatus(schedule, scheduleIndex, isFavorite);
+                                    changeFavoriteStatus(schedule, currentScheduleString, isFavorite);
                                 }}
-                                aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNumber}`}
+                                aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNum}`}
                             >
                                 {isFavorite ? '★' : '☆'}
                             </button>
-                            <p>Schedule {displayNumber}</p>
+                            <p>Schedule {displayNum}</p>
                             <button
                                 className={ss['delete-button']}
                                 onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteSchedule(scheduleIndex, favoriteIndex, isFavorite);
+                                    deleteSchedule(currentScheduleString, isFavorite);
                                 }}
                             >
                                 <Trash2 size={16} />
@@ -231,62 +188,63 @@ const Scheduler = () => {
     //FIXME Standardize modules css use
     const ClassCard = ({ classData, onUpdate, onDelete }) => {
         // Add a new state for the displayed course code
-        const [displayedCourseCode, setDisplayedCourseCode] = useState(
-            // If we have both code and name, combine them, otherwise use whatever is in classData.code
-            (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
-        );
-        
+        const [displayedCourseCode, setDisplayedCourseCode] = useState(`${classData.code}${classData.name}`);
+
+        // Data for managing and sending to frontend
         const [formData, setFormData] = useState({
+            id: classData.id,
             code: classData.code || '',
             name: classData.name || '',
             section: classData.section || '',
-            instructor: classData.instructor || ''
+            instructor: classData.instructor || '',
+            courseCodeValid: true,
+            sectionCodeValid: true
         });
-        
+
         // Track which fields have been modified
         const [modified, setModified] = useState({
             code: false,
-            name: false,
             section: false,
-            instructor: false
+            instructor: false,
         });
-        
-        // Update local state when props change (important for initial load)
+
+        // Update local state when classData changes post initial load
         useEffect(() => {
             setFormData({
+                id: classData.id,
                 code: classData.code || '',
                 name: classData.name || '',
                 section: classData.section || '',
                 instructor: classData.instructor || ''
             });
-            
+
             // Also update the displayed course code
             setDisplayedCourseCode(
                 (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
             );
         }, [classData]);
-    
+
         const handleDelete = () => {
-            onDelete(classData);
+            onDelete(classData.id);
         };
-        
+
         const handleChange = (e) => {
             const { name, value } = e.target;
-            
+
             // Special handling for course code input
             if (name === 'code') {
                 // Update the displayed value immediately
                 setDisplayedCourseCode(value);
-                
+
                 // Remove any whitespace and convert to uppercase
                 const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
-                
                 // Regular expression to match a valid course code pattern (e.g., CSC116)
                 const courseCodeRegex = /^([A-Z]{1,3})(\d{3})$/;
+                // Get matched strings according to regex
                 const match = cleanedValue.match(courseCodeRegex);
-                
-                if (match || value === '') {
-                    // If it's a valid format or empty, update the form data with separated values
+
+                if (match) {
+                    // If it's a valid format, update the form data with separated values
                     setFormData(prev => ({
                         ...prev,
                         // Split into separate code and name fields
@@ -294,118 +252,84 @@ const Scheduler = () => {
                         name: match ? match[2] : '',  // The numbers part (e.g., "116")
                         courseCodeValid: true
                     }));
-                    
-                    setModified(prev => ({
-                        ...prev,
-                        code: true,
-                        name: true
-                    }));
+
                 } else {
-                    // If invalid format, still update the backend values but mark as invalid
+                    // If invalid format, determine of string is empty for frontend purposes
                     setFormData(prev => ({
                         ...prev,
-                        code: value, // Store the entire value in code field temporarily
-                        name: '',     // Clear the name field
                         courseCodeValid: false
                     }));
-                    
-                    setModified(prev => ({
-                        ...prev,
-                        code: true,
-                        name: false
-                    }));
                 }
-            } 
+            }
             // Special handling for section input
             else if (name === 'section') {
                 // Remove any whitespace
                 const cleanedValue = value.replace(/\s+/g, '');
-                
                 // Regular expression to match exactly 3 digits followed by an optional uppercase letter
                 const sectionRegex = /^\d{3}([A-Z])?$/;
-                const isValid = sectionRegex.test(cleanedValue) || value === '';
-                
-                // Update form data
-                setFormData(prev => ({
-                    ...prev,
-                    [name]: value,
-                    sectionValid: isValid
-                }));
-                
-                setModified(prev => ({
-                    ...prev,
-                    [name]: true
-                }));
+                // Check if inputted value is valid according to regex
+                const isValid = sectionRegex.test(cleanedValue) || value === '' || !value;
+                if (isValid) {
+                    // Update form data
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value,
+                        sectionCodeValid: true
+                    }));
+                }
+                else {
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value,
+                        sectionCodeValid: false
+                    }));
+                }
             } else {
                 // Original behavior for other fields
                 setFormData(prev => ({
                     ...prev,
                     [name]: value
                 }));
-                
+            }
+
+            setModified(prev => ({
+                ...prev,
+                [name]: true
+            }));
+        };
+
+        const handleBlur = async (e) => {
+            const { name } = e.target;
+
+            // Only perform validation if the field was modified
+            if (modified[name]) {
+                if (!formData.courseCodeValid && name === 'code') {
+                    console.error("Valid course code required (e.g., CSC116)");
+                    return; // Don't update if invalid
+                }
+
+                if (!formData.sectionCodeValid && name === 'section') {
+                    console.error("Valid section required (3 digits with optional letter)");
+                    return; // Don't update if invalid
+                }
+
+                // Only submit if field was modified AND is valid
+                onUpdate(formData);
+
+                // Reset modified state for this field after successful update
                 setModified(prev => ({
                     ...prev,
-                    [name]: true
+                    [name]: false
                 }));
             }
         };
-    
-        const handleBlur = async (e) => {
-            const { name } = e.target;
-        
-            // Only submit if a field was modified
-            if (modified[name]) {
-                // Check if both code and section are valid
-                const isCodeValid = formData.courseCodeValid !== false && formData.code !== '';
-                const isSectionValid = formData.sectionValid !== false;
-                
-                if (isCodeValid && isSectionValid) {
-                    // Create updated class data with the current ID
-                    const updatedClassData = {
-                        ...formData,
-                        id: classData.id, // Ensure we keep the original ID
-                        // If id is null or undefined, generate a new one
-                        ...((!classData.id) && { id: Date.now().toString() })
-                    };
-                    
-                    console.log("Class ID before update:", classData.id);
-                    console.log("Updated class data:", updatedClassData);
-                    
-                    // Call the parent component's update function with the ID
-                    onUpdate(classData.id || updatedClassData.id, updatedClassData);
-        
-                    try {
-                        await invoke('update_classes', {
-                            id: updatedClassData.id, // Use the potentially new ID
-                            class: updatedClassData
-                        });
-                    } catch (err) {
-                        console.error("Error updating classes:", err);
-                    }
-        
-                    // Reset modified flags
-                    setModified(prev => ({
-                        ...prev,
-                        [name]: false
-                    }));
-                } else {
-                    if (!isCodeValid) {
-                        console.error("Valid course code required (e.g., CSC116)");
-                    }
-                    if (!isSectionValid) {
-                        console.error("Valid section required (3 digits with optional letter)");
-                    }
-                }
-            }
-        };
-      
+
         return (
           <div className={ss.classCard}>
             <form>
               <div className={ss.cardHeader}>
                 <div className={ss.classTitle}>
                 <input
-                    required
                     type="text"
                     name="code"
                     value={displayedCourseCode}
@@ -416,7 +340,6 @@ const Scheduler = () => {
                 />
                   <span> | Section: </span>
                   <input
-                    required
                     type="text"
                     name="section"
                     value={formData.section}
@@ -429,8 +352,8 @@ const Scheduler = () => {
 
 
                 <div className={ss.menuActions}>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className={ss.deleteButton}
                             onClick={handleDelete}
                         >
@@ -453,7 +376,7 @@ const Scheduler = () => {
                   </svg>
                 </button>
               </div>
-              
+
               <div className={ss.classInfo}>
                 <p>001: Days + Time</p>
                 {classData.name === "116" && <p className={ss.location}>Location</p>}
@@ -479,7 +402,7 @@ const Scheduler = () => {
           </div>
         );
     };
-      
+
     const AddClassCard = ({ onClick }) => {
       return (
         <div className={ss.addClassCard} onClick={onClick}>
@@ -495,7 +418,40 @@ const Scheduler = () => {
         </div>
       );
     };
-    
+
+
+    const handleUpdateClass = async (classData) => {
+
+        try {
+            // Update database
+            await invoke('update_classes', {class: classData});
+
+            // Update frontend
+            setClasses(prev =>
+                prev.map(item =>
+                    item.id === classData.id ? { ...classData} : item
+                )
+            );
+        } catch (err) {
+            console.error("Error updating class:", err);
+            //setError("Failed to update class");
+        }
+
+    };
+
+    const handleDeleteClass = async (id) => {
+        try {
+            // Remove from database
+            await invoke('remove_class', { id: id });
+
+            // Remove from state
+            setClasses(prev => prev.filter(item => item.id !== id));
+        } catch (err) {
+            console.error("Error deleting class:", err);
+            //setError
+        }
+    };
+
     // When creating a new class
     const handleAddClass = () => {
         const newClass = {
@@ -507,39 +463,15 @@ const Scheduler = () => {
         };
         setClasses(prev => [...prev, newClass]);
     };
-    
-    const handleUpdateClass = (id, updatedData) => {
-        console.log("Updating class with ID:", id);
-        console.log("Updated data:", updatedData);
-        
-        setClasses(prev => 
-            prev.map(item => 
-                item.id === id ? { ...updatedData, id } : item
-            )
-        );
-    };
 
-    const handleDeleteClass = async (classObj) => {
-        try {            
-            // Remove from database
-            await invoke('remove_class', { id: classObj.id });
-
-            // Remove from state
-            setClasses(prev => prev.filter(item => item.id !== classObj.id));
-        } catch (err) {
-            console.error("Error deleting class:", err);
-            // Optionally revert state change if database operation fails
-        }
-    };
-    
     const renderClasses = () => {
         return (
             <div className={ss.container}>
                 <div className={ss.classesWrapper}>
                     {classes.map((classItem) => (
-                        <ClassCard 
-                            key={classItem.id} 
-                            classData={classItem} 
+                        <ClassCard
+                            key={classItem.id}
+                            classData={classItem}
                             onUpdate={handleUpdateClass}
                             onDelete={handleDeleteClass}
                         />
@@ -618,7 +550,6 @@ const Scheduler = () => {
                 setScrapeState({ isScraping: false, status: `Error: ${result}` });
                 setSchedules([[]]);
                 setFavoritedSchedules([]); // Clear favorites as schedules changed
-                setFavoriteSchedulesMap({});
             } else if (Array.isArray(result)) {
                 console.log("Scrape successful:", result);
                 const numSchedules = result.length;
@@ -629,13 +560,13 @@ const Scheduler = () => {
                  setSchedules(numSchedules > 0 && result[0].length > 0 ? result : [[]]);
                 // Clear existing favorites when new schedules are generated
                 setFavoritedSchedules([]);
-                setFavoriteSchedulesMap({});
+                await updateSchedulePage(); // Refresh favorites from DB (should be empty now)
+                setSeed(Math.random()); // Force scrollbar re-render
             } else {
                  console.error("Scrape returned unexpected data:", result);
                  setScrapeState({ isScraping: false, status: `Error: Received unexpected data from backend.` });
                  setSchedules([[]]);
                  setFavoritedSchedules([]);
-                 setFavoriteSchedulesMap({});
             }
         } catch (error) {
             console.error("Scrape invocation failed:", error);
@@ -643,152 +574,48 @@ const Scheduler = () => {
             setScrapeState({ isScraping: false, status: `Scrape failed: ${error.message || 'Unknown error'}` });
             setSchedules([[]]);
             setFavoritedSchedules([]);
-            setFavoriteSchedulesMap({});
         }
     };
 
-
     // Toggles the favorite status of a schedule
-    const changeFavoriteStatus = async (scheduleData, scheduleIndex, isCurrentlyFavorite) => {
-        const scheduleString = stringifySchedule(scheduleData);
-        if (scheduleString === null) {
-             setError("Failed to process schedule for favoriting.");
-             return;
-        }
-
+    const changeFavoriteStatus = async (scheduleData, scheduleString, isCurrentlyFavorite) => {
         try {
-            // Generate a unique ID for each favorite schedule
-            // We'll use a hash of the schedule data + timestamp to ensure uniqueness
-            let favoriteId = -1;
-            
-            if (isCurrentlyFavorite) {
-                // Find the index in favoritedSchedules array
-                favoriteId = favoritedSchedules.findIndex(fav => 
-                    stringifySchedule(fav) === scheduleString
-                );
-            } else {
-                // We're adding a new favorite, so generate a unique ID based on timestamp
-                // This avoids ID conflicts with existing favorites
-                favoriteId = Math.floor(Math.random() * 2147483647) + 1;
-            }
-
             await invoke("change_favorite_schedule", {
-                id: favoriteId,
+                id: scheduleString, // Use the stringified version as the ID
                 isFavorited: isCurrentlyFavorite,
                 schedule: scheduleData
             });
-
-            if (isCurrentlyFavorite) {
-                // Remove from favorites
-                setFavoritedSchedules(prevFavorites =>
-                    prevFavorites.filter(fav => stringifySchedule(fav) !== scheduleString)
-                );
-                
-                // Remove from map
-                setFavoriteSchedulesMap(prev => {
-                    const newMap = { ...prev };
-                    delete newMap[scheduleString];
-                    return newMap;
-                });
-            } else {
-                // Add to favorites
-                setFavoritedSchedules(prevFavorites => [...prevFavorites, scheduleData]);
-                
-                // Update map
-                setFavoriteSchedulesMap(prev => ({
-                    ...prev,
-                    [scheduleString]: scheduleIndex
-                }));
-            }
-            
-            console.log(`Updated favorite status for schedule index: ${scheduleIndex} to ${!isCurrentlyFavorite}`);
-            console.log("Updated favoriteSchedulesMap:", favoriteSchedulesMap);
+            await updateSchedulePage(); // Reload schedules and favorites from DB
+            setSeed(Math.random()); // Force scrollbar re-render
 
         } catch (error) {
             console.error("Failed to update favorite status:", error);
-            setError(`Failed to update favorite status for schedule ${scheduleIndex + 1}.`);
+            setError(`Failed to update favorite status for schedule.`);
         }
     }
 
-    const deleteSchedule = async (scheduleIndex, favoriteIndex, isCurrentlyFavorite) => {
+    const deleteSchedule = async (id, isCurrentlyFavorite) => {
         try {
-            console.log(`Deleting schedule: scheduleIndex=${scheduleIndex}, favoriteIndex=${favoriteIndex}, isFavorited=${isCurrentlyFavorite}`);
-            
-            // Determine which schedule we're deleting
-            let scheduleToDelete;
-            
-            if (renderFavorites) {
-                // In favorites view, we're deleting from the favorites array
-                scheduleToDelete = favoritedSchedules[favoriteIndex];
-            } else {
-                // In regular view, we're deleting from the main schedules array
-                scheduleToDelete = schedules[scheduleIndex];
-            }
-            
-            const scheduleString = stringifySchedule(scheduleToDelete);
-            
-            // Call backend to delete the schedule
             await invoke("delete_schedule", {
-                idSchedule: scheduleIndex, 
-                idFavorite: isCurrentlyFavorite ? favoriteIndex : -1, 
+                id: id, // Use the stringified version as the ID
                 isFavorited: isCurrentlyFavorite
             });
-            
-            // Update local state
-            if (isCurrentlyFavorite) {
-                // Remove from favorites
-                setFavoritedSchedules(prev => 
-                    prev.filter((_, i) => i !== favoriteIndex)
-                );
-                
-                // Remove from map if it exists
-                if (scheduleString) {
-                    setFavoriteSchedulesMap(prev => {
-                        const newMap = { ...prev };
-                        delete newMap[scheduleString];
-                        return newMap;
-                    });
-                }
-            }
-            
-            // If we're deleting from the main schedules array
-            if (!renderFavorites) {
-                setSchedules(prev => 
-                    prev.filter((_, i) => i !== scheduleIndex)
-                );
-                
-                // Update all mappings that point to schedules after this one
-                setFavoriteSchedulesMap(prev => {
-                    const newMap = {};
-                    Object.entries(prev).forEach(([key, value]) => {
-                        if (value > scheduleIndex) {
-                            // Decrement indices that come after the deleted one
-                            newMap[key] = value - 1;
-                        } else if (value < scheduleIndex) {
-                            // Keep indices that come before the deleted one
-                            newMap[key] = value;
-                        }
-                        // Skip the one that matches the deleted index
-                    });
-                    return newMap;
-                });
-            }
-            
+
             // Refresh the UI
-            await updateSchedulePage();
-            setSeed(Math.random());
+            await updateSchedulePage(); // Reload schedules and favorites from DB
+            setSeed(Math.random()); // Force scrollbar re-render
         } catch (error) {
             console.error("Failed to delete schedule:", error);
-            setError(`Failed to delete schedule ${scheduleIndex + 1}.`);
+            setError(`Failed to delete schedule.`);
         }
     }
 
-    const scheduleMenuClick = async (index) => {
-        console.log("Selected schedule index:", index);
-        // TODO: Implement logic to display schedules[index]
+    const scheduleMenuClick = async (scheduleData) => {
+        console.log("Clicked schedule:", scheduleData);
+        // TODO: Implement logic to display the clicked schedule on the main calendar grid
+        // This might involve setting a 'currentSchedule' state and passing its events to CalendarGrid
     }
 
-    // Toggle parameter checkboxes
     const toggleParamCheckbox = (boxName) => {
         setParamCheckboxes(prev => ({
             ...prev,
@@ -817,10 +644,10 @@ const Scheduler = () => {
     return (
         <div className={ss['scheduler']}>
             <Sidebar />
-            
+
             <div className={ss['scheduler-wrapper']}>
-                <CalendarGrid 
-                    events={events} 
+                <CalendarGrid
+                    events={events}
                     onEventCreate={handleCreateEvent}
                     onEventDelete={handleDeleteEvent}
                     onEventUpdate={handleUpdateEvent}
@@ -828,16 +655,16 @@ const Scheduler = () => {
 
                 {renderScrollbar()}
             </div>
-            
+
             <div className={ss['scrape-container']}>
-                <button 
+                <button
                     className={`${ss.button} ${ss['button-primary']}`}
-                    onClick={generateSchedules} 
+                    onClick={generateSchedules}
                     disabled={isScraping}
                 >
                     {isScraping ? "Scraping..." : "Generate Schedules"}
                 </button>
-                
+
                 {/* Scrape status is always shown when available */}
                 {scrapeStatus && (
                     <div className={`${ss['status-message']} ${
@@ -849,15 +676,15 @@ const Scheduler = () => {
 
 
                 <button onClick={e => (setRenderFavorites(!renderFavorites))}>
-                    Change favorite render
+                    {renderFavorites ? "Show Generated" : "Show Favorites"}
                 </button>
-                <button onClick={e => (setRenderFavorites(!box1))}>
-                    Scrape open sections only
+                <button onClick={() => toggleParamCheckbox('box1')}>
+                    Scrape open sections only {paramCheckboxes.box1 ? '✓' : ''}
                 </button>
-                <button onClick={e => (setRenderFavorites(!box2))}>
-                    Waitlist ok
+                <button onClick={() => toggleParamCheckbox('box2')}>
+                    Waitlist ok? {paramCheckboxes.box2 ? '✓' : ''}
                 </button>
-                
+
                 {isScraping && (
                     <div className={ss['loading-indicator']}>
                         <div className={ss['spinner']}></div>
