@@ -61,7 +61,6 @@ const Scheduler = () => {
         box2: false,
         // 'Only fit in calendar' should always be false
     });
-    const {box1, box2} = paramCheckboxes;
 
     useEffect(() => {
         loadPage();
@@ -158,6 +157,7 @@ const Scheduler = () => {
                             key={currentScheduleString} // Use the unique stringified schedule as the key
                             className={ss['item-slot']}
                             onClick={() => scheduleMenuClick(schedule)} // Pass the actual schedule object if needed
+                            onMouseOver={() => scheduleMenuHover(schedule)}
                         >
                             <button
                                 className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
@@ -612,8 +612,14 @@ const Scheduler = () => {
 
     const scheduleMenuClick = async (scheduleData) => {
         console.log("Clicked schedule:", scheduleData);
-        // TODO: Implement logic to display the clicked schedule on the main calendar grid
-        // This might involve setting a 'currentSchedule' state and passing its events to CalendarGrid
+        // TODO: Implement logic to save the clicked schedule so whenever the page is mounted, that
+        // schedule will automatically populate
+    }
+
+    const scheduleMenuHover = async (scheduleData) => {
+        console.log("Hovered schedule:", scheduleData);
+        // TODO: Implement logic to display the hovered schedule along with the already saved events
+        // in the CalendarGrid
     }
 
     const toggleParamCheckbox = (boxName) => {
