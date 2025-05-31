@@ -1,29 +1,22 @@
+// src/components/CalendarGrid/CalendarGrid.jsx
 import React from 'react';
 import { parse, format, addMinutes } from 'date-fns';
 import ss from './CalendarGrid.module.css';
 import { Trash2, X } from 'lucide-react';
 
 // Day constants for bitwise operations
-const DAYS = {
-  SUNDAY: 0,
-  MONDAY: 1,
-  TUESDAY: 2,
-  WEDNESDAY: 3,
-  THURSDAY: 4,
-  FRIDAY: 5,
-  SATURDAY: 6
-};
+// const DAYS = { ... }; // Not directly used here, but good for context
 
 // Display names for each day
-const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
-const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F']; 
+const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI']; // For UI column headers
+const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F']; // For EventForm and getDayLabelsFromBits
 
 // Helper function to convert day index to bit flag
-const dayIndexToBit = (index) => 1 << (index + 1); // +1 because our UI uses Monday as first day (index 0), but bit 0 is Sunday
+const dayIndexToBit = (index) => 1 << (index + 1); // UI index (0=Mon) maps to bit 1 (Monday)
 
 // Helper function to check if a day bit is set in the day integer
-const isDaySelected = (dayBits, dayIndex) => {
-  return (dayBits & (1 << (dayIndex + 1))) !== 0; // +1 because index 0 in UI is Monday (bit 1)
+const isDaySelected = (dayBits, dayIndex) => { // dayIndex is UI index (0=Mon)
+  return (dayBits & (1 << (dayIndex + 1))) !== 0;
 };
 
 // Helper function to get readable day labels from day bits
@@ -44,9 +37,9 @@ const DayCheckbox = ({ day, index, checked, onChange }) => (
     <span className={ss['days-text']}>{day}</span>
   </label>
 );
-
   
 const Modal = ({ isOpen, onClose, children }) => {
+// ...
   return (
     <div 
       className={`${ss['slide-modal-container']} ${isOpen ? ss['modal-open'] : ''}`}
@@ -69,18 +62,17 @@ const Modal = ({ isOpen, onClose, children }) => {
   );
 };
 
-// Modified EventForm with improved button layout
 const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = false }) => {
-  // Updated to handle bit flag for days
   const handleDayToggle = (dayIndex) => {
     const dayBit = dayIndexToBit(dayIndex);
     setEvent(prev => ({
       ...prev,
-      day: prev.day ^ dayBit // XOR to toggle the bit
+      day: prev.day ^ dayBit 
     }));
   };
 
   const handleDelete = async () => {
+// ...
     const confirmed = await new Promise((resolve) => {
       const result = window.confirm('Are you sure you want to delete this event?');
       resolve(result);
@@ -88,7 +80,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
     
     if (confirmed && onDelete) {
       onDelete(event.id);
-      onCancel(); // Close the modal after deletion
+      onCancel(); 
     }
   };
 
@@ -121,6 +113,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
             ))}
           </div>
         </div>
+{/* ... rest of EventForm ... */}
         <div className={ss['form-row']}>
           <label className={ss['form-label']}>Time*</label>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -161,8 +154,6 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
           />
         </div>
       </div>
-
-      {/* Improved button layout - vertical stack for editing mode, horizontal for creation */}
       <div className={isEditing ? ss['button-container-stacked'] : ss['button-container']}>
         {isEditing && (
           <button 
@@ -193,54 +184,62 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
 };
 
 const Event = ({ event, eventStyle, onDelete, onEdit }) => {
-  const [eventCreated, setEventCreated] = React.useState(false);
-  
+// ...
   const asyncConfirm = async (message) => {
     return new Promise((resolve) => {
       const result = window.confirm(message);
-      resolve(result); // Resolve the promise with the user's choice
+      resolve(result); 
     });
   };
 
   const handleClick = (e) => {
     e.stopPropagation();
-    onEdit(event); // Pass the event to the parent component for editing
-  };
-  
-  const handleDelete = async (e) => {
-    e.stopPropagation(); // Prevent parent click handlers
-  
-    const confirmed = await asyncConfirm('Are you sure you want to delete this event?'); // Await user's choice
-    if (!confirmed) return; // Exit early if the user cancels
-  
-    try {
-      setEventCreated(true);
-      onDelete(event.id); // Notify parent about deletion
-      setEventCreated(false);
-    } catch (err) {
-      console.error('Error deleting event:', err); // Log error
-      alert('Failed to delete event. Please try again.'); // Inform user
+    if (!event.isPreview) { 
+        onEdit(event); 
     }
   };
   
-  // Get comma-separated list of days for multi-day events
-  const eventDays = getDayLabelsFromBits(event.day);
+  const handleDelete = async (e) => {
+// ...
+    e.stopPropagation(); 
+    if (event.isPreview) return; 
+  
+    const confirmed = await asyncConfirm('Are you sure you want to delete this event?'); 
+    if (!confirmed) return; 
+  
+    try {
+      onDelete(event.id); 
+    } catch (err) {
+      console.error('Error deleting event:', err); 
+      alert('Failed to delete event. Please try again.'); 
+    }
+  };
+  
+  // const eventDays = getDayLabelsFromBits(event.day); // This can still be used if needed for display within the Event
+
+  const eventClasses = [
+    ss.event,
+    event.professor === '' ? ss.activity : ss.class,
+    event.isPreview ? ss.previewEvent : '' 
+  ].filter(Boolean).join(' ');
 
   return (
     <div
-      className={`${ss.event} ${event.professor === '' ? ss.activity : ss.class}`}
+      className={eventClasses} 
       style={eventStyle}
       onClick={handleClick}
     >
       <div className={ss['event-header']}>
         <div className={ss['event-title']}>{event.title}</div>
-        <button 
-          className={ss['delete-button']}
-          onClick={handleDelete}
-          aria-label="Delete event"
-        >
-          <Trash2 size={16} />
-        </button>
+        {!event.isPreview && ( 
+            <button 
+              className={ss['delete-button']}
+              onClick={handleDelete}
+              aria-label="Delete event"
+            >
+              <Trash2 size={16} />
+            </button>
+        )}
       </div>
       <div className={ss['event-time']}>
         {event.startTime} - {event.endTime}
@@ -258,12 +257,19 @@ const defaultEventState = {
   title: '',
   startTime: '',
   endTime: '',
-  day: 0, // Using bits instead of selectedDays array
+  day: 0, 
   professor: '',
   description: ''
 };
 
-const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEventDelete, onEventUpdate }) => {
+const CalendarGrid = ({ 
+    events, // Expects: { "1": [monday_events], "2": [tuesday_events], ... } (key is dayBitIndex.toString())
+    startHour = 8, 
+    endHour = 20, 
+    onEventCreate, 
+    onEventDelete, 
+    onEventUpdate 
+}) => {
     const totalMinutes = (endHour - startHour) * 60;
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [editingEvent, setEditingEvent] = React.useState(null);
@@ -272,6 +278,7 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     const parseTime = (timeStr) => parse(timeStr, 'HH:mm', new Date());
   
     const getTimeFromPosition = (yPos, columnHeight) => {
+// ...
       const percentageDown = yPos / columnHeight;
       const minutesSinceStart = Math.floor(percentageDown * totalMinutes);
       const hours = Math.floor(minutesSinceStart / 60) + startHour;
@@ -279,40 +286,36 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
       return format(new Date().setHours(hours, minutes), 'HH:mm');
     };
   
-    const handleTimeSlotClick = (e, dayIndex) => {
+    const handleTimeSlotClick = (e, dayUiIndex) => { // dayUiIndex is 0 for Mon, 1 for Tue ...
       const columnRect = e.currentTarget.getBoundingClientRect();
       const relativeY = e.clientY - columnRect.top;
       const clickTime = getTimeFromPosition(relativeY, columnRect.height);
       const endTime = format(addMinutes(parseTime(clickTime), 60), 'HH:mm');
   
-      // Reset edit mode and set up for creating a new event
       setEditingEvent(null);
       setNewEvent({
         ...defaultEventState,
         startTime: clickTime,
         endTime: endTime,
-        day: dayIndexToBit(dayIndex), // Initialize with clicked day as bit
+        day: dayIndexToBit(dayUiIndex), // dayIndexToBit converts UI index to the correct day bit
       });
       setIsModalOpen(true);
     };
   
-    const handleEditEvent = (event) => {
-      // Set up for editing existing event
+    const handleEditEvent = (event) => { 
       setEditingEvent(event);
-      setNewEvent({...event}); // Copy the event data to the form state
+      setNewEvent({...event}); 
       setIsModalOpen(true);
     };
   
     const handleSaveEvent = () => {
+// ...
       if (newEvent.title && newEvent.startTime && newEvent.endTime && newEvent.day !== 0) {
         if (editingEvent) {
-          // Update existing event
           onEventUpdate(newEvent);
         } else {
-          // Create new event
           onEventCreate(newEvent);
         }
-        
         setIsModalOpen(false);
         setNewEvent({...defaultEventState});
         setEditingEvent(null);
@@ -320,16 +323,15 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
     };
   
     const handleCloseModal = () => {
+// ...
       setIsModalOpen(false);
       setEditingEvent(null);
       setNewEvent({...defaultEventState});
     };
   
-    // Ensure events are displayed correctly by using event ID as key instead of title-based key
     return (
       <div className={ss['calendar-container']}>
         <div className={ss['calendar-grid']}>
-          {/* Header and time slots remain unchanged */}
           <div className={ss['header-spacer']} />
           {dayLabels.map(day => (
             <div key={day} className={ss['header-cell']}>
@@ -346,39 +348,42 @@ const CalendarGrid = ({ events, startHour = 8, endHour = 20, onEventCreate, onEv
               ))}
             </div>
   
-            {dayLabels.map((_, dayIndex) => (
-              <div 
-                key={dayIndex} 
-                className={ss['day-column']}
-                onClick={(e) => handleTimeSlotClick(e, dayIndex)}
-              >
-                {Array.from({ length: (endHour - startHour) * 2 }).map((_, i) => (
-                  <div key={i} className={ss['grid-line']} />
-                ))}
-                
-                {/* Modified to use event.id as a unique key */}
-                {events
-                  .filter(event => isDaySelected(event.day, dayIndex))
-                  .map((event, eventIndex) => (
+            {dayLabels.map((_, dayUiIndex) => { // dayUiIndex is 0 for Mon, 1 for Tue...
+              // Convert UI day index (0=Mon, 1=Tue...) to the dayBitIndex key used in `events` map
+              // Monday (UI index 0) -> bit 1. Tuesday (UI index 1) -> bit 2.
+              const dayKeyForMap = (dayUiIndex + 1).toString(); 
+              const eventsForThisColumn = events[dayKeyForMap] || [];
+
+              return (
+                <div 
+                  key={dayUiIndex} 
+                  className={ss['day-column']}
+                  onClick={(e) => handleTimeSlotClick(e, dayUiIndex)}
+                >
+                  {Array.from({ length: (endHour - startHour) * 2 }).map((_, i) => (
+                    <div key={`line-${i}`} className={ss['grid-line']} />
+                  ))}
+                  
+                  {eventsForThisColumn.map((event, eventIndexInColumn) => (
                     <Event 
-                      key={`${event.id}-${dayIndex}`}
+                      key={event.id} // event.id should be unique within this day's processed list
                       event={event}
                       eventStyle={{
                         top: event.topPosition,
                         height: event.heightPosition,
                         width: event.width,
                         left: event.left,
-                        zIndex: eventIndex + 1
+                        zIndex: event.isPreview ? (eventIndexInColumn + 10000) : (eventIndexInColumn + 1)
                       }}
                       onDelete={onEventDelete}
                       onEdit={handleEditEvent}
                     />
                   ))}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
   
-          {/* Modal used for both creating and editing events */}
           <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
             <EventForm 
               event={newEvent}

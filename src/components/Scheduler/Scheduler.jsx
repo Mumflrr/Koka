@@ -17,7 +17,7 @@ import ss from './Scheduler.module.css';
 const stringifySchedule = (schedule) => {
     try {
         return JSON.stringify(schedule);
-    } catch (e) {
+    } catch (e)        {
         console.error("Failed to stringify schedule:", schedule, e);
         return null; // TODO Handle error case
     }
@@ -25,7 +25,8 @@ const stringifySchedule = (schedule) => {
 
 const Scheduler = () => {
     // Core state
-    const [events, setEvents] = useState([]);
+    const [userEvents, setUserEvents] = useState([]); // Changed from 'events' to 'userEvents'
+    const [currentHoveredSchedule, setCurrentHoveredSchedule] = useState(null); // Added state for hovered schedule
     const [schedules, setSchedules] = useState([]);
     const [classes, setClasses] = useState([]);
     const schedulesStringArray = useMemo(() => {
@@ -67,6 +68,94 @@ const Scheduler = () => {
         return () => { };
     }, []);
 
+        // Helper function to format integer time (e.g., 1145) to "HH:mm" string
+    const formatTimeIntToString = (timeInt) => {
+        if (timeInt === null || timeInt === undefined || timeInt === -1) {
+            return '00:00'; // Or some default/error string
+        }
+        const timeStr = String(timeInt).padStart(4, '0');
+        return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
+    };
+
+    // Derived state: Combines user events with hovered schedule and processes them for CalendarGrid
+    const processedEventsForGrid = useMemo(() => {
+        let combinedRawEvents = [...userEvents]; // Start with user's saved events
+
+        if (currentHoveredSchedule && Array.isArray(currentHoveredSchedule)) {
+            const previewEvents = currentHoveredSchedule.flatMap((courseData, courseIndex) => {
+                if (!courseData || !courseData.classes || !Array.isArray(courseData.classes)) {
+                    // console.warn("Skipping courseData due to missing or invalid 'classes' array:", courseData);
+                    return []; // Skip this course if 'classes' is not a valid array
+                }
+
+                return courseData.classes.map((classMeeting, meetingIndex) => {
+                    if (!classMeeting || !classMeeting.days || !Array.isArray(classMeeting.days)) {
+                        // console.warn("Skipping classMeeting due to missing or invalid 'days' array:", classMeeting);
+                        return null; 
+                    }
+
+                    let dayBitmask = 0;
+                    let meetingStartTimeInt = null;
+                    let meetingEndTimeInt = null;
+
+                    classMeeting.days.forEach((dayInfo, dayUiIndex) => {
+                        // dayInfo is like [[1145, 1235], true] or [[-1, -1], false]
+                        // dayUiIndex: 0=Mon, 1=Tue, ..., 4=Fri
+                        
+                        if (!Array.isArray(dayInfo) || dayInfo.length < 2 || 
+                            !Array.isArray(dayInfo[0]) || dayInfo[0].length < 2) {
+                            // console.warn("Skipping dayInfo due to invalid structure:", dayInfo);
+                            return; // Skip malformed dayInfo
+                        }
+
+                        const timePair = dayInfo[0]; // [startTime, endTime] e.g. [1145, 1235] or [-1, -1]
+                        const isActive = dayInfo[1];   // boolean
+
+                        if (isActive && timePair[0] !== -1) {
+                            // UI dayIndex 0 (Monday) corresponds to bit 1 (1 << (0 + 1))
+                            // UI dayIndex 1 (Tuesday) corresponds to bit 2 (1 << (1 + 1))
+                            dayBitmask |= (1 << (dayUiIndex + 1));
+
+                            if (meetingStartTimeInt === null) {
+                                meetingStartTimeInt = timePair[0];
+                                meetingEndTimeInt = timePair[1];
+                            }
+                        }
+                    });
+
+                    if (dayBitmask === 0 || meetingStartTimeInt === null) {
+                        return null; // No active days or times for this meeting
+                    }
+
+                    const courseIdPart = courseData.id || `${courseData.code || 'course'}${courseData.name || courseIndex}`;
+                    const meetingIdPart = classMeeting.section || meetingIndex;
+                    const eventId = `hover-${courseIdPart}-${meetingIdPart}`;
+                    
+                    const title = `${courseData.code || ''} ${courseData.name || ''}`.trim() +
+                                  (classMeeting.section ? ` - Sec ${classMeeting.section}` : '');
+
+                    return {
+                        id: eventId,
+                        isPreview: true,
+                        title: title,
+                        professor: classMeeting.instructor || '',
+                        description: courseData.description || '', // Or more specific like classMeeting.location
+                        // Add other relevant fields if needed by Event component, e.g., location
+                        // location: classMeeting.location || '', 
+                        
+                        startTime: formatTimeIntToString(meetingStartTimeInt),
+                        endTime: formatTimeIntToString(meetingEndTimeInt),
+                        day: dayBitmask,
+                    };
+                }).filter(event => event !== null); // Filter out nulls if a classMeeting was invalid
+            });
+            combinedRawEvents = [...combinedRawEvents, ...previewEvents];
+        }
+        
+        return processEvents(combinedRawEvents); // Process the combined list for layout
+    }, [userEvents, currentHoveredSchedule]);
+
+
     const loadPage = async() => {
         try {
             setLoading(true);
@@ -80,7 +169,7 @@ const Scheduler = () => {
        } catch (err) {
             console.error('Error loading page data:', err);
             setError('Failed to load schedule data. Please try again later.');
-            setEvents([]);
+            setUserEvents([]); // Was setEvents, now setUserEvents
             setSchedules([[]]);
             setFavoritedSchedules([]);
         } finally {
@@ -91,7 +180,7 @@ const Scheduler = () => {
     const updateSchedulePage = async() => {
         try {
             const loadedEvents = await invoke('get_events', {table: "scheduler"});
-            setEvents(processEvents(loadedEvents || []));
+            setUserEvents(loadedEvents || []); // Was setEvents(processEvents(...)), now setUserEvents with raw data
 
             // Load generated schedules first
             let loadedSchedules = await invoke('get_schedules', {table: "combinations"});
@@ -157,7 +246,8 @@ const Scheduler = () => {
                             key={currentScheduleString} // Use the unique stringified schedule as the key
                             className={ss['item-slot']}
                             onClick={() => scheduleMenuClick(schedule)} // Pass the actual schedule object if needed
-                            onMouseOver={() => scheduleMenuHover(schedule)}
+                            onMouseEnter={() => scheduleMenuHover(schedule)} // Added
+                            onMouseLeave={handleScheduleMenuLeave} // Added
                         >
                             <button
                                 className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
@@ -173,6 +263,7 @@ const Scheduler = () => {
                             <button
                                 className={ss['delete-button']}
                                 onClick={(e) => {
+                                    e.stopPropagation(); // Added to prevent parent click
                                     deleteSchedule(currentScheduleString, isFavorite);
                                 }}
                             >
@@ -485,42 +576,42 @@ const Scheduler = () => {
 {/*<!-----------------------------------End Render Functions----------------------------------!> */}
 {/*<!---------------------------------Start Runtime Functions---------------------------------!> */}
 
-    const handleCreateEvent = async (newEvent) => {
+    const handleCreateEvent = async (newEvent) => { // newEvent is raw event data from form
         try {
             const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             const eventToSave = { ...newEvent, id: uniqueId };
             await invoke('create_event', { event: eventToSave, table: "scheduler" });
-            setEvents(prevEvents => processEvents([...prevEvents, eventToSave]));
+            setUserEvents(prevEvents => [...prevEvents, eventToSave]); // Update raw userEvents
         } catch (err) {
             console.error('Error saving event:', err);
             setError('Failed to save event. Please try again.');
         }
     };
 
-    const handleDeleteEvent = async (eventId) => {
-        const originalEvents = events;
-        setEvents(prevEvents => processEvents(prevEvents.filter(e => e.id !== eventId)));
+    const handleDeleteEvent = async (eventId) => { // eventId refers to a userEvent
+        const originalUserEvents = [...userEvents]; // Store copy of raw userEvents
+        setUserEvents(prevEvents => prevEvents.filter(e => e.id !== eventId)); // Update raw userEvents
         try {
             await invoke('delete_event', { eventId, table: "scheduler" });
         } catch (err) {
             console.error('Error deleting event:', err);
             setError('Failed to delete event. Please try again.');
-            setEvents(originalEvents);
+            setUserEvents(originalUserEvents); // Restore raw userEvents on error
         }
     };
 
-    const handleUpdateEvent = async (updatedEvent) => {
-        const originalEvents = events;
-        setEvents(prevEvents => {
+    const handleUpdateEvent = async (updatedEvent) => { // updatedEvent is raw event data from form
+        const originalUserEvents = [...userEvents]; // Store copy of raw userEvents
+        setUserEvents(prevEvents => { // Update raw userEvents
             const filtered = prevEvents.filter(e => e.id !== updatedEvent.id);
-            return processEvents([...filtered, updatedEvent]);
+            return [...filtered, updatedEvent];
         });
         try {
             await invoke('update_event', { event: updatedEvent, table: "scheduler" });
         } catch (err) {
             console.error('Error updating event:', err);
             setError('Failed to update event. Please try again.');
-            setEvents(originalEvents);
+            setUserEvents(originalUserEvents); // Restore raw userEvents on error
         }
     };
 
@@ -528,9 +619,9 @@ const Scheduler = () => {
         setScrapeState({ isScraping: true, status: "Starting scrape..." });
 
         try {
-             const formattedUserEvents = events.map(event => ({
-                 time: [event.start, event.end],
-                 days: event.days
+             const formattedUserEvents = userEvents.map(event => ({ // Uses raw userEvents
+                 time: [event.startTime, event.endTime], // Ensure these field names match your raw event structure
+                 days: event.day // Ensure this field name matches your raw event structure
              }));
 
              const result = await invoke("generate_schedules", {
@@ -570,7 +661,7 @@ const Scheduler = () => {
             }
         } catch (error) {
             console.error("Scrape invocation failed:", error);
-            setError("Unable to scrape: {}", error);
+            setError(`Unable to scrape: ${error.message || error}`); // Display error message correctly
             setScrapeState({ isScraping: false, status: `Scrape failed: ${error.message || 'Unknown error'}` });
             setSchedules([[]]);
             setFavoritedSchedules([]);
@@ -612,14 +703,20 @@ const Scheduler = () => {
 
     const scheduleMenuClick = async (scheduleData) => {
         console.log("Clicked schedule:", scheduleData);
+        setCurrentHoveredSchedule(null); // Clear hover on click
         // TODO: Implement logic to save the clicked schedule so whenever the page is mounted, that
         // schedule will automatically populate
     }
 
-    const scheduleMenuHover = async (scheduleData) => {
+    // Modified to set currentHoveredSchedule
+    const scheduleMenuHover = (scheduleData) => {
         console.log("Hovered schedule:", scheduleData);
-        // TODO: Implement logic to display the hovered schedule along with the already saved events
-        // in the CalendarGrid
+        setCurrentHoveredSchedule(scheduleData);
+    }
+
+    // Added: handler to clear hovered schedule
+    const handleScheduleMenuLeave = () => {
+        setCurrentHoveredSchedule(null);
     }
 
     const toggleParamCheckbox = (boxName) => {
@@ -653,7 +750,7 @@ const Scheduler = () => {
 
             <div className={ss['scheduler-wrapper']}>
                 <CalendarGrid
-                    events={events}
+                    events={processedEventsForGrid} // Pass the combined and processed events
                     onEventCreate={handleCreateEvent}
                     onEventDelete={handleDeleteEvent}
                     onEventUpdate={handleUpdateEvent}
