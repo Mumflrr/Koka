@@ -1,3 +1,4 @@
+// src-tauri/src/main.rs
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -52,7 +53,7 @@ struct Class {
 struct TimeBlock {
     section: String,
     location: String,
-    days: [((i32, i32), bool); 5],
+    days: [((i32, i32), bool); 5], // Times here are already i32 (HHmm)
     instructor: String,
 }
 
@@ -60,13 +61,13 @@ struct TimeBlock {
 struct ScrapeClassesParameters {
     params_checkbox: [bool; 3],
     classes: Vec<ClassParam>,
-    events: Vec<EventParam>,
+    events: Vec<EventParam>, // Used for conflict checking
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct EventParam {
-    time: (i32, i32),
-    days: [bool; 5],
+struct EventParam { // Represents an existing event for conflict checking
+    time: (i32, i32), // StartTime (HHmm), EndTime (HHmm)
+    days: [bool; 5],  // Mon, Tue, Wed, Thu, Fri
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -92,7 +93,8 @@ impl fmt::Display for Class {
             // For each day in that block write the times
             for day in item.days {
                 if day.1 == true {
-                    write!(f, "{} - {} ",day.0.0, day.0.1).unwrap();
+                    // Assuming day.0.0 and day.0.1 are HHmm integers
+                    write!(f, "{:04} - {:04} ",day.0.0, day.0.1).unwrap();
                 }
                 else {write!(f, " NA ").unwrap()}
             }
@@ -211,10 +213,11 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
             let driver = start_chromedriver(&connect_info).await?;
 
             // Create temporary parameters for scraping
+            // Frontend will now send `events` in ScrapeClassesParameters with HHmm times and correct day array.
             let scrape_params_for_call = ScrapeClassesParameters {
-                 params_checkbox: parameters.params_checkbox, // Use original checkboxes
-                 classes: classes_to_scrape_params, // Only classes needing scraping
-                 events: parameters.events.clone(), // Use original events
+                 params_checkbox: parameters.params_checkbox, 
+                 classes: classes_to_scrape_params, 
+                 events: parameters.events.clone(), // This now contains EventParam with i32 times
             };
 
             // Perform the scrape
@@ -233,7 +236,6 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
                     scraped_results_map.insert(original_index, data);
                 }
             } else {
-                 // This case indicates an internal error or mismatch in scraping results
                  eprintln!(
                     "Error: Mismatch between scraped results count ({}) and requested scrape count ({}).",
                     scraped_data.len(), scrape_indices.len()
@@ -255,69 +257,63 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
              if index < combined_classes.len() { // Bounds check
                 combined_classes[index] = scraped_data;
              } else {
-                 // This should ideally not happen if indexing is correct
                  eprintln!("Warning: Scraped index {} out of bounds for combined_classes (len {})", index, combined_classes.len());
              }
         }
-
-        // Filter the combined classes using the *original* parameters
+        
+        // The `parameters` used here for filtering will contain the `events` field with EventParam
+        // which uses i32 for times. The `filter_classes` function must be compatible with this.
+        // Assuming `filter_classes` correctly uses `EventParam` and `TimeBlock` i32 times.
         let filtered_classes = filter_classes(combined_classes, &parameters)?;
 
         // Generate combinations
         if filtered_classes.is_empty() && !parameters.classes.is_empty() {
             println!("No classes remained after filtering. Returning empty combinations.");
-            // Return Ok with an empty Vec if filtering removed everything, but scraping was requested.
-            // This avoids trying to generate combinations from nothing.
             return Ok(Vec::new());
         } else if filtered_classes.is_empty() {
              println!("No classes to generate combinations from.");
              return Ok(Vec::new());
         }
 
-        // Generate new combinations and save them
         let combinations_generated = generate_combinations(filtered_classes).await?;
         let mut ids = Vec::with_capacity(combinations_generated.len());
 
         for combination in combinations_generated.iter() {
-            // Use serde_json to stringify the combination for a unique ID
             ids.push(serde_json::to_string(&combination).map_err(|e| anyhow!("Failed to stringify combination for ID: {}", e))?);
         }
 
-        // Clear old combinations and save new ones
         save_combinations_backend(ids, &combinations_generated).await?;
 
         Ok(combinations_generated)
     }
     .await;
 
-    // Convert anyhow::Error to String for Result
     result.map_err(|err| {
-        eprintln!("Error in generate_schedules async block: {:?}", err); // Log the detailed error
-        err.to_string() // Return the stringified error to the frontend
+        eprintln!("Error in generate_schedules async block: {:?}", err); 
+        err.to_string() 
     })
 }
 
 #[tauri::command]
 async fn delete_schedule(id: String, is_favorited: bool) -> Result<(), String> {
-    // If it's currently favorited, remove it from the favorites table
-    // We pass `None` for the schedule data to indicate deletion
     if is_favorited {
         change_favorite_status(id.clone(), None).await
             .map_err(|e| format!("Failed to remove from favorites when deleting schedule: {}", e))?;
     }
-    // Always delete from the combinations table (if it exists there)
     delete_combination_backend(id).await
         .map_err(|e| format!("Failed to delete from combinations: {}", e))
 }
 
 #[tauri::command]
-async fn create_event(event: Event, table: String) -> Result<(), String> {
+async fn create_event(event: Event, table: String) -> Result<(), String> { 
+    // `event` received from frontend will have start_time and end_time as i32
     save_event(table, event).await
         .map_err(|e| format!("Failed to save event: {}", e))
 }
 
 #[tauri::command]
 async fn get_events(table: String) -> Result<Vec<Event>, String> {
+    // `load_events` returns Vec<Event> where start_time and end_time are i32
     load_events(table).await
         .map_err(|e| format!("Failed to load events: {}", e))
 }
@@ -330,8 +326,6 @@ async fn delete_event(event_id: String, table: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>) -> Result<(), String> {
-    // If it *is* currently favorited, the action is to *unfavorite* it (delete from favorites DB)
-    // If it's *not* currently favorited, the action is to *favorite* it (add to favorites DB)
     let schedule_option = if is_favorited { None } else { Some(schedule) };
 
     change_favorite_status(id, schedule_option).await
@@ -362,6 +356,16 @@ async fn get_schedules(table: String) -> Result<Vec<Vec<Class>>, String> {
         .map_err(|e| format!("Failed to get favorite schedules: {}", e))
 }
 
+#[tauri::command]
+async fn get_display_schedule() -> Result<Option<i16>, String> {
+    database_functions::get_display_schedule().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_display_schedule(id: Option<i16>) -> Result<(), String> {
+    database_functions::set_display_schedule(id).await.map_err(|e| e.to_string())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -373,7 +377,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 startup_complete: AtomicBool::new(false),
             });
 
-            app.manage(Mutex::new(Vec::<Event>::new()));
+            // The Event type here is database_functions::Event which now uses i32 for times.
+            // This Mutex is not used by the provided code snippets for event management,
+            // but if it were, it would align with the new Event struct.
+            app.manage(Mutex::new(Vec::<database_functions::Event>::new()));
+
 
             let ascii = r#"
   ____    ___
@@ -402,6 +410,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             get_classes,
             update_classes,
             remove_class,
+            get_display_schedule,
+            set_display_schedule,
         ])
         .run(tauri::generate_context!())?;
 

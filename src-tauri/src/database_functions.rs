@@ -1,4 +1,5 @@
-use rusqlite::{params, Connection};
+// src-tauri/src/database_functions.rs
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Serialize, Deserialize};
 use anyhow::anyhow;
 use crate::{get_version, Class, ClassParam, ConnectInfo};
@@ -10,9 +11,9 @@ pub struct Event {
     pub id: String,
     pub title: String,
     #[serde(rename = "startTime")]
-    pub start_time: String,
+    pub start_time: i32, // Changed from String to i32
     #[serde(rename = "endTime")]
-    pub end_time: String,
+    pub end_time: i32,   // Changed from String to i32
     pub day: i32,
     pub professor: String,
     pub description: String,
@@ -37,8 +38,8 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         "CREATE TABLE IF NOT EXISTS calendar (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
+            start_time INTEGER NOT NULL, -- Changed from TEXT to INTEGER
+            end_time INTEGER NOT NULL,   -- Changed from TEXT to INTEGER
             day INTEGER NOT NULL,
             professor TEXT,
             description TEXT
@@ -50,8 +51,8 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         "CREATE TABLE IF NOT EXISTS scheduler (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
+            start_time INTEGER NOT NULL, -- Changed from TEXT to INTEGER
+            end_time INTEGER NOT NULL,   -- Changed from TEXT to INTEGER
             day INTEGER NOT NULL,
             professor TEXT,
             description TEXT
@@ -59,6 +60,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         (),
     )?;
 
+// ... rest of setup_database ...
     conn.execute(
         "CREATE TABLE IF NOT EXISTS favorites (
             id STRING PRIMARY KEY,
@@ -108,7 +110,7 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
         Ok(result_struct) => connect_info = result_struct,
         Err(_) => {
             // Save OS information to the database
-            conn.execute("INSERT INTO data (id, os) VALUES (0, ?1)", params![os_info.os])?;
+            conn.execute("INSERT INTO data (id, os, schedule) VALUES (0, ?1, NULL)", params![os_info.os])?;
 
             connect_info = os_info;
             get_version(&mut connect_info).await?;
@@ -120,7 +122,72 @@ pub async fn setup_database(os_info: ConnectInfo) -> Result<ConnectInfo, anyhow:
     Ok(connect_info)
 }
 
-// Separate function for database operations to keep concerns modular
+// ... update_db_version, save_class_sections, get_class_by_name, etc. remain the same ...
+// ... unless they directly interact with Event struct's time fields in a way that assumes String ...
+// ... but typical serde and rusqlite usage should handle i32 correctly for INTEGER columns. ...
+
+pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+        let insert_statement = format!("INSERT INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", TABLENAMES[index]);
+
+        // Insert new event
+        // event.start_time and event.end_time are now i32, which is compatible with INTEGER SQL type
+        conn.execute(&insert_statement,
+            params![
+                event.id,
+                event.title,
+                event.start_time,
+                event.end_time,
+                event.day,
+                event.professor,
+                event.description
+            ],
+        )?;
+
+        Ok(())
+    }).await?
+}
+
+pub async fn load_events(table: String) -> Result<Vec<Event>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<Event>, anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+
+        let index = match TABLENAMES.iter().position(|s| *s == table) {
+            Some(index) => index,
+            None => return Err(anyhow!("Unable to find table")),
+        };
+        let statement = format!( "SELECT id, title, start_time, end_time, day, professor, description FROM {}", TABLENAMES[index]);
+        let mut stmt = conn.prepare(
+            &statement
+        )?;
+
+        let events = stmt.query_map([], |row| {
+            Ok(Event {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                start_time: row.get(2)?, // Will retrieve as i32 from INTEGER column
+                end_time: row.get(3)?,   // Will retrieve as i32 from INTEGER column
+                day: row.get(4)?,
+                professor: row.get(5)?,
+                description: row.get(6)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(events)
+    }).await?
+}
+
+// ... delete_events, change_favorite_status, etc. should be fine ...
+// ... other functions like get_combinations, save_combinations_backend etc. are unchanged ...
+
+// ...
 pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
     // Spawn a blocking task since SQLite operations are synchronous
     tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
@@ -130,6 +197,27 @@ pub async fn update_db_version(version: String) -> Result<(), anyhow::Error> {
         // Execute the update query with the new version
         conn.execute("UPDATE data SET version = ?1 WHERE id = 0", params![version])?;
 
+        Ok(())
+    }).await?
+}
+
+pub async fn get_display_schedule() -> Result<Option<i16>, anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<Option<i16>, anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+        let id: Option<i16> = conn.query_row(
+            "SELECT schedule FROM data WHERE id = 0",
+            [],
+            |row| row.get(0),
+        ).optional()?
+         .flatten(); // .optional() handles no rows, .flatten() handles NULL in cell
+        Ok(id)
+    }).await?
+}
+
+pub async fn set_display_schedule(id: Option<i16>) -> Result<(), anyhow::Error> {
+    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+        let conn = Connection::open("programData.db")?;
+        conn.execute("UPDATE data SET schedule = ?1 WHERE id = 0", params![id])?;
         Ok(())
     }).await?
 }
@@ -351,63 +439,6 @@ pub async fn delete_combination_backend(id: String) -> Result<(), anyhow::Error>
     }).await??; // First '?' handles JoinError, second '?' handles the inner anyhow::Error
 
     Ok(())
-}
-
-pub async fn save_event(table: String, event: Event) -> Result<(), anyhow::Error> {
-    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
-        let conn = Connection::open("programData.db")?;
-
-        let index = match TABLENAMES.iter().position(|s| *s == table) {
-            Some(index) => index,
-            None => return Err(anyhow!("Unable to find table")),
-        };
-        let insert_statement = format!("INSERT INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", TABLENAMES[index]);
-
-        // Insert new event
-        conn.execute(&insert_statement,
-            params![
-                event.id,
-                event.title,
-                event.start_time,
-                event.end_time,
-                event.day,
-                event.professor,
-                event.description
-            ],
-        )?;
-
-        Ok(())
-    }).await?
-}
-
-pub async fn load_events(table: String) -> Result<Vec<Event>, anyhow::Error> {
-    tokio::task::spawn_blocking(move || -> Result<Vec<Event>, anyhow::Error> {
-        let conn = Connection::open("programData.db")?;
-
-        let index = match TABLENAMES.iter().position(|s| *s == table) {
-            Some(index) => index,
-            None => return Err(anyhow!("Unable to find table")),
-        };
-        let statement = format!( "SELECT id, title, start_time, end_time, day, professor, description FROM {}", TABLENAMES[index]);
-        let mut stmt = conn.prepare(
-            &statement
-        )?;
-
-        let events = stmt.query_map([], |row| {
-            Ok(Event {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                start_time: row.get(2)?,
-                end_time: row.get(3)?,
-                day: row.get(4)?,
-                professor: row.get(5)?,
-                description: row.get(6)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?; // This already correctly handles rusqlite::Error
-
-        Ok(events)
-    }).await?
 }
 
 pub async fn delete_events(table: String, event_id: String) -> Result<(), anyhow::Error> {

@@ -26,7 +26,6 @@ function Sidebar() {
     
     const sidebarItems = [
         { icon: LayoutDashboard, label: "Home", path: "/" },
-        { icon: Calendar, label: "Calendar", path: "/calendar" },
         { icon: Utensils, label: "Food", path: "/dining" },
         { icon: Presentation, label: "Courses", path: "/courses" },
         { icon: SearchIcon, label: "Scheduler", path: "/scheduler" },
