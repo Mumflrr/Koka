@@ -4,8 +4,6 @@ import { parse, format, addMinutes } from 'date-fns';
 import ss from './CalendarGrid.module.css';
 import { Trash2, X } from 'lucide-react';
 
-// TODO: TIme slot for async classes
-
 // ... Day constants and helpers ...
 const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
 const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F'];

@@ -561,7 +561,6 @@ const Scheduler = () => {
     
     const changeFavoriteStatus = async (scheduleData, scheduleString, isCurrentlyFavorite) => {
         try {
-            // BUG FIX: Clear hover state before the list re-renders
             setCurrentHoveredSchedule(null);
             
             await invoke("change_favorite_schedule", {
@@ -580,7 +579,6 @@ const Scheduler = () => {
 
     const deleteSchedule = async (id, isCurrentlyFavorite) => {
         try {
-            // BUG FIX: Clear hover state before the list re-renders
             setCurrentHoveredSchedule(null);
 
             await invoke("delete_schedule", {

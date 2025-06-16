@@ -8,7 +8,7 @@ A little project of mine for learning Rust, React, database management, and web 
 ## How to operate
 - To be determined :3 (Too early in development, am just running src code in env, but want to make application standalone first)
 
-## TODO:
+## Future plans:
 - Handle no wifi situations (version getting, scraping, setting up, etc)
 - Security if I want to implement way to store credentials
 - Implementing pre req checks (theoretically possible but loads of works)

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/tauri";
 import Home from './components/Home';
@@ -12,38 +12,30 @@ import './App.css';
 
 function App() {
 
-    const showSplashscreen = useCallback( () => {
-        try {
-            invoke("show_splashscreen");
-            console.log("Splash screen shown");
-        } catch (error) {
-            console.error("Failed to show splash screen:", error);
-        }
-    }, []);
-
-    const startupApp = useCallback(async () => {
-        try {
-            await invoke("startup_app");
-            console.log("App started successfully");
-        } catch (error) {
-            console.error("Failed to startup app: ", error);
-        }
-    }, []);
-
-    const closeSplashscreen = useCallback(async () => {
-        try {
-            await invoke("close_splashscreen");
-            console.log("Splash screen closed");
-        } catch (error) {
-            console.error("Failed to close splash screen:", error);
-        }
-    }, []);
-
     useEffect(() => {
-        showSplashscreen();
-        startupApp();
-        closeSplashscreen();
-    }, [showSplashscreen, startupApp, closeSplashscreen]);
+        const initializeApp = async () => {
+            try {
+                // 1. Show the splash screen first.
+                await invoke("show_splashscreen");
+                console.log("Splash screen shown");
+
+                // 2. Wait for the entire backend setup to complete.
+                await invoke("startup_app");
+                console.log("App startup logic completed successfully.");
+
+                // 3. Only after the backend is ready, close the splash screen.
+                await invoke("close_splashscreen");
+                console.log("Splash screen closed");
+            } catch (error) {
+                console.error("Error during app initialization:", error);
+                // In case of an error, still try to close the splashscreen
+                // to prevent the user from being stuck.
+                await invoke("close_splashscreen").catch(console.error);
+            }
+        };
+
+        initializeApp();
+    }, []); // The empty dependency array ensures this runs only once on component mount.
 
     return (
         <BrowserRouter>

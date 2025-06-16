@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "windows"))] 
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
 use std::{collections::HashMap, env, fs::{self, File}, io::{copy, BufReader}, net::TcpStream, path::PathBuf, process::Command, time::Duration};
 use reqwest::Client;
@@ -6,11 +6,14 @@ use serde::{Deserialize, Serialize};
 use thirtyfour::{ChromiumLikeCapabilities, DesiredCapabilities, WebDriver};
 use zip::ZipArchive;
 use anyhow::Context;
-use rusqlite::Result;
-use crate::{database_functions::update_db_version, ConnectInfo};
+use crate::ConnectInfo;
 
 const RESOURCES_DIR: &str = "resources";
 const CHROME_URL: &str = "https://storage.googleapis.com/chrome-for-testing-public";
+
+struct Downloader {
+    client: Client,
+}
 
 impl Downloader {
     fn new() -> Self {
@@ -32,18 +35,12 @@ impl Downloader {
     }
 }
 
-struct Downloader {
-    client: Client,
-}
-
-// Struct to read in the latest version from JSON
 #[derive(Debug, Serialize, Deserialize)]
 struct LatestVersion {
     timestamp: String,
     channels: HashMap<String, Channel>,
 }
 
-// Struct to read in channel info from JSON
 #[derive(Debug, Serialize, Deserialize)]
 struct Channel {
     channel: String,
@@ -51,172 +48,117 @@ struct Channel {
     revision: String,
 }
 
-// Make sure chromedriver is not running (for windows machine)
 #[cfg(target_os = "windows")]
 pub fn quit_chromedriver() -> Result<(), anyhow::Error> {
     let output = Command::new("tasklist")
         .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
         .output()?;
-
     let output_str = String::from_utf8(output.stdout)?;
-    
     if output_str.contains("chromedriver.exe") {
         println!("Chromedriver processes found. Terminating...");
         let kill_output = Command::new("taskkill")
             .args(&["/F", "/IM", "chromedriver.exe"])
             .output()?;
-
-        if kill_output.status.success() {
-            println!("All chromedriver processes have been terminated.");
-        } else {
+        if !kill_output.status.success() {
             let error_message = String::from_utf8(kill_output.stderr)?;
-            return Err(anyhow::anyhow!("Failed to terminate ChromDriver: {}", error_message));
+            return Err(anyhow::anyhow!("Failed to terminate ChromeDriver: {}", error_message));
         }
+        println!("All chromedriver processes have been terminated.");
     } else {
         println!("No chromedriver processes found.");
     }
-
     Ok(())
 }
 
-// Make sure chromedriver is not running (for macos and linux machines)
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub fn quit_chromedriver() -> Result<(), anyhow::Error> {
-    let output = Command::new("pgrep")
-        .arg("chromedriver")
-        .output()?;
-
+    let output = Command::new("pgrep").arg("chromedriver").output()?;
     if !output.stdout.is_empty() {
         println!("Chromedriver processes found. Terminating...");
-        let kill_output = Command::new("pkill")
-            .arg("chromedriver")
-            .output()?;
-
-        if kill_output.status.success() {
-            println!("All chromedriver processes have been terminated.");
-        } else {
+        let kill_output = Command::new("pkill").arg("chromedriver").output()?;
+        if !kill_output.status.success() {
             let error_message = String::from_utf8(kill_output.stderr)?;
-            return Err(anyhow::anyhow!("Failed to terminate ChromDriver: {}", error_message));
+            return Err(anyhow::anyhow!("Failed to terminate ChromeDriver: {}", error_message));
         }
+        println!("All chromedriver processes have been terminated.");
     } else {
         println!("No chromedriver processes found to kill.");
     }
-
     Ok(())
 }
 
 async fn setup_chrome_and_driver(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
-    println!("Updating Chrome resources");
-    fs::remove_dir_all(RESOURCES_DIR).ok(); // Clean-up
-    
+    println!("Updating Chrome resources...");
+    fs::remove_dir_all(RESOURCES_DIR).ok(); // Clean-up old resources
     let resources_path = ensure_resources_dir()?;
     let downloader = Downloader::new();
 
-    // Chrome Binary
     let chrome_zip = resources_path.join(format!("chrome-{}.zip", connect_info.os));
     let chrome_url = format!("{}/{}/{}/chrome-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
-
     downloader.download_to_file(&chrome_url, &chrome_zip).await?;
     downloader.extract_zip(&chrome_zip, &resources_path)?;
     fs::remove_file(chrome_zip)?;
 
-    // ChromeDriver
     let driver_zip = resources_path.join(format!("chromedriver-{}.zip", connect_info.os));
     let driver_url = format!("{}/{}/{}/chromedriver-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
-
     downloader.download_to_file(&driver_url, &driver_zip).await?;
     downloader.extract_zip(&driver_zip, &resources_path)?;
-    set_executable(&resources_path.join(format!("chromedriver-{}", connect_info.os)))?;
+    set_executable(&get_chromedriver_path(connect_info))?; // Pass the full path to set_executable
     fs::remove_file(driver_zip)?;
 
     Ok(())
 }
 
-// Main function to check and update Chrome version
-pub async fn get_version(connect_info: &mut ConnectInfo) -> Result<String, anyhow::Error> {
-    // Store the current version to return later (for tracking changes)
-    let old_version = connect_info.version.clone();
-
-    // Create an HTTP client with reasonable timeout settings
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()?;
-    
-    // URL for Chrome's version information
+pub async fn fetch_latest_chrome_version() -> Result<String, anyhow::Error> {
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
     let url = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json";
-    
-    // Fetch and parse the version information
-    let response: LatestVersion = client
-        .get(url)
-        .send().await?  // Wait for the HTTP request to complete
-        .json().await?; // Wait for JSON parsing to complete
-
-    // Extract the stable version from the response
-    let new_version = response
+    let response: LatestVersion = client.get(url).send().await?.json().await?;
+    let stable_version = response
         .channels
         .get("Stable")
-        .ok_or_else(|| anyhow::anyhow!("Stable channel not found"))?
+        .ok_or_else(|| anyhow::anyhow!("Stable channel not found in JSON response"))?
         .version
         .clone();
-
-    // Update the ConnectInfo structure with the new version
-    connect_info.version = new_version.clone();
-
-    // Update the database with the new version
-    update_db_version(new_version).await?;
-
-    // Return the old version (useful for detecting changes)
-    Ok(old_version)
+    Ok(stable_version)
 }
 
-
-pub async fn chrome_update_check(connect_info: &mut ConnectInfo) -> Result<(), anyhow::Error> {
-    let old_version = get_version(connect_info).await?;
-    if old_version != connect_info.version || check_invalid_paths(connect_info) {
+pub async fn sync_chrome_resources(connect_info: &ConnectInfo, needs_update: bool) -> Result<(), anyhow::Error> {
+    if needs_update || check_for_invalid_paths(connect_info) {
         setup_chrome_and_driver(connect_info).await?;
+        println!("Chrome resources are now up-to-date.");
+    } else {
+        println!("Chrome resources are already up-to-date.");
     }
-
-    println!("Chrome resources are up-to-date.");
     Ok(())
 }
 
-pub fn check_invalid_paths(connect_info: &mut ConnectInfo) -> bool {
+pub fn check_for_invalid_paths(connect_info: &ConnectInfo) -> bool {
     let driver_path = get_chromedriver_path(connect_info);
     let binary_path = get_chromebinary_path(connect_info);
-
     !driver_path.exists() || !binary_path.exists()
 }
 
 pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, anyhow::Error> {
-    // Get path to chromedriver exe and set path to that binary
     quit_chromedriver()?;
-    
     let mut caps = DesiredCapabilities::chrome();
-    let path_buf = get_chromebinary_path(connect_info);
-    caps.set_binary(&path_buf.to_string_lossy()).context("Unable to set binary")?;
+    let binary_path = get_chromebinary_path(connect_info);
+    caps.set_binary(&binary_path.to_string_lossy()).context("Unable to set binary path")?;
 
-    // Start chromedriver
-    let _chromedriver = Command::new(get_chromedriver_path(connect_info))
+    let driver_path = get_chromedriver_path(connect_info);
+    Command::new(&driver_path)
         .args(["--port=9515", "--verbose", "--log-path=chromedriver.log"])
         .spawn()
-        .map_err(|e| anyhow::Error::new(e) as anyhow::Error).context("Unable to start CD")?;
-
-    // Keep checking to see if chromedriver has started running
-    for _ in 0..5 {
+        .with_context(|| format!("Failed to start chromedriver from path: {:?}", driver_path))?;
+    
+    for _ in 0..10 { // Increased retries slightly
         if TcpStream::connect("localhost:9515").is_ok() {
-            println!("ChromeDriver is running on port 9515");
-            break;
+            println!("ChromeDriver is running on port 9515.");
+            return WebDriver::new("http://localhost:9515", caps).await.map_err(Into::into);
         }
-        println!("Waiting for ChromeDriver to start...");
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    // Start running webdriver on port 9515 that connects to chromedriver
-    WebDriver::new("http://localhost:9515", caps).await
-        .map_err(|e| {
-            eprintln!("WebDriver error: {:?}", e);
-            anyhow::Error::new(e) as anyhow::Error
-        })
+    Err(anyhow::anyhow!("ChromeDriver did not start on port 9515 in time."))
 }
 
 #[cfg(unix)]
@@ -224,40 +166,33 @@ fn set_executable(path: &PathBuf) -> Result<(), anyhow::Error> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
+
 #[cfg(windows)]
 fn set_executable(_: &PathBuf) -> Result<(), anyhow::Error> {
-    Ok(()) // No-op for Windows
+    Ok(())
 }
 
 fn get_chromedriver_path(connect_info: &ConnectInfo) -> PathBuf {
-    // Get current directory and naviagte to chromedriver folder
     let mut path = std::env::current_dir().expect("Failed to get current directory");
-    path.push("resources");
-    path.push(format!("chromedriver-{}", connect_info.os));
+    path.push(RESOURCES_DIR);
+    let os_folder = format!("chromedriver-{}", connect_info.os);
+    path.push(os_folder);
     path.push("chromedriver");
 
-    // If windows then add exe extension
     if cfg!(target_os = "windows") {
         path.set_extension("exe");
     }
-
-    // Return filepath
     path
 }
 
 fn get_chromebinary_path(connect_info: &ConnectInfo) -> PathBuf {
-    // Get current directory and navigate to chrome binary folder
     let mut path_buf = std::env::current_dir().expect("Failed to get current directory")
-        .join("resources")
+        .join(RESOURCES_DIR)
         .join(format!("chrome-{}", connect_info.os));
 
-    // Depending on os additional file path steps may be needed to get to the binary exe
     match env::consts::OS {
         "macos" => {
-            path_buf.push("Google Chrome for Testing.app");
-            path_buf.push("Contents");
-            path_buf.push("MacOS");
-            path_buf.push("Google Chrome for Testing");
+            path_buf.push("Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
         },
         "windows" => {
             path_buf.push("chrome.exe");
@@ -267,8 +202,6 @@ fn get_chromebinary_path(connect_info: &ConnectInfo) -> PathBuf {
         },
         _ => panic!("Unsupported operating system"),
     }
-
-    // Return filepath
     path_buf
 }
 

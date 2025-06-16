@@ -19,84 +19,42 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use anyhow::{Result, anyhow};
-use std::time::Duration;
 use std::collections::HashMap;
 
+pub type DbPool = r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>;
 
-//TODO: Work on splashscreen when updating chrome
-//TODO: Add custom menu items
-
-
-// AppState to allow for this struct to be passed into functions via Tauri without needing
-// Global variable. Arc makes it read-only across threads, and mutex makes it writeable on
-// one thread at a time. Acts like a singleton
 struct AppState {
+    db_pool: DbPool,
     connect_info: Arc<Mutex<ConnectInfo>>,
     startup_complete: AtomicBool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub enum EventType {
-    Calendar,
-    Scheduler
-}
+pub enum EventType { Calendar, Scheduler }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct Class {
-    code: String,
-    name: String,
-    description: String,
-    classes: Vec<TimeBlock>,
-}
+struct Class { code: String, name: String, description: String, classes: Vec<TimeBlock>, }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct TimeBlock {
-    section: String,
-    location: String,
-    days: [((i32, i32), bool); 5], // Times here are already i32 (HHmm)
-    instructor: String,
-}
+struct TimeBlock { section: String, location: String, days: [((i32, i32), bool); 5], instructor: String, }
 
 #[derive(Serialize, Deserialize)]
-struct ScrapeClassesParameters {
-    params_checkbox: [bool; 3],
-    classes: Vec<ClassParam>,
-    events: Vec<EventParam>, // Used for conflict checking
-}
+struct ScrapeClassesParameters { params_checkbox: [bool; 3], classes: Vec<ClassParam>, events: Vec<EventParam>, }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct EventParam { // Represents an existing event for conflict checking
-    time: (i32, i32), // StartTime (HHmm), EndTime (HHmm)
-    days: [bool; 5],  // Mon, Tue, Wed, Thu, Fri
-}
+struct EventParam { time: (i32, i32), days: [bool; 5], }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct ClassParam {
-    id: String, // Used for database operations
-    code: String, // Look for this code
-    name: String, // Look for this name
-    section: String, // Look for this section
-    instructor: String, // Search for this instructor
-}
+struct ClassParam { id: String, code: String, name: String, section: String, instructor: String, }
 
-// To use the `{}` marker, the trait `fmt::Display` must be implemented
-// manually for the type.
 impl fmt::Display for Class {
-    // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write code number and name
-        write!(f, "{}, {}, <", self.code, self.name).unwrap();
-
-        // For each block in that section (for example if a lab is attached)
-        for (idx, item) in self.classes.clone().iter().enumerate() {
+        write!(f, "{}, {}, <", self.code, self.name)?;
+        for (idx, item) in self.classes.iter().enumerate() {
             write!(f, "{}{}, [", if idx == 0 { "" } else { " & " }, item.section)?;
-            // For each day in that block write the times
             for day in item.days {
-                if day.1 == true {
-                    // Assuming day.0.0 and day.0.1 are HHmm integers
-                    write!(f, "{:04} - {:04} ",day.0.0, day.0.1).unwrap();
-                }
-                else {write!(f, " NA ").unwrap()}
+                if day.1 { write!(f, "{:04}-{:04} ", day.0.0, day.0.1)?; }
+                else { write!(f, " NA ")?; }
             }
             write!(f, "], {}, {}", item.location, item.instructor)?;
         }
@@ -104,60 +62,32 @@ impl fmt::Display for Class {
     }
 }
 
-// ConnectInfo struct (only one should ever be instantiated)
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
-struct ConnectInfo {
-    // Naviagtes to specific chromedriver version depending on the os
-    os: String,
-    // Version of chromedriver installed
-    version: String,
-}
+struct ConnectInfo { os: String, version: String, }
 
 #[tauri::command]
-fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    // First, check if we've already completed startup to prevent duplicate runs
-    if state.startup_complete.load(Ordering::SeqCst) {
-        println!("Startup already completed, skipping...");
+async fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if state.startup_complete.compare_and_swap(false, true, Ordering::SeqCst) {
+        println!("Startup already completed, skipping.");
         return Ok(());
     }
-
-    // Create a blocking runtime specifically for this operation
-    // We use a blocking runtime instead of a standard runtime because we're in a sync context
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()  // Enable both I/O and time drivers
-        .build()
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
-
-    // Use the runtime to run our async operation synchronously
-    // block_on transforms our async operation into a synchronous one
-    let connection_struct = rt.block_on(async {
-        setup_program().await
-    }).map_err(|e| format!("Error: {}", e))?;
-
-    // Update the connection info in our state
-    rt.block_on(async {
-        let mut connect_info = state.connect_info.lock().await;
-        *connect_info = connection_struct;
-    });
-
-    // Mark startup as complete
-    state.startup_complete.store(true, Ordering::SeqCst);
-    Ok(())
+    println!("Starting up the application backend...");
+    setup_program(&state.db_pool, state.connect_info.clone()).await
+        .map_err(|e| format!("Error during program setup: {}", e))
 }
 
 #[tauri::command]
 fn close_splashscreen(window: Window) {
-    // Close splashscreen
     if let Some(splashscreen) = window.get_window("splashscreen") {
         splashscreen.close().unwrap();
     }
-    // Show main window
-    window.get_window("main").expect("no window labeled 'main' found").show().unwrap();
+    if let Some(main_window) = window.get_window("main") {
+        main_window.show().unwrap();
+    }
 }
 
 #[tauri::command]
 fn show_splashscreen(window: Window) {
-    std::thread::sleep(Duration::from_millis(500));
     if let Some(splashscreen) = window.get_window("splashscreen") {
         splashscreen.show().unwrap();
     }
@@ -165,224 +95,170 @@ fn show_splashscreen(window: Window) {
 
 #[tauri::command]
 async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    // If no classes passed in then nothing to scrape
     if parameters.classes.is_empty() {
         return Err("No classes set to scrape".to_string());
     }
 
-    // Clone the Arc<Mutex<ConnectInfo>> to use in async block
     let connect_info_mutex = Arc::clone(&state.connect_info);
+    let db_pool = state.db_pool.clone();
 
-    // Inner closure to capture all Results that could propagate due to '?'
-    let result: Result<Vec<Vec<Class>>, anyhow::Error> = async {
-
-        // Determine which classes to scrape vs. use cache
+    let result: Result<Vec<Vec<Class>>, anyhow::Error> = async move {
         let mut classes_to_scrape_params: Vec<ClassParam> = Vec::new();
-        let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new(); // Store original index and cached data
-        let mut scrape_indices: Vec<usize> = Vec::new(); // Store original indices of classes to scrape
+        let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new();
+        let mut scrape_indices: Vec<usize> = Vec::new();
 
         for (index, class_param) in parameters.classes.iter().enumerate() {
             let name = format!("{}{}", class_param.code, class_param.name);
-            // Consider adding error handling for get_class_by_name if it can fail critically
-            let database_classes = get_class_by_name(name.clone()).await.unwrap_or_else(|e| {
+            let database_classes = get_class_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
                  eprintln!("Warning: Failed to query cache for {}: {}", name, e);
-                 Vec::new() // Treat as not cached if DB query fails
+                 Vec::new()
             });
 
             if !database_classes.is_empty() {
-                // Found in cache
                 cached_results.insert(index, database_classes);
             } else {
-                // Not in cache, need to scrape
                 classes_to_scrape_params.push(class_param.clone());
                 scrape_indices.push(index);
             }
         }
-        println!("Need to scrape {} classes.", classes_to_scrape_params.len());
-        println!("Found {} classes in cache.", cached_results.len());
 
-        // Perform scraping only if needed
         let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
         if !classes_to_scrape_params.is_empty() {
-            println!("Starting scrape...");
-            let mut connect_info = {
-                let locked_connect_info = connect_info_mutex.lock().await;
-                (*locked_connect_info).clone()
-            };
-            chrome_update_check(&mut connect_info).await?;
+            let connect_info = connect_info_mutex.lock().await.clone();
+            // Note: The check for Chrome updates is now handled at startup.
+            // It is not re-checked here to avoid unnecessary delays.
             let driver = start_chromedriver(&connect_info).await?;
-
-            // Create temporary parameters for scraping
-            // Frontend will now send `events` in ScrapeClassesParameters with HHmm times and correct day array.
+            
             let scrape_params_for_call = ScrapeClassesParameters {
                  params_checkbox: parameters.params_checkbox, 
                  classes: classes_to_scrape_params, 
-                 events: parameters.events.clone(), // This now contains EventParam with i32 times
+                 events: parameters.events.clone(),
             };
 
-            // Perform the scrape
             let scraped_data = perform_schedule_scrape(&scrape_params_for_call, driver).await?;
-            println!("Scrape finished, got {} results.", scraped_data.len());
-
-            // Save scraped data (consider error handling)
-            if let Err(e) = save_class_sections(&scraped_data).await {
+            
+            if let Err(e) = save_class_sections(&scraped_data, &db_pool).await {
                  eprintln!("Warning: Failed to save scraped class sections: {}", e);
             }
 
-            // Map scraped results back to their original indices
             if scraped_data.len() == scrape_indices.len() {
                 for (i, data) in scraped_data.into_iter().enumerate() {
                     let original_index = scrape_indices[i];
                     scraped_results_map.insert(original_index, data);
                 }
             } else {
-                 eprintln!(
-                    "Error: Mismatch between scraped results count ({}) and requested scrape count ({}).",
-                    scraped_data.len(), scrape_indices.len()
-                 );
                  return Err(anyhow!("Mismatch between scraped results and requested classes"));
             }
         }
 
-        // Combine cached and scraped results in the original order
         let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); parameters.classes.len()];
         for (index, cached_data) in cached_results {
-             if index < combined_classes.len() {
-                 combined_classes[index] = cached_data;
-             } else {
-                  eprintln!("Warning: Cached index {} out of bounds (len {})", index, combined_classes.len());
-             }
+             if index < combined_classes.len() { combined_classes[index] = cached_data; }
         }
         for (index, scraped_data) in scraped_results_map {
-             if index < combined_classes.len() { // Bounds check
-                combined_classes[index] = scraped_data;
-             } else {
-                 eprintln!("Warning: Scraped index {} out of bounds for combined_classes (len {})", index, combined_classes.len());
-             }
+             if index < combined_classes.len() { combined_classes[index] = scraped_data; }
         }
         
-        // The `parameters` used here for filtering will contain the `events` field with EventParam
-        // which uses i32 for times. The `filter_classes` function must be compatible with this.
-        // Assuming `filter_classes` correctly uses `EventParam` and `TimeBlock` i32 times.
         let filtered_classes = filter_classes(combined_classes, &parameters)?;
-
-        // Generate combinations
-        if filtered_classes.is_empty() && !parameters.classes.is_empty() {
-            println!("No classes remained after filtering. Returning empty combinations.");
-            return Ok(Vec::new());
-        } else if filtered_classes.is_empty() {
-             println!("No classes to generate combinations from.");
-             return Ok(Vec::new());
-        }
+        if filtered_classes.iter().all(|group| group.is_empty()) { return Ok(Vec::new()); }
 
         let combinations_generated = generate_combinations(filtered_classes).await?;
         let mut ids = Vec::with_capacity(combinations_generated.len());
-
-        for combination in combinations_generated.iter() {
-            ids.push(serde_json::to_string(&combination).map_err(|e| anyhow!("Failed to stringify combination for ID: {}", e))?);
+        for combination in &combinations_generated {
+            ids.push(serde_json::to_string(combination)?);
         }
 
-        save_combinations_backend(ids, &combinations_generated).await?;
-
+        save_combinations_backend(ids, &combinations_generated, &db_pool).await?;
         Ok(combinations_generated)
     }
     .await;
 
-    result.map_err(|err| {
-        eprintln!("Error in generate_schedules async block: {:?}", err); 
-        err.to_string() 
-    })
+    result.map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-async fn delete_schedule(id: String, is_favorited: bool) -> Result<(), String> {
+async fn delete_schedule(id: String, is_favorited: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
     if is_favorited {
-        change_favorite_status(id.clone(), None).await
-            .map_err(|e| format!("Failed to remove from favorites when deleting schedule: {}", e))?;
+        change_favorite_status(id.clone(), None, &state.db_pool).await
+            .map_err(|e| format!("Failed to remove from favorites: {}", e))?;
     }
-    delete_combination_backend(id).await
+    delete_combination_backend(id, &state.db_pool).await
         .map_err(|e| format!("Failed to delete from combinations: {}", e))
 }
 
 #[tauri::command]
-async fn create_event(event: Event, table: String) -> Result<(), String> { 
-    // `event` received from frontend will have start_time and end_time as i32
-    save_event(table, event).await
+async fn create_event(event: Event, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> { 
+    save_event(table, event, &state.db_pool).await
         .map_err(|e| format!("Failed to save event: {}", e))
 }
 
 #[tauri::command]
-async fn get_events(table: String) -> Result<Vec<Event>, String> {
-    // `load_events` returns Vec<Event> where start_time and end_time are i32
-    load_events(table).await
+async fn get_events(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Event>, String> {
+    load_events(table, &state.db_pool).await
         .map_err(|e| format!("Failed to load events: {}", e))
 }
 
 #[tauri::command]
-async fn delete_event(event_id: String, table: String) -> Result<(), String> {
-    delete_events(table, event_id).await
+async fn delete_event(event_id: String, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    delete_events(table, event_id, &state.db_pool).await
         .map_err(|e| format!("Failed to delete event: {}", e))
 }
 
 #[tauri::command]
-async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>) -> Result<(), String> {
+async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let schedule_option = if is_favorited { None } else { Some(schedule) };
-
-    change_favorite_status(id, schedule_option).await
+    change_favorite_status(id, schedule_option, &state.db_pool).await
         .map_err(|e| format!("Failed to change favorite status: {}", e))
 }
 
 #[tauri::command]
-async fn get_classes() -> Result<Vec<ClassParam>, String> {
-    get_parameter_classes().await
+async fn get_classes(state: tauri::State<'_, AppState>) -> Result<Vec<ClassParam>, String> {
+    get_parameter_classes(&state.db_pool).await
         .map_err(|e| format!("Failed to get classes: {}", e))
 }
 
 #[tauri::command]
-async fn update_classes(class: ClassParam) -> Result<(), String> {
-    update_parameter_classes(class).await
+async fn update_classes(class: ClassParam, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    update_parameter_classes(class, &state.db_pool).await
         .map_err(|e| format!("Failed to update classes: {}", e))
 }
 
 #[tauri::command]
-async fn remove_class(id: String) -> Result<(), String> {
-    remove_parameter_class(id).await
+async fn remove_class(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    remove_parameter_class(id, &state.db_pool).await
         .map_err(|e| format!("Failed to remove class: {}", e))
 }
 
 #[tauri::command]
-async fn get_schedules(table: String) -> Result<Vec<Vec<Class>>, String> {
-    get_combinations(table).await
+async fn get_schedules(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
+    get_combinations(table, &state.db_pool).await
         .map_err(|e| format!("Failed to get favorite schedules: {}", e))
 }
 
 #[tauri::command]
-async fn get_display_schedule() -> Result<Option<i16>, String> {
-    database_functions::get_display_schedule().await.map_err(|e| e.to_string())
+async fn get_display_schedule(state: tauri::State<'_, AppState>) -> Result<Option<i16>, String> {
+    database_functions::get_display_schedule(&state.db_pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn set_display_schedule(id: Option<i16>) -> Result<(), String> {
-    database_functions::set_display_schedule(id).await.map_err(|e| e.to_string())
+async fn set_display_schedule(id: Option<i16>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    database_functions::set_display_schedule(id, &state.db_pool).await.map_err(|e| e.to_string())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    tauri::Builder::default()
-        .setup(|app| {
+    let manager = r2d2_sqlite::SqliteConnectionManager::file("programData.db");
+    let pool = r2d2::Pool::new(manager)?;
+    initialize_database(&pool)?;
 
+    tauri::Builder::default()
+        .setup(move |app| {
             app.manage(AppState {
+                db_pool: pool,
                 connect_info: Arc::new(Mutex::new(ConnectInfo::default())),
                 startup_complete: AtomicBool::new(false),
             });
-
-            // The Event type here is database_functions::Event which now uses i32 for times.
-            // This Mutex is not used by the provided code snippets for event management,
-            // but if it were, it would align with the new Event struct.
-            app.manage(Mutex::new(Vec::<database_functions::Event>::new()));
-
-
             let ascii = r#"
   ____    ___
  /\  _`\ /\_ \
@@ -391,29 +267,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
    \ \ \/   \_\ \_/\ \L\ \ \ \_/ |/\  __/\ \ \/
     \ \_\   /\____\ \____/\ \___/ \ \____\\ \_\
      \/_/   \/____/\/___/  \/__/   \/____/ \/_/ "#;
-
             println!("{ascii}");
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            generate_schedules,
-            close_splashscreen,
-            startup_app,
-            show_splashscreen,
-            create_event,
-            get_events,
-            delete_event,
-            change_favorite_schedule,
-            get_schedules,
-            delete_schedule,
-            get_classes,
-            update_classes,
-            remove_class,
-            get_display_schedule,
-            set_display_schedule,
+            generate_schedules, close_splashscreen, startup_app, show_splashscreen,
+            create_event, get_events, delete_event, change_favorite_schedule,
+            get_schedules, delete_schedule, get_classes, update_classes, remove_class,
+            get_display_schedule, set_display_schedule,
         ])
         .run(tauri::generate_context!())?;
-
     Ok(())
 }

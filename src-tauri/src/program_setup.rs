@@ -1,112 +1,58 @@
-use std::process::Command;
-use crate::{chrome_update_check, database_functions::setup_database, ConnectInfo};
-use rusqlite::Result;
+use crate::{
+    chrome_functions::{fetch_latest_chrome_version, sync_chrome_resources},
+    database_functions::{load_connect_info, update_db_version},
+    ConnectInfo, DbPool,
+};
+use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-// Function called to setup and install dependencies for the program
-pub async fn setup_program() -> Result<ConnectInfo, anyhow::Error> {
-    // First get OS info without saving to database
-    let os_info = os_setup_initial();
-    println!("OS setup complete!");
+// This function now orchestrates the entire setup process.
+pub async fn setup_program(
+    pool: &DbPool,
+    connect_info_arc: Arc<Mutex<ConnectInfo>>,
+) -> Result<(), anyhow::Error> {
+    // 1. Determine the current OS.
+    let os_string = determine_os_string();
 
-    // Then setup database with the OS info
-    let mut connect_info = setup_database(os_info).await?;
-    println!("Database setup!");
+    // 2. Load connection info from the database. If it doesn't exist, create it.
+    let mut stored_info = load_connect_info(pool, os_string)?;
 
-    // Setup Chromium and ChromeDriver
-    chrome_update_check(&mut connect_info).await?;
-    println!("Program setup!");
+    // 3. Fetch the latest version from the web.
+    let latest_version = fetch_latest_chrome_version().await?;
+    println!("Latest Chrome version available: {}", latest_version);
+    println!("Stored Chrome version: {}", stored_info.version);
 
-    Ok(connect_info)
-}
-
-// New function to get OS info without database interaction
-fn os_setup_initial() -> ConnectInfo {
-    let mut connect_info = setup_struct();
-
-    // Determine the OS and architecture
-    connect_info.os = if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            String::from("mac-arm64")
-        } else {
-            String::from("mac-x64")
-        }
-    } else if cfg!(target_os = "windows") {
-        String::from("win64")
-    } else if cfg!(target_os = "linux") {
-        String::from("linux64")
-    } else {
-        panic!("Unsupported operating system");
-    };
-
-    // Install dependencies
-    //check_and_install_dependencies();
-
-    connect_info
-}
-
-
-// Setup base struct
-fn setup_struct() -> ConnectInfo {
-    ConnectInfo {
-        os : String::from(""),
-        version : String::from(""),
-    }
-}
-
-// Ensure the system has dependencies installed
-fn check_and_install_dependencies() {
-    if Command::new("pnpm").arg("-v").status().is_err() {
-        install_pnpm();
+    // 4. Compare versions and decide if an update is needed.
+    let needs_update = stored_info.version != latest_version;
+    if needs_update {
+        println!("New Chrome version found. Updating database.");
+        update_db_version(latest_version.clone(), pool).await?;
+        stored_info.version = latest_version; // Update in-memory struct
     }
 
-    let output = Command::new("pnpm")
-        .current_dir("../src") // adjust this path as needed
-        .arg("install")
-        .arg("react-router-dom")
-        .output()
-        .expect("Failed to execute pnpm install");
-    if !output.status.success() {
-        panic!("pnpm install failed: {}", String::from_utf8_lossy(&output.stderr));
-    }
-}
-
-
-// Install pnpm if not installed
-fn install_pnpm() {
-    println!("Installing pnpm...");
+    // 5. Sync local chrome/chromedriver files if needed (due to version change or missing files).
+    sync_chrome_resources(&stored_info, needs_update).await?;
     
-    #[cfg(target_os = "macos")] {
-        Command::new("brew")
-            .args(["install", "pnpm"])
-            .status()
-            .expect("Failed to install pnpm on macOS");
+    // 6. Update the shared state in Tauri with the final, correct info.
+    {
+        let mut app_state_info = connect_info_arc.lock().await;
+        *app_state_info = stored_info;
     }
+    
+    println!("Program setup complete!");
+    Ok(())
+}
 
-    #[cfg(target_os = "linux")] {
-        Command::new("curl")
-            .args(["-fsSL", "https://get.pnpm.io/install.sh"])
-            .output()
-            .expect("Failed to download pnpm install script on Linux")
-            .status
-            .success();
-
-        Command::new("sh")
-            .arg("install.sh")
-            .status()
-            .expect("Failed to install pnpm on Linux");
-    }
-
-    #[cfg(target_os = "windows")] {
-        let output = Command::new("npm")
-            .args(["install", "-g", "pnpm"])
-            .output()
-            .expect("Failed to install pnpm on Windows");
-
-        if output.status.success() {
-            println!("pnpm installed successfully on Windows.");
-        } else {
-            let error = String::from_utf8_lossy(&output.stderr);
-            println!("Failed to install pnpm: {}", error);
-        }
+// Helper to get the OS-specific string.
+fn determine_os_string() -> String {
+    if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") { "mac-arm64".to_string() } else { "mac-x64".to_string() }
+    } else if cfg!(target_os = "windows") {
+        "win64".to_string()
+    } else if cfg!(target_os = "linux") {
+        "linux64".to_string()
+    } else {
+        "unsupported".to_string()
     }
 }
