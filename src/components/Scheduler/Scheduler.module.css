@@ -1,15 +1,164 @@
-/* <---- Scroll Selector ---->*/
-.scrollbar-wrapper {
-    background-color: white;
-    display: grid;
-    overflow-y: scroll;
-    color: black;
-    margin-left: 2rem;
-    height: 80%;
+/* --- General & Layout --- */
+.schedulerPage {
+    display: flex;
+    height: 100vh;
+    background-color: #f9fafb; /* Light gray background for the whole page */
+    color: #1f2937;
 }
 
-.item-slot {
-    border-bottom: 1px solid #e2e8f0;
+.mainContent {
+    flex-grow: 1;
+    display: grid;
+    /* Main content is calendar, control panel is on the side */
+    grid-template-columns: minmax(0, 1fr) 400px; /* Flexible calendar, fixed-width panel */
+    gap: 1.5rem;
+    padding: 1.5rem;
+    padding-left: calc(var(--sidebar-short-width) + 1.5rem);
+    height: 100vh;
+    box-sizing: border-box; /* Include padding in height calculation */
+}
+
+.calendarContainer {
+    background-color: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    height: calc(100vh - 3rem); /* Full height minus padding */
+    overflow: hidden; /* Ensures calendar grid respects the border radius */
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Control Panel --- */
+.controlPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    padding: 1.5rem;
+    height: calc(100vh - 3rem); /* Full height minus padding */
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.generationControls {
+    flex-shrink: 0; /* Don't shrink the controls */
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.paramToggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+/* --- Tabbed Interface for Lists --- */
+.listContainer {
+    flex: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow shrinking */
+}
+
+.listTabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.tabButton {
+    flex-grow: 1;
+    padding: 0.75rem 0.5rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6b7280;
+    transition: all 0.2s ease-in-out;
+}
+
+.tabButton:hover {
+    color: #374151;
+    background-color: #f9fafb;
+}
+
+.tabButton.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+
+.listContent {
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 0.5rem;
+}
+
+/* --- Schedule Actions --- */
+.scheduleActions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.scheduleFilterButton {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 2px solid transparent; /* Use border instead of outline */
+    background-color: #f3f4f6;
+    color: #374151;
+    transition: all 0.2s ease-in-out;
+    font-size: 0.875rem;
+    margin: 0; /* Remove any default margins */
+    box-sizing: border-box;
+}
+
+.scheduleFilterButton:hover {
+    background-color: #e5e7eb;
+}
+
+.scheduleFilterButton.active {
+    background-color: #e5e7eb;
+    color: #374151;
+    border-color: #3b82f6; /* Blue border when active */
+}
+
+/* --- Schedules List --- */
+.schedulesContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.scheduleItem {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.5rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f3f4f6; /* very light separator */
+}
+
+.scheduleItem:last-child {
+    border-bottom: none;
+}
+
+.scheduleItem:hover {
+    background-color: #f9fafb;
+}
+
+.scheduleItem.selected-schedule {
+    background-color: #eff6ff; /* Light blue */
+    border-color: #dbeafe;
 }
 
 .favorite-button {
@@ -17,157 +166,196 @@
     border: none;
     cursor: pointer;
     font-size: 1.5rem;
-    color: #ccc;
+    color: #d1d5db; /* Lighter gray */
     transition: color 0.2s ease;
-    outline: none;
     padding: 4px;
 }
 
-.favorite-button:hover {
-    color: #ffd700;
+.favorite-button:hover, .favorite-button.favorited {
+    color: #facc15; /* A brighter, more modern gold */
 }
 
-.favorite-button.favorited {
-    color: #ffd700;
+.listActions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
 }
 
-.delete-button {
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-.empty-message {
-    text-align: center;
-    padding: 1rem;
-    color: #6b7280;
-}
-
-/* <---- Classes Selector ----> */
-.container {
-    min-height: 100vh;
-    margin: 2rem;
-    overflow: scroll;
+/* --- Classes List & Cards --- */
+.classesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .classCard {
-    background-color: white;
+    background-color: #f9fafb; /* Slightly off-white to stand out */
+    border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
     padding: 1rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  }
-
-.classesWrapper {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    overflow: visible;
-}
-
-.addClassCard {
-    border: 2px dashed #9ca3af;
-    border-radius: 0.5rem;
-    padding-bottom: 1rem;
-    margin: 3rem;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(249, 250, 251, 0.7);
-    min-height: 8rem;
-    opacity: 0.7;
-    cursor: pointer;
-    transition: opacity 0.2s;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 .cardHeader {
-    display: inline-flex;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.inputField {
+    background-color: white;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    width: 100%;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.inputField:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.addClassCard {
+    border: 2px dashed #d1d5db;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 6rem;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
 .addClassCard:hover {
-    opacity: 0.9;
+    border-color: #3b82f6;
+    background-color: #eff6ff;
 }
 
 .addButtonCard {
     display: flex;
-    flex-direction: column;
     align-items: center;
+    gap: 0.5rem;
     color: #6b7280;
     background: none;
     border: none;
     cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
 }
 
-.addIconCircle {
-    background-color: #d1d5db;
-    border-radius: 9999px;
-    width: 3rem;
-    height: 3rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.5rem;
+.addClassCard:hover .addButtonCard {
+    color: #3b82f6;
 }
 
-/* <---- Scheduler ----> */
-.scheduler {
-    height: 100%;
-    width: 100%;
-    display: grid;
-    grid-template-columns: 4fr 2fr;
-}
-
-.scheduler-wrapper {
-    height: calc(100vh - 2rem);
-    padding: 1rem;
-    padding-left: calc(var(--sidebar-short-width) + 1rem);
-    display: grid;
-    transition: 0ms;
-    position: relative;
-    grid-template-columns: 5fr 2fr;
-    align-items: center;
-}
-
-.message-container {
-    padding-left: 6rem;
-}
-
-.message {
-    margin-bottom: 1rem;
-}
-
+/* --- Buttons & Controls --- */
 .button {
-    padding: 0.5rem 1rem;
-    border-radius: 0.25rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.375rem;
     font-weight: 500;
     cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    text-align: center;
 }
 
 .button-primary {
     background-color: #3b82f6;
     color: white;
+}
+
+.button-primary:hover {
+    background-color: #2563eb;
+}
+
+.button-primary:disabled {
+    background-color: #93c5fd;
+    cursor: not-allowed;
+}
+
+.toggleButton {
+    background-color: #f3f4f6;
+    color: #4b5563;
+    border: 2px solid transparent; /* Use 2px border for consistency */
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Updated toggle button styling for waitlist/open sections - inward border */
+.toggleButton.active {
+    background-color: #e5e7eb; /* Darker gray instead of blue fill */
+    color: #374151;
+    border-color: #3b82f6; /* Blue border when active, goes inward */
+}
+
+.toggleButton:hover {
+    background-color: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.iconButton {
+    background: none;
     border: none;
-}
-
-.button-active {
-    background-color: #1e40af;
-    color: white;
-}
-
-.scrape-container {
-    margin-top: 1rem;
-}
-
-.controls-container {
+    cursor: pointer;
+    color: #9ca3af;
+    padding: 0.25rem;
+    border-radius: 9999px;
     display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    align-items: center;
+    justify-content: center;
+}
+
+.iconButton:hover {
+    color: #374151;
+    background-color: #e5e7eb;
+}
+
+/* --- Action Buttons (for Show All/Favorites functionality) --- */
+.actionButton {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background-color: #ffffff;
+    color: #374151;
+    transition: all 0.2s ease-in-out;
+    font-size: 0.875rem;
+}
+
+.actionButton:hover {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.actionButton-primary {
+    background-color: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.actionButton-primary:hover {
+    background-color: #2563eb;
+}
+
+/* --- Status & Messages --- */
+.empty-message {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #6b7280;
 }
 
 .status-message {
-    padding: 0.5rem;
-    margin-bottom: 1rem;
-    border-radius: 0.25rem;
+    padding: 0.75rem;
+    margin-top: 1rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
 }
 
 .status-error {
@@ -176,29 +364,25 @@
 }
 
 .status-success {
-    background-color: #d1fae5;
-    color: #065f46;
+    background-color: #dcfce7;
+    color: #166534;
 }
 
 .loading-indicator {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 0.75rem;
+    color: #6b7280;
+    padding: 0.5rem;
 }
 
 .spinner {
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #3498db;
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #3b82f6;
     border-radius: 50%;
     width: 20px;
     height: 20px;
     animation: spin 1s linear infinite;
-}
-
-.item-slot.selected-schedule {
-  background-color: #4a5568; /* A dark gray, adjust to fit your theme */
-  border-color: #718096;
 }
 
 @keyframes spin {
