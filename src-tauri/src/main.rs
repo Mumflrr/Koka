@@ -67,7 +67,7 @@ struct ConnectInfo { os: String, version: String, }
 
 #[tauri::command]
 async fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    if state.startup_complete.compare_and_swap(false, true, Ordering::SeqCst) {
+    if state.startup_complete.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
         println!("Startup already completed, skipping.");
         return Ok(());
     }
