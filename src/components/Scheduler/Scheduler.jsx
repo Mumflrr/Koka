@@ -17,14 +17,6 @@ const stringifySchedule = (schedule) => {
     }
 };
 
-const formatTimeIntToString = (timeInt) => {
-    if (timeInt === null || timeInt === undefined || timeInt === -1) {
-        return '00:00'; 
-    }
-    const timeStr = String(timeInt).padStart(4, '0');
-    return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
-};
-
 const bitmaskToDayArray = (dayBitmask) => {
     const dayArray = [false, false, false, false, false]; // Mon, Tue, Wed, Thu, Fri
     for (let i = 0; i < 5; i++) { // i = 0 for Monday, 1 for Tuesday, ...
@@ -49,13 +41,19 @@ const Scheduler = () => {
     const [favoritedSchedules, setFavoritedSchedules] = useState([]); 
     const [activeTab, setActiveTab] = useState('schedules');
 
-    const schedulesStringArray = useMemo(() => {
-        return schedules.map(stringifySchedule).filter(s => s !== null);
-    }, [schedules]); 
+    const schedulesStringArray = useMemo(
+        () => {
+            return schedules.map(stringifySchedule).filter(s => s !== null);
+        },
+        [schedules]
+    ); 
 
-    const favoritedScheduleStrings = useMemo(() => {
-        return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
-    }, [favoritedSchedules]); 
+    const favoritedScheduleStrings = useMemo(
+        () => {
+            return new Set(favoritedSchedules.map(stringifySchedule).filter(s => s !== null));
+        },
+        [favoritedSchedules]
+    ); 
 
     const [scrapeState, setScrapeState] = useState({
         isScraping: false,
@@ -72,43 +70,87 @@ const Scheduler = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const { eventsByDay, noTimeEventsByDay } = useMemo(() => {
-        const scheduleToDisplay = currentHoveredSchedule ?? (selectedScheduleIndex !== null && schedules && schedules[selectedScheduleIndex] ? schedules[selectedScheduleIndex] : null);
-        let combinedRawEvents = userEvents.map(event => ({ ...event, startTime: event.startTime, endTime: event.endTime, isPreview: false, }));
-        if (scheduleToDisplay && Array.isArray(scheduleToDisplay)) {
-            const previewEvents = scheduleToDisplay.flatMap((courseData, courseIndex) => {
-                if (!courseData || !courseData.classes || !Array.isArray(courseData.classes)) { return []; }
-                return courseData.classes.map((classMeeting, meetingIndex) => {
-                    if (!classMeeting || !classMeeting.days || !Array.isArray(classMeeting.days)) { return null; }
-                    let dayBitmask = 0;
-                    let meetingStartTimeInt = null;
-                    let meetingEndTimeInt = null;
-                    let hasAnyActiveDay = false;
-                    classMeeting.days.forEach((dayInfo, dayUiIndex) => {
-                        if (!Array.isArray(dayInfo) || dayInfo.length < 2 || !Array.isArray(dayInfo[0]) || dayInfo[0].length < 2) { return; }
-                        const timePair = dayInfo[0];
-                        const isActive = dayInfo[1];
-                        if (isActive && timePair[0] !== -1) {
-                            dayBitmask |= (1 << (dayUiIndex + 1));
-                            if (meetingStartTimeInt === null) { meetingStartTimeInt = timePair[0]; meetingEndTimeInt = timePair[1]; }
-                            hasAnyActiveDay = true;
-                        }
-                    });
-                    const courseIdPart = courseData.id || `${courseData.code || 'course'}${courseData.name || courseIndex}`;
-                    const meetingIdPart = classMeeting.section || meetingIndex;
-                    const eventId = `preview-${courseIdPart}-${meetingIdPart}`;
-                    const title = `${courseData.code || ''} ${courseData.name || ''}`.trim() + (classMeeting.section ? ` - Sec ${classMeeting.section}` : '');
-                    if (!hasAnyActiveDay) {
-                        return [0, 1, 2, 3, 4].map(dayUiIndex => ({ id: `${eventId}-notime-${dayUiIndex}`, isPreview: true, title: title, professor: classMeeting.instructor || '', description: courseData.description || '', startTime: 0, endTime: 0, day: 1 << (dayUiIndex + 1), }));
+    const { eventsByDay, noTimeEventsByDay } = useMemo(
+        () => {
+            const scheduleToDisplay =
+                currentHoveredSchedule ??
+                (selectedScheduleIndex !== null && schedules && schedules[selectedScheduleIndex]
+                    ? schedules[selectedScheduleIndex]
+                    : null);
+
+            let combinedRawEvents = userEvents.map(event => ({
+                ...event,
+                startTime: event.startTime,
+                endTime: event.endTime,
+                isPreview: false,
+            }));
+
+            if (scheduleToDisplay && Array.isArray(scheduleToDisplay)) {
+                const previewEvents = scheduleToDisplay.flatMap((courseData, courseIndex) => {
+                    if (!courseData || !courseData.classes || !Array.isArray(courseData.classes)) {
+                        return [];
                     }
-                    if (dayBitmask === 0 || meetingStartTimeInt === null) { return null; }
-                    return { id: eventId, isPreview: true, title: title, professor: classMeeting.instructor || '', description: courseData.description || '', startTime: meetingStartTimeInt, endTime: meetingEndTimeInt, day: dayBitmask, };
-                }).flat().filter(event => event !== null);
-            });
-            combinedRawEvents = [...combinedRawEvents, ...previewEvents];
-        }
-        return processEvents(combinedRawEvents);
-    }, [userEvents, currentHoveredSchedule, selectedScheduleIndex, schedules]);
+                    return courseData.classes.map((classMeeting, meetingIndex) => {
+                        if (!classMeeting || !classMeeting.days || !Array.isArray(classMeeting.days)) {
+                            return null;
+                        }
+                        let dayBitmask = 0;
+                        let meetingStartTimeInt = null;
+                        let meetingEndTimeInt = null;
+                        let hasAnyActiveDay = false;
+                        classMeeting.days.forEach((dayInfo, dayUiIndex) => {
+                            if (!Array.isArray(dayInfo) || dayInfo.length < 2 || !Array.isArray(dayInfo[0]) || dayInfo[0].length < 2) {
+                                return;
+                            }
+                            const timePair = dayInfo[0];
+                            const isActive = dayInfo[1];
+                            if (isActive && timePair[0] !== -1) {
+                                dayBitmask |= (1 << (dayUiIndex + 1));
+                                if (meetingStartTimeInt === null) {
+                                    meetingStartTimeInt = timePair[0];
+                                    meetingEndTimeInt = timePair[1];
+                                }
+                                hasAnyActiveDay = true;
+                            }
+                        });
+                        const courseIdPart = courseData.id || `${courseData.code || 'course'}${courseData.name || courseIndex}`;
+                        const meetingIdPart = classMeeting.section || meetingIndex;
+                        const eventId = `preview-${courseIdPart}-${meetingIdPart}`;
+                        const title = `${courseData.code || ''} ${courseData.name || ''}`.trim() + (classMeeting.section ? ` - Sec ${classMeeting.section}` : '');
+                        
+                        if (!hasAnyActiveDay) {
+                            return [0, 1, 2, 3, 4].map(dayUiIndex => ({
+                                id: `${eventId}-notime-${dayUiIndex}`,
+                                isPreview: true,
+                                title: title,
+                                professor: classMeeting.instructor || '',
+                                description: courseData.description || '',
+                                startTime: 0,
+                                endTime: 0,
+                                day: 1 << (dayUiIndex + 1),
+                            }));
+                        }
+                        if (dayBitmask === 0 || meetingStartTimeInt === null) {
+                            return null;
+                        }
+                        return {
+                            id: eventId,
+                            isPreview: true,
+                            title: title,
+                            professor: classMeeting.instructor || '',
+                            description: courseData.description || '',
+                            startTime: meetingStartTimeInt,
+                            endTime: meetingEndTimeInt,
+                            day: dayBitmask,
+                        };
+                    }).flat().filter(event => event !== null);
+                });
+                combinedRawEvents = [...combinedRawEvents, ...previewEvents];
+            }
+            return processEvents(combinedRawEvents);
+        },
+        [userEvents, currentHoveredSchedule, selectedScheduleIndex, schedules]
+    );
 
     const loadPage = async () => {
         try {
@@ -120,7 +162,6 @@ const Scheduler = () => {
             setSelectedScheduleIndex(loadedSelected);
 
             const loadedClasses = await invoke('get_classes');
-            console.log(loadedClasses);
             setClasses(loadedClasses);
         } catch (err) {
             console.error('Error loading page data:', err);
@@ -159,7 +200,10 @@ const Scheduler = () => {
 
     const handleCreateEvent = async (newEventWithIntTimes) => {
         try {
-            const eventToSave = { ...newEventWithIntTimes, id: newEventWithIntTimes.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` };
+            const eventToSave = {
+                ...newEventWithIntTimes,
+                id: newEventWithIntTimes.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            };
             await invoke('create_event', { event: eventToSave, table: "scheduler" });
             setUserEvents(prevEvents => [...prevEvents, eventToSave]);
         } catch (err) {
@@ -195,17 +239,28 @@ const Scheduler = () => {
     const generateSchedules = async () => {
         setScrapeState({ isScraping: true, status: "Starting scrape..." });
         try {
-            const formattedUserEventsForScrape = userEvents.map(event => ({ time: [event.startTime, event.endTime], days: bitmaskToDayArray(event.day) }));
-            const result = await invoke("generate_schedules", { parameters: { params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false], classes: classes, events: formattedUserEventsForScrape } });
+            const formattedUserEventsForScrape = userEvents.map(event => ({
+                time: [event.startTime, event.endTime],
+                days: bitmaskToDayArray(event.day)
+            }));
+            const result = await invoke("generate_schedules", {
+                parameters: {
+                    params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false],
+                    classes: classes,
+                    events: formattedUserEventsForScrape
+                }
+            });
             if (typeof result === 'string') {
                 console.error("Scrape error:", result);
                 setScrapeState({ isScraping: false, status: `Error: ${result}` });
                 setSchedules([[]]);
                 setFavoritedSchedules([]);
             } else if (Array.isArray(result)) {
-                console.log("Scrape successful:", result);
                 const numSchedules = result.length;
-                setScrapeState({ isScraping: false, status: numSchedules > 0 ? `Scrape completed, found ${numSchedules} schedules.` : "Scrape completed. No matching schedules found." });
+                setScrapeState({
+                    isScraping: false,
+                    status: numSchedules > 0 ? `Scrape completed, found ${numSchedules} schedules.` : "Scrape completed. No matching schedules found."
+                });
                 setSchedules(numSchedules > 0 && result[0].length > 0 ? result : [[]]);
                 setFavoritedSchedules([]);
                 await updateSchedulePage();
@@ -228,7 +283,9 @@ const Scheduler = () => {
 
     const changeFavoriteStatus = async (scheduleData, scheduleString, isCurrentlyFavorite) => {
         try {
-            if (renderFavorites) setCurrentHoveredSchedule(null);
+            if (renderFavorites) {
+                setCurrentHoveredSchedule(null);
+            }
             await invoke("change_favorite_schedule", { id: scheduleString, isFavorited: isCurrentlyFavorite, schedule: scheduleData });
             await updateSchedulePage();
             setSeed(Math.random());
@@ -304,14 +361,21 @@ const Scheduler = () => {
     };
 
     const handleAddClass = () => {
-        const newClass = { id: Date.now().toString(), code: '', name: '', section: '', instructor: '' };
+        const newClass = {
+            id: Date.now().toString(),
+            code: '',
+            name: '',
+            section: '',
+            instructor: ''
+        };
         setClasses(prev => [...prev, newClass]);
     };
 
-    // ... The render functions remain the same as the previous step ...
     const renderScrollbar = () => {
         const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
-        const isEmpty = !schedulesToRender.length || (schedulesToRender.length === 1 && !schedulesToRender[0]?.length);
+        const isEmpty =
+            !schedulesToRender.length ||
+            (schedulesToRender.length === 1 && !schedulesToRender[0]?.length);
 
         return (
             <div className={ss.schedulesContainer} key={seed}>
@@ -340,7 +404,7 @@ const Scheduler = () => {
 
                         return (
                             <div
-                                key={currentScheduleString} 
+                                key={currentScheduleString || `schedule-item-${i}`}
                                 className={`${ss.scheduleItem} ${isSelected ? ss['selected-schedule'] : ''}`}
                                 onClick={() => scheduleMenuClick(schedule, displayIndex)} 
                                 onMouseEnter={() => scheduleMenuHover(schedule)} 
@@ -370,12 +434,79 @@ const Scheduler = () => {
 
     const ClassCard = ({ classData, onUpdate, onDelete }) => {
         const [displayedCourseCode, setDisplayedCourseCode] = useState(`${classData.code}${classData.name}`);
-        const [formData, setFormData] = useState({ id: classData.id, code: classData.code || '', name: classData.name || '', section: classData.section || '', instructor: classData.instructor || '', courseCodeValid: true, sectionCodeValid: true });
-        const [modified, setModified] = useState({ code: false, section: false, instructor: false, });
-        useEffect(() => { setFormData({ id: classData.id, code: classData.code || '', name: classData.name || '', section: classData.section || '', instructor: classData.instructor || '' }); setDisplayedCourseCode( (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '') ); }, [classData]);
-        const handleDelete = () => { onDelete(classData.id); };
-        const handleChange = (e) => { const { name, value } = e.target; if (name === 'code') { setDisplayedCourseCode(value); const cleanedValue = value.replace(/\s+/g, '').toUpperCase(); const courseCodeRegex = /^([A-Z]{1,3})(\d{3})$/; const match = cleanedValue.match(courseCodeRegex); if (match) { setFormData(prev => ({ ...prev, code: match ? match[1] : '', name: match ? match[2] : '', courseCodeValid: true })); } else { setFormData(prev => ({ ...prev, courseCodeValid: false })); } } else if (name === 'section') { const cleanedValue = value.replace(/\s+/g, ''); const sectionRegex = /^\d{3}([A-Z])?$/; const isValid = sectionRegex.test(cleanedValue) || value === '' || !value; setFormData(prev => ({ ...prev, [name]: value, sectionCodeValid: isValid })); } else { setFormData(prev => ({ ...prev, [name]: value })); } setModified(prev => ({ ...prev, [name]: true })); };
-        const handleBlur = async (e) => { const { name } = e.target; if (modified[name]) { if (!formData.courseCodeValid && name === 'code') { console.error("Valid course code required (e.g., CSC116)"); return; } if (!formData.sectionCodeValid && name === 'section') { console.error("Valid section required (3 digits with optional letter)"); return; } onUpdate(formData); setModified(prev => ({ ...prev, [name]: false })); } };
+        const [formData, setFormData] = useState({
+            id: classData.id,
+            code: classData.code || '',
+            name: classData.name || '',
+            section: classData.section || '',
+            instructor: classData.instructor || '',
+            courseCodeValid: true,
+            sectionCodeValid: true
+        });
+        const [modified, setModified] = useState({
+            code: false,
+            section: false,
+            instructor: false,
+        });
+
+        useEffect(
+            () => {
+                setFormData({
+                    id: classData.id,
+                    code: classData.code || '',
+                    name: classData.name || '',
+                    section: classData.section || '',
+                    instructor: classData.instructor || ''
+                });
+                setDisplayedCourseCode(
+                    (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
+                );
+            },
+            [classData]
+        );
+
+        const handleDelete = () => {
+            onDelete(classData.id);
+        };
+
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+            if (name === 'code') {
+                setDisplayedCourseCode(value);
+                const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
+                const courseCodeRegex = /^([A-Z]{1,3})(\d{3})$/;
+                const match = cleanedValue.match(courseCodeRegex);
+                if (match) {
+                    setFormData(prev => ({ ...prev, code: match ? match[1] : '', name: match ? match[2] : '', courseCodeValid: true }));
+                } else {
+                    setFormData(prev => ({ ...prev, courseCodeValid: false }));
+                }
+            } else if (name === 'section') {
+                const cleanedValue = value.replace(/\s+/g, '');
+                const sectionRegex = /^\d{3}([A-Z])?$/;
+                const isValid = sectionRegex.test(cleanedValue) || value === '' || !value;
+                setFormData(prev => ({ ...prev, [name]: value, sectionCodeValid: isValid }));
+            } else {
+                setFormData(prev => ({ ...prev, [name]: value }));
+            }
+            setModified(prev => ({ ...prev, [name]: true }));
+        };
+
+        const handleBlur = async (e) => {
+            const { name } = e.target;
+            if (modified[name]) {
+                if (!formData.courseCodeValid && name === 'code') {
+                    console.error("Valid course code required (e.g., CSC116)");
+                    return;
+                }
+                if (!formData.sectionCodeValid && name === 'section') {
+                    console.error("Valid section required (3 digits with optional letter)");
+                    return;
+                }
+                onUpdate(formData);
+                setModified(prev => ({ ...prev, [name]: false }));
+            }
+        };
 
         return (
           <div className={ss.classCard}>

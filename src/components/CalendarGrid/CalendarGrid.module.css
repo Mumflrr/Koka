@@ -183,7 +183,6 @@
     transform: scale(1.1);
 }
 
-.event-time,
 .event-professor {
     font-size: 0.75rem;
     opacity: 0.9;
@@ -267,30 +266,6 @@
     background-color: #f0f0f0;
     color: #333;
   }
-
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1;
-    backdrop-filter: blur(4px);
-}
-
-.modal-content {
-    background: white;
-    padding: 2rem;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 500px;
-    position: relative;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
 
 .modal-header {
     margin-bottom: 16px;
@@ -440,12 +415,7 @@
     min-width: 14px; /* Prevent checkbox from shrinking */
     margin: 0;
   }
-
-  .info-text {
-    color: black;
-  }
   
-
   .button-danger {
     background-color: #dc3545;
     color: white;
@@ -478,11 +448,6 @@
     border: 1px dashed #999;
     background-color: green;
   }
-
-  .event.lockedEvent {
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    background-color: green;
-  }
   
 .no-time-bar {
     position: absolute;
@@ -509,10 +474,6 @@
     white-space: nowrap;
 }
 
-.no-day-divider {
-    display: none;
-}
-
 @media (max-width: 768px) {
     .event {
         padding: 4px 6px;
@@ -522,8 +483,7 @@
         font-size: 0.75rem;
     }
 
-    .event-time,
-    .event-professor {
+    .event-professor { /* .event-time was removed from this rule */
         font-size: 0.7rem;
     }
 

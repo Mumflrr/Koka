@@ -1,9 +1,6 @@
 // src/components/CalendarGrid/processEvents.jsx
-// No date-fns 'parse' needed here if we work with HHmm integers directly for calculation
-// and format to string only for display.
 
 const startHour = 8; // Define startHour for calculations
-// const endHour = 20; // endHour is also used in calculations
 
 // Helper to convert HHmm integer to "HH:mm" string
 const formatTimeIntToString = (timeInt) => {
@@ -25,7 +22,9 @@ const getMinutesSinceStart = (timeInt) => {
 };
 
 const processEvents = (rawEvents) => {
-    if (!rawEvents || rawEvents.length === 0) return { eventsByDay: {}, noTimeEventsByDay: {} };
+    if (!rawEvents || rawEvents.length === 0) {
+        return { eventsByDay: {}, noTimeEventsByDay: {} };
+    }
 
     const eventsWithIds = rawEvents.map(event => {
         const startTimeInt = typeof event.startTime === 'number' ? event.startTime : 0;
@@ -33,14 +32,14 @@ const processEvents = (rawEvents) => {
         return {
             ...event,
             id: event.id || `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-            startTimeInt,
-            endTimeInt,
+            startTimeInt: startTimeInt,
+            endTimeInt: endTimeInt,
             startTime: formatTimeIntToString(startTimeInt),
             endTime: formatTimeIntToString(endTimeInt),
         };
     });
 
-    const totalMinutesInView = (20 - startHour) * 60;
+    const totalMinutesInView = (20 - startHour) * 60; // Assuming endHour is 20
     const eventsByDay = {};
     const noTimeEventsByDay = {};
 
@@ -55,12 +54,16 @@ const processEvents = (rawEvents) => {
                     event.startTimeInt === -1 ||
                     event.endTimeInt === -1
                 ) {
-                    if (!noTimeEventsByDay[dayKey]) noTimeEventsByDay[dayKey] = [];
+                    if (!noTimeEventsByDay[dayKey]) {
+                        noTimeEventsByDay[dayKey] = [];
+                    }
                     if (!noTimeEventsByDay[dayKey].find(e => e.id === event.id)) {
                         noTimeEventsByDay[dayKey].push({ ...event });
                     }
                 } else {
-                    if (!eventsByDay[dayKey]) eventsByDay[dayKey] = [];
+                    if (!eventsByDay[dayKey]) {
+                        eventsByDay[dayKey] = [];
+                    }
                     if (!eventsByDay[dayKey].find(e => e.id === event.id)) {
                         eventsByDay[dayKey].push({ ...event });
                     }
@@ -90,14 +93,18 @@ const processEvents = (rawEvents) => {
             if (overlapsWithGroup) {
                 currentGroup.push(event);
             } else {
-                if (currentGroup.length > 0) groups.push([...currentGroup]);
+                if (currentGroup.length > 0) {
+                    groups.push([...currentGroup]);
+                }
                 currentGroup = [event];
             }
         });
-        if (currentGroup.length > 0) groups.push(currentGroup);
+        if (currentGroup.length > 0) {
+            groups.push(currentGroup);
+        }
 
         groups.forEach(group => {
-            const groupWidth = 100;
+            const groupWidth = 100; // Percentage
             const eventWidth = groupWidth / group.length;
             group.forEach((eventInGroup, index) => {
                 eventInGroup.width = `${eventWidth}%`;

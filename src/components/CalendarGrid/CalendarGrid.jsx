@@ -10,15 +10,6 @@ const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F'];
 const dayIndexToBit = (index) => 1 << (index + 1);
 const isDaySelected = (dayBits, dayIndex) => (dayBits & (1 << (dayIndex + 1))) !== 0;
 
-// Helper function to format integer time (e.g., 1145) to "HH:mm" string
-const formatTimeIntToString = (timeInt) => {
-    if (timeInt === null || timeInt === undefined || timeInt === -1 || timeInt === 0) {
-        return 'N/A'; 
-    }
-    const timeStr = String(timeInt).padStart(4, '0');
-    return `${timeStr.substring(0, 2)}:${timeStr.substring(2, 4)}`;
-};
-
 // Helper function to convert "HH:mm" string to HHmm integer
 const hhmmStringToInt = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
@@ -42,7 +33,6 @@ const getDaysFromBitmask = (dayBitmask) => {
       .join(', ');
 };
 
-// ... DayCheckbox component remains the same ...
 const DayCheckbox = ({ day, index, checked, onChange }) => (
   <label 
     className={`${ss['day-checkbox']} ${checked ? ss.selected : ''}`}
@@ -58,7 +48,6 @@ const DayCheckbox = ({ day, index, checked, onChange }) => (
 );
   
 const Modal = ({ isOpen, onClose, children }) => {
-// ...
   return (
     <div 
       className={`${ss['slide-modal-container']} ${isOpen ? ss['modal-open'] : ''}`}
@@ -82,11 +71,13 @@ const Modal = ({ isOpen, onClose, children }) => {
 };
 
 const DetailsModal = ({ isOpen, onClose, event }) => {
-    if (!event) return null;
+    if (!event) {
+        return null;
+    }
 
     // FIX: The event properties are pre-formatted strings. Use them directly.
     // A time of "00:00" from a preview/processed event usually means N/A (e.g., async class).
-    const displayTime = event.startTime === '00:00' && event.endTime === '00:00' 
+    const displayTime = (event.startTime === '00:00' && event.endTime === '00:00')
         ? 'N/A' 
         : `${event.startTime} - ${event.endTime}`;
 
@@ -140,7 +131,6 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
   };
 
   const handleDelete = async () => {
-// ...
     const confirmed = await new Promise((resolve) => {
       const result = window.confirm('Are you sure you want to delete this event?');
       resolve(result);
@@ -164,7 +154,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
             type="text"
             className={ss['form-input']}
             value={event.title} // Expects string
-            onChange={(e) => setEvent({...event, title: e.target.value})}
+            onChange={(e) => setEvent({ ...event, title: e.target.value })}
           />
         </div>
         <div className={ss['form-row']}>
@@ -188,7 +178,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
               type="time"
               className={ss['form-input']}
               value={event.startTime} // Expects "HH:mm" string
-              onChange={(e) => setEvent({...event, startTime: e.target.value})}
+              onChange={(e) => setEvent({ ...event, startTime: e.target.value })}
               style={{ width: '50%' }}
               onClick={(e) => e.stopPropagation()}
             />
@@ -196,7 +186,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
               type="time"
               className={ss['form-input']}
               value={event.endTime} // Expects "HH:mm" string
-              onChange={(e) => setEvent({...event, endTime: e.target.value})}
+              onChange={(e) => setEvent({ ...event, endTime: e.target.value })}
               style={{ width: '50%' }}
               onClick={(e) => e.stopPropagation()}
             />
@@ -208,7 +198,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
             type="text"
             className={ss['form-input']}
             value={event.professor}
-            onChange={(e) => setEvent({...event, professor: e.target.value})}
+            onChange={(e) => setEvent({ ...event, professor: e.target.value })}
           />
         </div>
         <div className={ss['form-row']}>
@@ -216,7 +206,7 @@ const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = fa
           <textarea
             className={ss['form-textarea']}
             value={event.description}
-            onChange={(e) => setEvent({...event, description: e.target.value})}
+            onChange={(e) => setEvent({ ...event, description: e.target.value })}
             placeholder="Add event description..."
           />
         </div>
@@ -261,18 +251,26 @@ const Event = ({ event, eventStyle, onDelete, onEdit, onShowDetails }) => {
   const handleClick = (e) => {
     e.stopPropagation();
     if (event.isPreview) {
-        if(onShowDetails) onShowDetails(event);
+        if(onShowDetails) {
+            onShowDetails(event);
+        }
     } else { 
-        if(onEdit) onEdit(event); 
+        if(onEdit) {
+            onEdit(event); 
+        }
     }
   };
   
   const handleDelete = async (e) => {
     e.stopPropagation(); 
-    if (event.isPreview) return; // Button not rendered anyway, but good practice
+    if (event.isPreview) { // Button not rendered anyway, but good practice
+        return;
+    }
   
     const confirmed = await asyncConfirm('Are you sure you want to delete this event?'); 
-    if (!confirmed) return; 
+    if (!confirmed) {
+        return; 
+    }
   
     try {
       onDelete(event.id); 
@@ -314,7 +312,6 @@ const Event = ({ event, eventStyle, onDelete, onEdit, onShowDetails }) => {
     </div>
   );
 };
-
 
 const defaultEventState = { // For EventForm
   id: null, // Important for distinguishing new vs edit
@@ -388,7 +385,12 @@ const CalendarGrid = ({
   
     const handleSaveEvent = () => {
       // newEventData contains "HH:mm" strings for startTime and endTime from the form
-      if (newEventData.title && newEventData.startTime && newEventData.endTime && newEventData.day !== 0) {
+      if (
+          newEventData.title &&
+          newEventData.startTime &&
+          newEventData.endTime &&
+          newEventData.day !== 0
+      ) {
         const eventToSave = {
           ...newEventData,
           // Convert "HH:mm" strings to HHmm integers before passing to onEventCreate/Update
