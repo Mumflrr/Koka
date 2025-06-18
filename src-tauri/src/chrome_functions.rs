@@ -87,28 +87,6 @@ pub fn quit_chromedriver() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn setup_chrome_and_driver(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
-    println!("Updating Chrome resources...");
-    fs::remove_dir_all(RESOURCES_DIR).ok(); // Clean-up old resources
-    let resources_path = ensure_resources_dir()?;
-    let downloader = Downloader::new();
-
-    let chrome_zip = resources_path.join(format!("chrome-{}.zip", connect_info.os));
-    let chrome_url = format!("{}/{}/{}/chrome-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
-    downloader.download_to_file(&chrome_url, &chrome_zip).await?;
-    downloader.extract_zip(&chrome_zip, &resources_path)?;
-    fs::remove_file(chrome_zip)?;
-
-    let driver_zip = resources_path.join(format!("chromedriver-{}.zip", connect_info.os));
-    let driver_url = format!("{}/{}/{}/chromedriver-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
-    downloader.download_to_file(&driver_url, &driver_zip).await?;
-    downloader.extract_zip(&driver_zip, &resources_path)?;
-    set_executable(&get_chromedriver_path(connect_info))?; // Pass the full path to set_executable
-    fs::remove_file(driver_zip)?;
-
-    Ok(())
-}
-
 pub async fn fetch_latest_chrome_version() -> Result<String, anyhow::Error> {
     let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
     let url = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json";
@@ -169,6 +147,28 @@ fn set_executable(path: &PathBuf) -> Result<(), anyhow::Error> {
 
 #[cfg(windows)]
 fn set_executable(_: &PathBuf) -> Result<(), anyhow::Error> {
+    Ok(())
+}
+
+async fn setup_chrome_and_driver(connect_info: &ConnectInfo) -> Result<(), anyhow::Error> {
+    println!("Updating Chrome resources...");
+    fs::remove_dir_all(RESOURCES_DIR).ok(); // Clean-up old resources
+    let resources_path = ensure_resources_dir()?;
+    let downloader = Downloader::new();
+
+    let chrome_zip = resources_path.join(format!("chrome-{}.zip", connect_info.os));
+    let chrome_url = format!("{}/{}/{}/chrome-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
+    downloader.download_to_file(&chrome_url, &chrome_zip).await?;
+    downloader.extract_zip(&chrome_zip, &resources_path)?;
+    fs::remove_file(chrome_zip)?;
+
+    let driver_zip = resources_path.join(format!("chromedriver-{}.zip", connect_info.os));
+    let driver_url = format!("{}/{}/{}/chromedriver-{}.zip", CHROME_URL, connect_info.version, connect_info.os, connect_info.os);
+    downloader.download_to_file(&driver_url, &driver_zip).await?;
+    downloader.extract_zip(&driver_zip, &resources_path)?;
+    set_executable(&get_chromedriver_path(connect_info))?; // Pass the full path to set_executable
+    fs::remove_file(driver_zip)?;
+
     Ok(())
 }
 

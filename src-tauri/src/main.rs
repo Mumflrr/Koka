@@ -30,7 +30,7 @@ struct AppState {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub enum EventType { Calendar, Scheduler }
+pub enum EventType { Events, Schedules }
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Class { code: String, name: String, description: String, classes: Vec<TimeBlock>, }
@@ -109,7 +109,7 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 
         for (index, class_param) in parameters.classes.iter().enumerate() {
             let name = format!("{}{}", class_param.code, class_param.name);
-            let database_classes = get_class_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
+            let database_classes = ClassRepository::get_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
                  eprintln!("Warning: Failed to query cache for {}: {}", name, e);
                  Vec::new()
             });
@@ -137,7 +137,7 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 
             let scraped_data = perform_schedule_scrape(&scrape_params_for_call, driver).await?;
             
-            if let Err(e) = save_class_sections(&scraped_data, &db_pool).await {
+            if let Err(e) = ClassRepository::save_sections_batch(&scraped_data, &db_pool).await {
                  eprintln!("Warning: Failed to save scraped class sections: {}", e);
             }
 
@@ -168,7 +168,7 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
             ids.push(serde_json::to_string(combination)?);
         }
 
-        save_combinations_backend(ids, &combinations_generated, &db_pool).await?;
+        ScheduleRepository::save_batch(ids, &combinations_generated, &db_pool).await?;
         Ok(combinations_generated)
     }
     .await;
@@ -179,70 +179,70 @@ async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::S
 #[tauri::command]
 async fn delete_schedule(id: String, is_favorited: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
     if is_favorited {
-        change_favorite_status(id.clone(), None, &state.db_pool).await
+        FavoriteRepository::change_status(id.clone(), None, &state.db_pool).await
             .map_err(|e| format!("Failed to remove from favorites: {}", e))?;
     }
-    delete_combination_backend(id, &state.db_pool).await
-        .map_err(|e| format!("Failed to delete from combinations: {}", e))
+    ScheduleRepository::delete(id, &state.db_pool).await
+        .map_err(|e| format!("Failed to delete from schedules: {}", e))
 }
 
 #[tauri::command]
 async fn create_event(event: Event, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> { 
-    save_event(table, event, &state.db_pool).await
+    EventRepository::save(&table, event, &state.db_pool).await
         .map_err(|e| format!("Failed to save event: {}", e))
 }
 
 #[tauri::command]
 async fn get_events(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Event>, String> {
-    load_events(table, &state.db_pool).await
+    EventRepository::load_all(&table, &state.db_pool).await
         .map_err(|e| format!("Failed to load events: {}", e))
 }
 
 #[tauri::command]
 async fn delete_event(event_id: String, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    delete_events(table, event_id, &state.db_pool).await
+    EventRepository::delete(&table, event_id, &state.db_pool).await
         .map_err(|e| format!("Failed to delete event: {}", e))
 }
 
 #[tauri::command]
 async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let schedule_option = if is_favorited { None } else { Some(schedule) };
-    change_favorite_status(id, schedule_option, &state.db_pool).await
+    FavoriteRepository::change_status(id, schedule_option, &state.db_pool).await
         .map_err(|e| format!("Failed to change favorite status: {}", e))
 }
 
 #[tauri::command]
 async fn get_classes(state: tauri::State<'_, AppState>) -> Result<Vec<ClassParam>, String> {
-    get_parameter_classes(&state.db_pool).await
+    ClassParamRepository::get_all(&state.db_pool).await
         .map_err(|e| format!("Failed to get classes: {}", e))
 }
 
 #[tauri::command]
 async fn update_classes(class: ClassParam, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    update_parameter_classes(class, &state.db_pool).await
+    ClassParamRepository::update(class, &state.db_pool).await
         .map_err(|e| format!("Failed to update classes: {}", e))
 }
 
 #[tauri::command]
 async fn remove_class(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    remove_parameter_class(id, &state.db_pool).await
+    ClassParamRepository::remove(id, &state.db_pool).await
         .map_err(|e| format!("Failed to remove class: {}", e))
 }
 
 #[tauri::command]
 async fn get_schedules(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    get_combinations(table, &state.db_pool).await
-        .map_err(|e| format!("Failed to get favorite schedules: {}", e))
+    ScheduleRepository::get_all(&table, &state.db_pool).await
+        .map_err(|e| format!("Failed to get schedules: {}", e))
 }
 
 #[tauri::command]
 async fn get_display_schedule(state: tauri::State<'_, AppState>) -> Result<Option<i16>, String> {
-    database_functions::get_display_schedule(&state.db_pool).await.map_err(|e| e.to_string())
+    SystemRepository::get_display_schedule(&state.db_pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn set_display_schedule(id: Option<i16>, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    database_functions::set_display_schedule(id, &state.db_pool).await.map_err(|e| e.to_string())
+    SystemRepository::set_display_schedule(id, &state.db_pool).await.map_err(|e| e.to_string())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 use crate::{
     chrome_functions::{fetch_latest_chrome_version, sync_chrome_resources},
-    database_functions::{load_connect_info, update_db_version},
+    database_functions::{load_connect_info, SystemRepository},
     ConnectInfo, DbPool,
 };
 use anyhow::Result;
@@ -27,7 +27,7 @@ pub async fn setup_program(
     let needs_update = stored_info.version != latest_version;
     if needs_update {
         println!("New Chrome version found. Updating database.");
-        update_db_version(latest_version.clone(), pool).await?;
+        SystemRepository::update_version(latest_version.clone(), pool).await?;
         stored_info.version = latest_version; // Update in-memory struct
     }
 
