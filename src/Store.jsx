@@ -192,16 +192,19 @@ const useStore = create((set, get) => ({
         if (!eventId) {
             console.error('Error: eventId is null or undefined');
             set({ schedulerError: 'Failed to delete event: Invalid event ID.' });
-            return;
+            throw new Error('Invalid event ID');
         }
 
-        const originalUserEvents = get().userEvents;
-        set(state => ({ userEvents: state.userEvents.filter(e => e.id !== eventId) }));
         try {
+            // Call backend to delete event
             await invoke('delete_event', { eventId, table: "events" });
+            
+            // Update UI after successful backend deletion
+            set(state => ({ userEvents: state.userEvents.filter(e => e.id !== eventId) }));
         } catch (err) {
             console.error('Error deleting event:', err);
-            set({ schedulerError: 'Failed to delete event. Please try again.', userEvents: originalUserEvents });
+            set({ schedulerError: 'Failed to delete event. Please try again.' });
+            throw err; // Re-throw so CalendarGrid knows deletion failed
         }
     },
 

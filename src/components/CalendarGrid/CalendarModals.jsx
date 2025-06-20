@@ -81,9 +81,10 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
   };
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this event?') && onDelete) {
-      onDelete(event.id); // Assuming event.id is present for deletion
-      onCancel(); // Close form after deletion
+    if (onDelete) {
+      onDelete(event.id); // This calls Store's deleteUserEvent which shows confirmation
+      // DO NOT call onCancel() here - let the Store handle modal closure after successful deletion
+      // The modal should stay open until the user confirms or cancels the deletion
     }
   };
 
@@ -157,14 +158,24 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
           />
         </div>
       </div>
-      <div className={isEditing ? styles['button-container-stacked'] : styles['button-container']}>
-        {isEditing && (
-          <button className={`${styles.button} ${styles['button-danger']} ${styles['full-width']}`} onClick={handleDelete}>
-            Delete Event
-          </button>
-        )}
-        <div className={styles['action-buttons']}>
-          <button className={`${styles.button} ${styles['button-outline']}`} onClick={onCancel}>Cancel</button>
+      <div className={styles['button-container']} style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '8px'
+      }}>
+        <button className={`${styles.button} ${styles['button-outline']}`} onClick={onCancel}>Cancel</button>
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px',
+          flexShrink: 0
+        }}>
+          {isEditing && (
+            <button className={`${styles.button} ${styles['button-danger']}`} onClick={handleDelete}>
+              Delete
+            </button>
+          )}
           <button 
             className={`${styles.button} ${styles['button-primary']}`}
             onClick={onSave}
