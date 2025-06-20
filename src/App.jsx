@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/tauri";
+import { systemAPI } from './api';
 import Home from './components/Home/Home';
 import Courses from './components/Courses/Courses';
 import Dining from './components/Dining/Dining';
@@ -15,21 +15,25 @@ function App() {
         const initializeApp = async () => {
             try {
                 // 1. Show the splash screen first.
-                await invoke("show_splashscreen");
+                await systemAPI.showSplashscreen();
                 console.log("Splash screen shown");
 
                 // 2. Wait for the entire backend setup to complete.
-                await invoke("startup_app");
+                await systemAPI.startupApp();
                 console.log("App startup logic completed successfully.");
 
                 // 3. Only after the backend is ready, close the splash screen.
-                await invoke("close_splashscreen");
+                await systemAPI.closeSplashscreen();
                 console.log("Splash screen closed");
             } catch (error) {
                 console.error("Error during app initialization:", error);
                 // In case of an error, still try to close the splashscreen
                 // to prevent the user from being stuck.
-                await invoke("close_splashscreen").catch(console.error);
+                try {
+                    await systemAPI.closeSplashscreen();
+                } catch (closeError) {
+                    console.error("Failed to close splashscreen:", closeError);
+                }
             }
         };
 

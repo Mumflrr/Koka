@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { invoke } from "@tauri-apps/api/tauri";
+import { systemAPI, eventsAPI, schedulesAPI, favoritesAPI, classParametersAPI } from './api'
 
 // Helper functions (moved from Scheduler.jsx or similar)
 // TODO: Prevent duplicate class params from being typed in
@@ -59,10 +59,10 @@ const useStore = create((set, get) => ({
     // Scheduler actions
     _updateSchedulerData: async (calledFromGenerate = false) => {
         try {
-            const loadedEvents = await invoke('get_events', { table: "events" });
-            const loadedSchedules = await invoke('get_schedules', { table: "schedules" });
-            const loadedFavorites = await invoke('get_schedules', { table: "favorites" });
-            
+            const loadedEvents = await eventsAPI.getAll();
+            const loadedSchedules = await schedulesAPI.getAll();
+            const loadedFavorites = await favoritesAPI.getAll();
+
             set(state => ({
                 userEvents: loadedEvents || [],
                 schedules: (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) ? loadedSchedules : [[]],
@@ -80,8 +80,8 @@ const useStore = create((set, get) => ({
         try {
             await get()._updateSchedulerData();
 
-            const loadedSelectedSchedule = await invoke('get_display_schedule');
-            const loadedClasses = await invoke('get_classes');
+            const loadedSelectedSchedule = await systemAPI.getDisplaySchedule();
+            const loadedClasses = await classParametersAPI.getAll();
 
             set({
                 selectedScheduleIndex: loadedSelectedSchedule,
@@ -141,7 +141,7 @@ const useStore = create((set, get) => ({
 
         try {
             // create_event returns void, not the created event
-            await invoke('create_event', { event: eventToSave, table: "events" });
+            await eventsAPI.create(eventToSave);
             
             // Since create_event returns void, we need to refresh the data to get the updated list
             await get()._updateSchedulerData();
@@ -177,7 +177,7 @@ const useStore = create((set, get) => ({
         }));
         
         try {
-            await invoke('update_event', { event: updatedEventData, table: "events" });
+            await eventsAPI.update(updatedEventData);
         } catch (err) {
             console.error('Error updating event:', err);
             set({ schedulerError: 'Failed to update event. Please try again.', userEvents: originalUserEvents });
@@ -197,7 +197,7 @@ const useStore = create((set, get) => ({
 
         try {
             // Call backend to delete event
-            await invoke('delete_event', { eventId, table: "events" });
+            await eventsAPI.delete(eventId);
             
             // Update UI after successful backend deletion
             set(state => ({ userEvents: state.userEvents.filter(e => e.id !== eventId) }));
@@ -216,13 +216,13 @@ const useStore = create((set, get) => ({
                 time: [event.startTime, event.endTime],
                 days: bitmaskToDayArray(event.day)
             }));
-            const result = await invoke("generate_schedules", {
+            const result = await schedulesAPI.generate( {
                 parameters: {
                     params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false],
                     classes: classes,
                     events: formattedUserEventsForScrape
                 }
-            });
+            })
 
             if (typeof result === 'string') {
                 console.error("Scrape error:", result);
@@ -241,7 +241,7 @@ const useStore = create((set, get) => ({
                     // favoritedSchedules: state.favoritedSchedules, // Keep existing favorites explicitly if backend doesn't clear them
                     selectedScheduleIndex: null,
                 }));
-                await invoke('set_display_schedule', { id: null });
+                await systemAPI.setDisplaySchedule(null);
                 await get()._updateSchedulerData(true); // Refresh all lists, indicate it's from generate
             } else {
                 console.error("Scrape returned unexpected data:", result);
@@ -264,15 +264,15 @@ const useStore = create((set, get) => ({
             currentHoveredSchedule: state.renderFavorites ? null : state.currentHoveredSchedule 
         }));
         try {
-            await invoke("change_favorite_schedule", { id: scheduleString, isFavorited: isCurrentlyFavorite, schedule: scheduleData });
-            const loadedFavorites = await invoke('get_schedules', { table: "favorites" });
+            await favoritesAPI.changeFavorite({ id: scheduleString, isFavorited: isCurrentlyFavorite, schedule: scheduleData });
+            const loadedFavorites = await favoritesAPI.getAll();
             set({
                 favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [],
             });
         } catch (error) {
             console.error("Failed to update favorite status:", error);
             set({ schedulerError: `Failed to update favorite status.` });
-            const loadedFavorites = await invoke('get_schedules', { table: "favorites" });
+            const loadedFavorites = await favoritesAPI.getAll();
              set({ favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [] });
         }
     },
@@ -280,7 +280,7 @@ const useStore = create((set, get) => ({
     deleteSchedule: async (scheduleIdString, isCurrentlyFavorite) => {
         set({ currentHoveredSchedule: null, schedulerError: null });
         try {
-            await invoke("delete_schedule", { id: scheduleIdString, isFavorited: isCurrentlyFavorite });
+            await schedulesAPI.delete(scheduleIdString, isCurrentlyFavorite);
             await get()._updateSchedulerData();
             
             const { schedules, selectedScheduleIndex } = get();
@@ -302,7 +302,7 @@ const useStore = create((set, get) => ({
              if (newSelectedScheduleIndex !== selectedScheduleIndex) {
                  set({ selectedScheduleIndex: newSelectedScheduleIndex });
                  if (newSelectedScheduleIndex === null) {
-                     await invoke('set_display_schedule', { id: null });
+                    await systemAPI.setDisplaySchedule(null);
                  }
              }
 
@@ -319,7 +319,7 @@ const useStore = create((set, get) => ({
         const currentSelected = get().selectedScheduleIndex;
         const newSelectedScheduleIndex = currentSelected === scheduleIndex ? null : scheduleIndex;
         try {
-            await invoke('set_display_schedule', { id: newSelectedScheduleIndex });
+            await systemAPI.setDisplaySchedule(newSelectedScheduleIndex);
             set({ selectedScheduleIndex: newSelectedScheduleIndex, currentHoveredSchedule: null });
         } catch (error) {
             console.error("Failed to set display schedule:", error);
@@ -365,7 +365,7 @@ const useStore = create((set, get) => ({
         
         try {
             // The Rust backend returns void on success, not the updated class
-            await invoke('update_class', { class: classData });
+            await classParametersAPI.updateClass(classData);
 
         } catch (err) {
             console.error("Error updating class:", err);
@@ -384,7 +384,7 @@ const useStore = create((set, get) => ({
         const originalClasses = get().classes;
         set(state => ({ classes: state.classes.filter(item => item.id !== classId) }));
         try {
-            await invoke('remove_class', { id: classId });
+            await classParametersAPI.remove(classId);
         } catch (err) {
             console.error("Error deleting class:", err);
             set({ schedulerError: 'Failed to delete class.', classes: originalClasses });

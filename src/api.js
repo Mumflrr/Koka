@@ -56,7 +56,7 @@ export const eventsAPI = {
   delete(eventId) {
     return invokeWrapper('delete_event', { eventId, table: 'events' });
   }, 
-  
+
   update(eventData) {
     return invokeWrapper('update_event', { event: eventData, table: 'events' });
   }
@@ -86,13 +86,6 @@ export const favoritesAPI = {
 
   changeFavorite(scheduleIdString, isFavorited, scheduleData) {
     return invokeWrapper('change_favorite_schedule', { id: scheduleIdString, isFavorited, schedule: scheduleData });
-  }
-};
-
-// --- Classes Table API ---
-export const classesAPI = {
-  getAll() {
-    return invokeWrapper('get_classes');
   }
 };
 

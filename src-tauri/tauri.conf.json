@@ -38,7 +38,7 @@
             "title": "Plover",
             "width": 1000,
             "height": 669,
-            "minWidth": 950,
+            "minWidth": 860,
             "minHeight": 575,
             "label": "main",
             "url": "index.html",
