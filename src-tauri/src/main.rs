@@ -218,7 +218,7 @@ async fn get_classes(state: tauri::State<'_, AppState>) -> Result<Vec<ClassParam
 }
 
 #[tauri::command]
-async fn update_classes(class: ClassParam, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn update_class(class: ClassParam, state: tauri::State<'_, AppState>) -> Result<(), String> {
     ClassParamRepository::update(class, &state.db_pool).await
         .map_err(|e| format!("Failed to update classes: {}", e))
 }
@@ -273,7 +273,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             generate_schedules, close_splashscreen, startup_app, show_splashscreen,
             create_event, get_events, delete_event, change_favorite_schedule,
-            get_schedules, delete_schedule, get_classes, update_classes, remove_class,
+            get_schedules, delete_schedule, get_classes, update_class, remove_class,
             get_display_schedule, set_display_schedule,
         ])
         .run(tauri::generate_context!())?;

@@ -54,8 +54,8 @@ const useStore = create((set, get) => ({
     // Scheduler actions
     _updateSchedulerData: async (calledFromGenerate = false) => {
         try {
-            const loadedEvents = await invoke('get_events', { table: "scheduler" });
-            const loadedSchedules = await invoke('get_schedules', { table: "combinations" });
+            const loadedEvents = await invoke('get_events', { table: "events" });
+            const loadedSchedules = await invoke('get_schedules', { table: "schedules" });
             const loadedFavorites = await invoke('get_schedules', { table: "favorites" });
             
             set(state => ({
@@ -99,7 +99,7 @@ const useStore = create((set, get) => ({
     createUserEvent: async (newEventData) => {
         set({ schedulerError: null });
         try {
-            const createdEvent = await invoke('create_event', { event: newEventData, table: "scheduler" });
+            const createdEvent = await invoke('create_event', { event: newEventData, table: "events" });
             set(state => ({ userEvents: [...state.userEvents, createdEvent] }));
         } catch (err) {
             console.error('Error saving event:', err);
@@ -114,7 +114,7 @@ const useStore = create((set, get) => ({
             userEvents: state.userEvents.map(e => e.id === updatedEventData.id ? updatedEventData : e)
         }));
         try {
-            await invoke('update_event', { event: updatedEventData, table: "scheduler" });
+            await invoke('update_event', { event: updatedEventData, table: "events" });
         } catch (err) {
             console.error('Error updating event:', err);
             set({ schedulerError: 'Failed to update event. Please try again.', userEvents: originalUserEvents });
@@ -125,7 +125,7 @@ const useStore = create((set, get) => ({
         const originalUserEvents = get().userEvents;
         set(state => ({ userEvents: state.userEvents.filter(e => e.id !== eventId) }));
         try {
-            await invoke('delete_event', { eventId, table: "scheduler" });
+            await invoke('delete_event', { eventId, table: "events" });
         } catch (err) {
             console.error('Error deleting event:', err);
             set({ schedulerError: 'Failed to delete event. Please try again.', userEvents: originalUserEvents });
@@ -266,7 +266,7 @@ const useStore = create((set, get) => ({
 
     addClass: () => {
         const newClass = {
-            id: `temp-${Date.now().toString()}-${Math.random().toString(36).substring(2,9)}`,
+            id: `${Date.now().toString()}-${Math.random().toString(36).substring(2,9)}`,
             code: '', name: '', section: '', instructor: '',
         };
         set(state => ({ classes: [...state.classes, newClass] }));
@@ -274,18 +274,16 @@ const useStore = create((set, get) => ({
     updateClass: async (classData) => {
         set({ schedulerError: null });
         const originalClasses = [...get().classes];
+        
+        // Optimistically update the UI
         set(state => ({
             classes: state.classes.map(item => item.id === classData.id ? { ...classData } : item)
         }));
+        
         try {
-            const persistedClass = await invoke('update_classes', { class: classData });
-            set(state => ({
-                classes: state.classes.map(item => 
-                    (item.id === classData.id || (classData.id.startsWith('temp-') && item.code === persistedClass.code && item.name === persistedClass.name && item.section === persistedClass.section)) 
-                    ? { ...persistedClass } 
-                    : item
-                )
-            }));
+            // The Rust backend returns void on success, not the updated class
+            await invoke('update_class', { class: classData });
+
         } catch (err) {
             console.error("Error updating class:", err);
             set({ schedulerError: 'Failed to update class.', classes: originalClasses });

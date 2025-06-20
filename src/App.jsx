@@ -1,12 +1,11 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/tauri";
-import Home from './components/Home';
+import Home from './components/Home/Home';
 import Courses from './components/Courses/Courses';
-import Calendar from './components/Calendar';
-import Dining from './components/Dining';
-import Gallery from './components/Organisms';
-import Settings from './components/Settings';
+import Dining from './components/Dining/Dining';
+import Gallery from './components/Gallery/Gallery';
+import Settings from './components/Settings/Settings';
 import Scheduler from './components/Scheduler/Scheduler';
 import './App.css';
 
@@ -41,7 +40,6 @@ function App() {
         <BrowserRouter>
             <Routes>
                 <Route path='/' element={<Home />} />
-                <Route path='/calendar' element={<Calendar />}/>
                 <Route path='/courses' element={<Courses />}/>
                 <Route path='/dining' element={<Dining />}/>
                 <Route path='/gallery' element={<Gallery />}/>

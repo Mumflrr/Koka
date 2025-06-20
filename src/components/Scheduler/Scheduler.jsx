@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 // shallow import is not strictly needed if we select granularly or if actions are stable
 // import { shallow } from 'zustand/shallow'; 
-import useStore, { stringifySchedule } from '../Store.jsx';
+import useStore, { stringifySchedule } from '../../Store.jsx';
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
 import Sidebar from "../Sidebar/Sidebar";

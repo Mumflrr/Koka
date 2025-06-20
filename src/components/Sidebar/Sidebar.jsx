@@ -1,7 +1,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Calendar, Utensils, Presentation, SearchIcon, Squirrel} from "lucide-react";
-import useStore from '../Store.jsx';
+import useStore from '../../Store.jsx';
 import ss from "./Sidebar.module.css";
 
 const SidebarItem = ({ icon: Icon, label, to }) => {
