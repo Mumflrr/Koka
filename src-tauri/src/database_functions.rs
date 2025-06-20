@@ -48,6 +48,19 @@ impl EventRepository {
         }).await?
     }
 
+    pub async fn update(table: &str, event: Event, pool: &DbPool) -> Result<(), anyhow::Error> {
+        validate_table_name(table)?;
+        let table = table.to_string();
+        let pool = pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+            let mut conn = pool.get()?;
+            let tx = conn.transaction()?;
+            Self::update_event_in_transaction(&tx, &table, &event)?;
+            tx.commit()?;
+            Ok(())
+        }).await?
+    }
+
     pub async fn load_all(table: &str, pool: &DbPool) -> Result<Vec<Event>, anyhow::Error> {
         validate_table_name(table)?;
         let table = table.to_string();
@@ -93,6 +106,23 @@ impl EventRepository {
             event.id, event.title, event.start_time, event.end_time, 
             event.day, event.professor, event.description
         ])?;
+        Ok(())
+    }
+
+    fn update_event_in_transaction(tx: &Transaction, table: &str, event: &Event) -> Result<(), anyhow::Error> {
+        let update_statement = format!(
+            "UPDATE {} SET title = ?2, start_time = ?3, end_time = ?4, day = ?5, professor = ?6, description = ?7 WHERE id = ?1", 
+            table
+        );
+        let rows_affected = tx.execute(&update_statement, params![
+            event.id, event.title, event.start_time, event.end_time, 
+            event.day, event.professor, event.description
+        ])?;
+        
+        if rows_affected == 0 {
+            return Err(anyhow!("Event with id '{}' not found", event.id));
+        }
+        
         Ok(())
     }
 }

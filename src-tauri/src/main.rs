@@ -205,6 +205,12 @@ async fn delete_event(event_id: String, table: String, state: tauri::State<'_, A
 }
 
 #[tauri::command]
+async fn update_event(event: Event, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    EventRepository::update(&table, event, &state.db_pool).await
+        .map_err(|e| format!("Failed to update event: {}", e))
+}
+
+#[tauri::command]
 async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<Class>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let schedule_option = if is_favorited { None } else { Some(schedule) };
     FavoriteRepository::change_status(id, schedule_option, &state.db_pool).await
@@ -272,7 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             generate_schedules, close_splashscreen, startup_app, show_splashscreen,
-            create_event, get_events, delete_event, change_favorite_schedule,
+            create_event, get_events, delete_event, update_event, change_favorite_schedule,
             get_schedules, delete_schedule, get_classes, update_class, remove_class,
             get_display_schedule, set_display_schedule,
         ])

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { invoke } from "@tauri-apps/api/tauri";
 
 // Helper functions (moved from Scheduler.jsx or similar)
+// TODO: Prevent duplicate class params from being typed in
 const stringifySchedule = (schedule) => {
     try {
         return JSON.stringify(schedule);
@@ -21,6 +22,10 @@ const bitmaskToDayArray = (dayBitmask) => {
     return dayArray;
 };
 
+// Generate a unique ID for events
+const generateEventId = () => {
+    return `event-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+};
 
 const useStore = create((set, get) => ({
     // Initial state from Sidebar
@@ -98,30 +103,98 @@ const useStore = create((set, get) => ({
 
     createUserEvent: async (newEventData) => {
         set({ schedulerError: null });
+        
+        // Validate that newEventData is not null/undefined
+        if (!newEventData) {
+            console.error('Error: newEventData is null or undefined');
+            set({ schedulerError: 'Failed to save event: Invalid event data.' });
+            return;
+        }
+
+        // Generate ID if not provided
+        if (!newEventData.id) {
+            newEventData.id = generateEventId();
+        }
+
+        // Validate required Event fields based on Rust struct (excluding id since we generate it)
+        const requiredFields = ['title', 'startTime', 'endTime', 'day'];
+        const missingFields = requiredFields.filter(field => 
+            newEventData[field] === undefined || newEventData[field] === null
+        );
+        
+        if (missingFields.length > 0) {
+            console.error('Error: Missing required fields:', missingFields);
+            set({ schedulerError: `Failed to save event: Missing required fields: ${missingFields.join(', ')}` });
+            return;
+        }
+
+        // Ensure all required fields have proper defaults
+        const eventToSave = {
+            id: newEventData.id,
+            title: newEventData.title,
+            startTime: newEventData.startTime,
+            endTime: newEventData.endTime,
+            day: newEventData.day,
+            professor: newEventData.professor || '',
+            description: newEventData.description || '',
+        };
+
         try {
-            const createdEvent = await invoke('create_event', { event: newEventData, table: "events" });
-            set(state => ({ userEvents: [...state.userEvents, createdEvent] }));
+            // create_event returns void, not the created event
+            await invoke('create_event', { event: eventToSave, table: "events" });
+            
+            // Since create_event returns void, we need to refresh the data to get the updated list
+            await get()._updateSchedulerData();
         } catch (err) {
             console.error('Error saving event:', err);
             set({ schedulerError: 'Failed to save event. Please try again.' });
             await get()._updateSchedulerData(); // Re-fetch to ensure consistency on error
         }
     },
+
     updateUserEvent: async (updatedEventData) => {
         set({ schedulerError: null });
+        
+        // Validate that updatedEventData is not null/undefined
+        if (!updatedEventData) {
+            console.error('Error: updatedEventData is null or undefined');
+            set({ schedulerError: 'Failed to update event: Invalid event data.' });
+            return;
+        }
+
+        // Validate that the event has an ID (required for updates)
+        if (!updatedEventData.id) {
+            console.error('Error: updatedEventData missing id field');
+            set({ schedulerError: 'Failed to update event: Event ID is required for updates.' });
+            return;
+        }
+
         const originalUserEvents = get().userEvents;
+        
+        // Optimistically update the UI
         set(state => ({
             userEvents: state.userEvents.map(e => e.id === updatedEventData.id ? updatedEventData : e)
         }));
+        
         try {
             await invoke('update_event', { event: updatedEventData, table: "events" });
         } catch (err) {
             console.error('Error updating event:', err);
             set({ schedulerError: 'Failed to update event. Please try again.', userEvents: originalUserEvents });
+            // Refresh data to ensure consistency on error
+            await get()._updateSchedulerData();
         }
     },
+
     deleteUserEvent: async (eventId) => {
         set({ schedulerError: null });
+        
+        if (!eventId) {
+            console.error('Error: eventId is null or undefined');
+            set({ schedulerError: 'Failed to delete event: Invalid event ID.' });
+            return;
+        }
+
         const originalUserEvents = get().userEvents;
         set(state => ({ userEvents: state.userEvents.filter(e => e.id !== eventId) }));
         try {
@@ -273,6 +346,13 @@ const useStore = create((set, get) => ({
     },
     updateClass: async (classData) => {
         set({ schedulerError: null });
+        
+        if (!classData) {
+            console.error('Error: classData is null or undefined');
+            set({ schedulerError: 'Failed to update class: Invalid class data.' });
+            return;
+        }
+
         const originalClasses = [...get().classes];
         
         // Optimistically update the UI
@@ -291,6 +371,13 @@ const useStore = create((set, get) => ({
     },
     deleteClass: async (classId) => {
         set({ schedulerError: null });
+        
+        if (!classId) {
+            console.error('Error: classId is null or undefined');
+            set({ schedulerError: 'Failed to delete class: Invalid class ID.' });
+            return;
+        }
+
         const originalClasses = get().classes;
         set(state => ({ classes: state.classes.filter(item => item.id !== classId) }));
         try {
