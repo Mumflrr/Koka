@@ -2,16 +2,14 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod program_setup;
 mod tauri_backend;
-mod chrome_functions;
 mod database_functions;
+mod services;
 
 use database_functions::*;
-use program_setup::*;
 use tauri::{Manager, Window};
 use tauri_backend::{scrape_classes::{perform_schedule_scrape, filter_classes}, class_combinations::generate_combinations};
-use chrome_functions::*;
+use services::*;
 
 use serde::{Serialize, Deserialize};
 use std::{env, fmt};

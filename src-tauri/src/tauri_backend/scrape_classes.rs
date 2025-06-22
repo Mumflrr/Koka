@@ -5,6 +5,8 @@ use tokio::time::{sleep, Instant};
 
 use crate::{Class, EventParam, ScrapeClassesParameters, TimeBlock};
 
+//TODO scrape teachers 
+
 // Performs the scraping
 pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack

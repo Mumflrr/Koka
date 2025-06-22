@@ -1,8 +1,6 @@
 // src/components/Scheduler/Scheduler.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { Trash2, Plus } from 'lucide-react';
-// shallow import is not strictly needed if we select granularly or if actions are stable
-// import { shallow } from 'zustand/shallow'; 
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { Trash2, Plus, X } from 'lucide-react';
 import useStore, { stringifySchedule } from '../../Store.jsx';
 import processEvents from '../CalendarGrid/processEvents';
 import CalendarGrid from '../CalendarGrid/CalendarGrid';
@@ -10,7 +8,7 @@ import Sidebar from "../Sidebar/Sidebar";
 import ss from './Scheduler.module.css';
 
 const Scheduler = () => {
-    // Select individual state pieces
+    // Use individual selectors to avoid creating new objects on every render
     const userEvents = useStore(state => state.userEvents);
     const schedules = useStore(state => state.schedules);
     const favoritedSchedules = useStore(state => state.favoritedSchedules);
@@ -24,32 +22,32 @@ const Scheduler = () => {
     const classes = useStore(state => state.classes);
     const activeTab = useStore(state => state.activeTab);
     const renderFavorites = useStore(state => state.renderFavorites);
-    // schedulerSeed removed
 
-    // Select individual actions (references are stable)
+    // Actions
     const loadSchedulerPage = useStore(state => state.loadSchedulerPage);
     const createUserEvent = useStore(state => state.createUserEvent);
     const updateUserEvent = useStore(state => state.updateUserEvent);
     const deleteUserEvent = useStore(state => state.deleteUserEvent);
-    const storeGenerateSchedules = useStore(state => state.generateSchedules);
+    const generateSchedules = useStore(state => state.generateSchedules);
+    const clearScrapeStatus = useStore(state => state.clearScrapeStatus);
     const toggleFavoriteSchedule = useStore(state => state.toggleFavoriteSchedule);
-    const storeDeleteSchedule = useStore(state => state.deleteSchedule);
+    const deleteSchedule = useStore(state => state.deleteSchedule);
     const setSelectedSchedule = useStore(state => state.setSelectedSchedule);
     const setHoveredSchedule = useStore(state => state.setHoveredSchedule);
     const clearHoveredSchedule = useStore(state => state.clearHoveredSchedule);
     const showEventDetailsModal = useStore(state => state.showEventDetailsModal);
     const closeEventDetailsModal = useStore(state => state.closeEventDetailsModal);
     const toggleRenderFavorites = useStore(state => state.toggleRenderFavorites);
-    const storeSetActiveTab = useStore(state => state.setActiveTab);
-    const storeToggleParamCheckbox = useStore(state => state.toggleParamCheckbox);
-    const storeAddClass = useStore(state => state.addClass);
-    const storeUpdateClass = useStore(state => state.updateClass);
-    const storeDeleteClass = useStore(state => state.deleteClass);
+    const setActiveTab = useStore(state => state.setActiveTab);
+    const toggleParamCheckbox = useStore(state => state.toggleParamCheckbox);
+    const addClass = useStore(state => state.addClass);
+    const updateClass = useStore(state => state.updateClass);
+    const deleteClass = useStore(state => state.deleteClass);
+    const getScheduleDisplayNumber = useStore(state => state.getScheduleDisplayNumber);
 
     useEffect(() => {
         loadSchedulerPage();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // loadSchedulerPage reference is stable
+    }, [loadSchedulerPage]);
 
     const { eventsByDay, noTimeEventsByDay } = useMemo(
         () => {
@@ -132,76 +130,18 @@ const Scheduler = () => {
         [userEvents, currentHoveredSchedule, selectedScheduleIndex, schedules]
     );
     
-    const schedulesStringArray = useMemo(() => schedules.map(s => stringifySchedule(s)).filter(s => s !== null), [schedules]);
-    const favoritedScheduleStrings = useMemo(() => new Set(favoritedSchedules.map(s => stringifySchedule(s)).filter(s => s !== null)), [favoritedSchedules]);
+    const schedulesStringArray = useMemo(() => 
+        schedules.map(s => stringifySchedule(s)).filter(s => s !== null), 
+        [schedules]
+    );
+    
+    const favoritedScheduleStrings = useMemo(() => 
+        new Set(favoritedSchedules.map(s => stringifySchedule(s)).filter(s => s !== null)), 
+        [favoritedSchedules]
+    );
 
-
-    const renderScrollbar = () => {
-        const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
-        const isEmpty =
-            !schedulesToRender || !schedulesToRender.length ||
-            (schedulesToRender.length === 1 && (!schedulesToRender[0] || !schedulesToRender[0].length));
-
-        return (
-            // Removed key={schedulerSeed}
-            <div className={ss.schedulesContainer}> 
-                <div className={ss.listActions}>
-                    <button
-                        className={`${ss.toggleButton} ${ss.button} ${renderFavorites ? ss.active : ''}`}
-                        onClick={toggleRenderFavorites}>
-                        {renderFavorites ? "★ Favorites" : "Show Favorites"}
-                    </button>
-                </div>
-
-                {isEmpty ? (
-                    <div className={ss['empty-message']}>
-                        {renderFavorites ? "You have no favorited schedules." : 
-                         (scrapeState.isScraping ? "Generating..." : 
-                          (scrapeState.status && scrapeState.status.includes("No matching") ? scrapeState.status : "No schedules have been generated yet." )
-                         )
-                        }
-                    </div>
-                ) : (
-                    schedulesToRender.map((schedule, i) => {
-                        const currentScheduleString = stringifySchedule(schedule);
-                        if (!currentScheduleString) return null;
-
-                        const isFavorite = favoritedScheduleStrings.has(currentScheduleString);
-                        const displayIndex = schedulesStringArray.indexOf(currentScheduleString);
-                        const displayNum = displayIndex !== -1 ? displayIndex + 1 : "?";
-                        const isSelected = displayIndex !== -1 && displayIndex === selectedScheduleIndex;
-
-                        return (
-                            <div
-                                key={currentScheduleString || `schedule-item-${i}`} // Key without seed
-                                className={`${ss.scheduleItem} ${isSelected ? ss['selected-schedule'] : ''}`}
-                                onClick={() => setSelectedSchedule(displayIndex)}
-                                onMouseEnter={() => setHoveredSchedule(schedule)} 
-                                onMouseLeave={clearHoveredSchedule} 
-                            >
-                                <button
-                                    className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
-                                    onClick={(e) => { e.stopPropagation(); toggleFavoriteSchedule(schedule, currentScheduleString, isFavorite); }}
-                                    aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNum}`}
-                                >
-                                    {isFavorite ? '★' : '☆'}
-                                </button>
-                                <span>Schedule {displayNum}</span>
-                                <button
-                                    className={ss.iconButton}
-                                    onClick={(e) => { e.stopPropagation(); storeDeleteSchedule(currentScheduleString, isFavorite); }}
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        );
-                    })
-                )}
-            </div>
-        );
-    };
-
-    const ClassCard = ({ classData, onUpdate, onDelete }) => {
+    // Memoize the ClassCard component to prevent unnecessary re-renders
+    const ClassCard = React.memo(({ classData, onUpdate, onDelete }) => {
         const [displayedCourseCode, setDisplayedCourseCode] = useState(`${classData.code || ''}${classData.name || ''}`);
         const [formData, setFormData] = useState({
             id: classData.id,
@@ -231,11 +171,11 @@ const Scheduler = () => {
             setModifiedFields({});
         }, [classData]);
 
-        const handleDelete = () => {
+        const handleDelete = useCallback(() => {
             onDelete(classData.id);
-        };
+        }, [onDelete, classData.id]);
 
-        const handleChange = (e) => {
+        const handleChange = useCallback((e) => {
             const { name, value } = e.target;
             setModifiedFields(prev => ({ ...prev, [name]: true }));
 
@@ -255,20 +195,19 @@ const Scheduler = () => {
                 const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
                 const sectionRegex = /^\d{1,3}[A-Z]{0,2}$/;
                 const isValid = sectionRegex.test(cleanedValue) || value === '';
-                setFormData(prev => ({ ...prev, [name]: value })); // Store user input as is
+                setFormData(prev => ({ ...prev, [name]: value }));
                 setValidation(prev => ({...prev, sectionCodeValid: isValid}));
             } else {
                 setFormData(prev => ({ ...prev, [name]: value }));
             }
-        };
+        }, []);
 
-        const handleBlur = async (e) => {
+        const handleBlur = useCallback(async (e) => {
             const { name } = e.target;
             if (modifiedFields[name]) {
                 if (!validation.courseCodeValid && name === 'code') return;
                 if (!validation.sectionCodeValid && name === 'section') return;
                 
-                // For 'code', ensure the parsed code and name are sent if valid
                 const dataToSend = {...formData};
                 if (name === 'code' && validation.courseCodeValid) {
                      const cleanedValue = displayedCourseCode.replace(/\s+/g, '').toUpperCase();
@@ -282,7 +221,7 @@ const Scheduler = () => {
                 onUpdate(dataToSend);
                 setModifiedFields(prev => ({ ...prev, [name]: false }));
             }
-        };
+        }, [modifiedFields, validation, formData, displayedCourseCode, onUpdate]);
 
         return (
           <div className={`${ss.classCard} ${!validation.courseCodeValid || !validation.sectionCodeValid ? ss.invalidCard : ''}`}>
@@ -310,27 +249,95 @@ const Scheduler = () => {
             />
           </div>
         );
-    };
+    });
 
-    const AddClassCard = ({ onClick }) => (
+    const AddClassCard = React.memo(({ onClick }) => (
       <div className={ss.addClassCard} onClick={onClick}>
         <button className={ss.addButtonCard}>
           <Plus size={20} />
           <span>Add Course</span>
         </button>
       </div>
-    );
+    ));
+
+    const renderScrollbar = useCallback(() => {
+        const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
+        const isEmpty =
+            !schedulesToRender || !schedulesToRender.length ||
+            (schedulesToRender.length === 1 && (!schedulesToRender[0] || !schedulesToRender[0].length));
+
+        return (
+            <div className={ss.schedulesContainer}> 
+                <div className={ss.listActions}>
+                    <button
+                        className={`${ss.toggleButton} ${ss.button} ${renderFavorites ? ss.active : ''}`}
+                        onClick={toggleRenderFavorites}>
+                        {renderFavorites ? "★ Favorites" : "Show Favorites"}
+                    </button>
+                </div>
+
+                {isEmpty ? (
+                    <div className={ss['empty-message']}>
+                        {renderFavorites ? "You have no favorited schedules." : 
+                         (scrapeState.isScraping ? "Generating..." : 
+                          (scrapeState.status && scrapeState.status.includes("No matching") ? scrapeState.status : "No schedules have been generated yet." )
+                         )
+                        }
+                    </div>
+                ) : (
+                    schedulesToRender.map((schedule, i) => {
+                        const currentScheduleString = stringifySchedule(schedule);
+                        if (!currentScheduleString) return null;
+
+                        const isFavorite = favoritedScheduleStrings.has(currentScheduleString);
+                        const displayIndex = schedulesStringArray.indexOf(currentScheduleString);
+                        // Use stable display number instead of array index
+                        const displayNum = getScheduleDisplayNumber(currentScheduleString);
+                        const isSelected = displayIndex !== -1 && displayIndex === selectedScheduleIndex;
+
+                        return (
+                            <div
+                                key={currentScheduleString || `schedule-item-${i}`}
+                                className={`${ss.scheduleItem} ${isSelected ? ss['selected-schedule'] : ''}`}
+                                onClick={() => setSelectedSchedule(displayIndex)}
+                                onMouseEnter={() => setHoveredSchedule(schedule)} 
+                                onMouseLeave={clearHoveredSchedule} 
+                            >
+                                <button
+                                    className={`${ss['favorite-button']} ${isFavorite ? ss['favorited'] : ''}`}
+                                    onClick={(e) => { e.stopPropagation(); toggleFavoriteSchedule(schedule, currentScheduleString, isFavorite); }}
+                                    aria-label={`${isFavorite ? 'Unfavorite' : 'Favorite'} Schedule ${displayNum}`}
+                                >
+                                    {isFavorite ? '★' : '☆'}
+                                </button>
+                                <span>Schedule {displayNum}</span>
+                                <button
+                                    className={ss.iconButton}
+                                    onClick={(e) => { e.stopPropagation(); deleteSchedule(currentScheduleString, isFavorite); }}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+        );
+    }, [renderFavorites, favoritedSchedules, schedules, scrapeState, favoritedScheduleStrings, schedulesStringArray, selectedScheduleIndex, toggleRenderFavorites, setSelectedSchedule, setHoveredSchedule, clearHoveredSchedule, toggleFavoriteSchedule, deleteSchedule, getScheduleDisplayNumber]);
     
-    const renderClassesList = () => (
+    const renderClassesList = useCallback(() => (
         <div className={ss.classesContainer}>
             {classes.map((classItem) => (
                 <ClassCard
-                    key={classItem.id} classData={classItem}
-                    onUpdate={storeUpdateClass} onDelete={storeDeleteClass} />
+                    key={classItem.id} 
+                    classData={classItem}
+                    onUpdate={updateClass} 
+                    onDelete={deleteClass} 
+                />
             ))}
-            <AddClassCard onClick={storeAddClass} />
+            <AddClassCard onClick={addClass} />
         </div>
-    );
+    ), [classes, updateClass, deleteClass, addClass]);
 
     if (schedulerLoading) {
         return (
@@ -346,7 +353,7 @@ const Scheduler = () => {
         );
     }
     
-    if (schedulerError && !scrapeState.status) { // Only show general error if no specific scrape status
+    if (schedulerError && !scrapeState.status) {
         return (
             <div className={ss.schedulerPage}>
                 <Sidebar />
@@ -382,16 +389,16 @@ const Scheduler = () => {
                     <div className={ss.generationControls}>
                         <button
                             className={`${ss.button} ${ss['button-primary']}`}
-                            onClick={storeGenerateSchedules}
+                            onClick={generateSchedules}
                             disabled={isScraping || classes.length === 0}
                         >
                             {isScraping ? "Generating..." : "Generate Schedules"}
                         </button>
                         <div className={ss.paramToggles}>
-                            <button className={`${ss.button} ${ss.toggleButton} ${paramCheckboxes.box1 ? ss.active : ''}`} onClick={() => storeToggleParamCheckbox('box1')}>
+                            <button className={`${ss.button} ${ss.toggleButton} ${paramCheckboxes.box1 ? ss.active : ''}`} onClick={() => toggleParamCheckbox('box1')}>
                                 Open Sections Only
                             </button>
-                            <button className={`${ss.button} ${ss.toggleButton} ${paramCheckboxes.box2 ? ss.active : ''}`} onClick={() => storeToggleParamCheckbox('box2')}>
+                            <button className={`${ss.button} ${ss.toggleButton} ${paramCheckboxes.box2 ? ss.active : ''}`} onClick={() => toggleParamCheckbox('box2')}>
                                 Waitlist OK
                             </button>
                         </div>
@@ -405,21 +412,35 @@ const Scheduler = () => {
                             <div className={`${ss['status-message']} ${
                                 scrapeStatus.includes("Error") || scrapeStatus.includes("failed") || scrapeStatus.includes("No matching") ? ss['status-error'] : ss['status-success']
                             }`}>
-                                {scrapeStatus}
+                                <span>{scrapeStatus}</span>
+                                <button 
+                                    className={ss.closeButton} 
+                                    onClick={clearScrapeStatus}
+                                    aria-label="Close status message"
+                                >
+                                    <X size={16} />
+                                </button>
                             </div>
                         )}
-                         {schedulerError && scrapeStatus && ( // Show general error alongside scrape status if both exist
+                         {schedulerError && scrapeStatus && (
                             <div className={`${ss['status-message']} ${ss['status-error']}`} style={{marginTop: '0.5rem'}}>
-                                Additional Info: {schedulerError}
+                                <span>Additional Info: {schedulerError}</span>
+                                <button 
+                                    className={ss.closeButton} 
+                                    onClick={clearScrapeStatus}
+                                    aria-label="Close error message"
+                                >
+                                    <X size={16} />
+                                </button>
                             </div>
                         )}
                     </div>
                     <div className={ss.listContainer}>
                         <div className={ss.listTabs}>
-                            <button className={`${ss.tabButton} ${activeTab === 'schedules' ? ss.active : ''}`} onClick={() => storeSetActiveTab('schedules')}>
+                            <button className={`${ss.tabButton} ${activeTab === 'schedules' ? ss.active : ''}`} onClick={() => setActiveTab('schedules')}>
                                 Schedules
                             </button>
-                            <button className={`${ss.tabButton} ${activeTab === 'classes' ? ss.active : ''}`} onClick={() => storeSetActiveTab('classes')}>
+                            <button className={`${ss.tabButton} ${activeTab === 'classes' ? ss.active : ''}`} onClick={() => setActiveTab('classes')}>
                                 Courses
                             </button>
                         </div>

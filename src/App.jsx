@@ -11,6 +11,7 @@ import './App.css';
 
 function App() {
 
+    // FIXME: Make waiting actually work
     useEffect(() => {
         const initializeApp = async () => {
             try {

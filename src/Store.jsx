@@ -51,10 +51,45 @@ const useStore = create((set, get) => ({
     classes: [],
     activeTab: 'schedules',
     renderFavorites: false,
-    // Removed schedulerSeed, relying on proper state updates for re-renders
+    // New: mapping of schedule strings to stable display numbers
+    scheduleDisplayNumbers: new Map(),
+    nextScheduleNumber: 1,
 
     // Sidebar actions
     setIsExpanded: (value) => set({ isExpanded: value }),
+
+    // Helper function to assign stable display numbers to schedules
+    _assignScheduleDisplayNumbers: (schedules) => {
+        const state = get();
+        const currentMapping = new Map(state.scheduleDisplayNumbers);
+        let nextNumber = state.nextScheduleNumber;
+
+        schedules.forEach(schedule => {
+            const scheduleString = stringifySchedule(schedule);
+            if (scheduleString && !currentMapping.has(scheduleString)) {
+                currentMapping.set(scheduleString, nextNumber);
+                nextNumber++;
+            }
+        });
+
+        set({
+            scheduleDisplayNumbers: currentMapping,
+            nextScheduleNumber: nextNumber
+        });
+    },
+
+    // Helper function to get display number for a schedule
+    getScheduleDisplayNumber: (scheduleString) => {
+        const state = get();
+        return state.scheduleDisplayNumbers.get(scheduleString) || "?";
+    },
+
+    clearScrapeStatus: () => {
+        set({ 
+            scrapeState: { isScraping: false, status: "" }, 
+            schedulerError: null 
+        });
+    },
 
     // Scheduler actions
     _updateSchedulerData: async (calledFromGenerate = false) => {
@@ -63,9 +98,14 @@ const useStore = create((set, get) => ({
             const loadedSchedules = await schedulesAPI.getAll();
             const loadedFavorites = await favoritesAPI.getAll();
 
+            const finalSchedules = (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) ? loadedSchedules : [[]];
+            
+            // Assign stable display numbers to new schedules
+            get()._assignScheduleDisplayNumbers(finalSchedules);
+
             set(state => ({
                 userEvents: loadedEvents || [],
-                schedules: (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) ? loadedSchedules : [[]],
+                schedules: finalSchedules,
                 favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [],
                 schedulerError: calledFromGenerate ? state.schedulerError : null, // Preserve scrape status if called from generate
             }));
@@ -217,11 +257,11 @@ const useStore = create((set, get) => ({
                 days: bitmaskToDayArray(event.day)
             }));
             const result = await schedulesAPI.generate( {
-                parameters: {
+
                     params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false],
                     classes: classes,
                     events: formattedUserEventsForScrape
-                }
+
             })
 
             if (typeof result === 'string') {
@@ -232,13 +272,23 @@ const useStore = create((set, get) => ({
                 });
             } else if (Array.isArray(result)) {
                 const numSchedules = result.length;
+                const finalSchedules = numSchedules > 0 && result[0] && result[0].length > 0 ? result : [[]];
+                
+                // Clear old schedule display numbers when generating new schedules
+                set({
+                    scheduleDisplayNumbers: new Map(),
+                    nextScheduleNumber: 1
+                });
+                
+                // Assign display numbers to new schedules
+                get()._assignScheduleDisplayNumbers(finalSchedules);
+                
                 set(state => ({ // Pass a function to set to access current state for favorites
                     scrapeState: {
                         isScraping: false,
                         status: numSchedules > 0 ? `Scrape completed, found ${numSchedules} schedules.` : "Scrape completed. No matching schedules found."
                     },
-                    schedules: numSchedules > 0 && result[0] && result[0].length > 0 ? result : [[]],
-                    // favoritedSchedules: state.favoritedSchedules, // Keep existing favorites explicitly if backend doesn't clear them
+                    schedules: finalSchedules,
                     selectedScheduleIndex: null,
                 }));
                 await systemAPI.setDisplaySchedule(null);
@@ -264,7 +314,8 @@ const useStore = create((set, get) => ({
             currentHoveredSchedule: state.renderFavorites ? null : state.currentHoveredSchedule 
         }));
         try {
-            await favoritesAPI.changeFavorite({ id: scheduleString, isFavorited: isCurrentlyFavorite, schedule: scheduleData });
+            // Fix: Pass parameters individually instead of as an object
+            await favoritesAPI.changeFavorite(scheduleString, isCurrentlyFavorite, scheduleData);
             const loadedFavorites = await favoritesAPI.getAll();
             set({
                 favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [],
@@ -273,7 +324,7 @@ const useStore = create((set, get) => ({
             console.error("Failed to update favorite status:", error);
             set({ schedulerError: `Failed to update favorite status.` });
             const loadedFavorites = await favoritesAPI.getAll();
-             set({ favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [] });
+            set({ favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [] });
         }
     },
 
@@ -281,6 +332,14 @@ const useStore = create((set, get) => ({
         set({ currentHoveredSchedule: null, schedulerError: null });
         try {
             await schedulesAPI.delete(scheduleIdString, isCurrentlyFavorite);
+            
+            // Remove the deleted schedule's display number mapping
+            set(state => {
+                const newMapping = new Map(state.scheduleDisplayNumbers);
+                newMapping.delete(scheduleIdString);
+                return { scheduleDisplayNumbers: newMapping };
+            });
+            
             await get()._updateSchedulerData();
             
             const { schedules, selectedScheduleIndex } = get();
