@@ -424,7 +424,7 @@ const useStore = create((set, get) => ({
         
         try {
             // The Rust backend returns void on success, not the updated class
-            await classParametersAPI.updateClass(classData);
+            await classParametersAPI.update(classData);
 
         } catch (err) {
             console.error("Error updating class:", err);
