@@ -8,7 +8,7 @@ mod services;
 
 use database_functions::*;
 use tauri::{Manager, Window};
-use tauri_backend::{scrape_classes::{perform_schedule_scrape, filter_classes}, class_combinations::generate_combinations};
+use tauri_backend::{scrape_classes::{setup_scrape}};
 use services::*;
 
 use serde::{Serialize, Deserialize};
@@ -16,8 +16,7 @@ use std::{env, fmt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use anyhow::{Result, anyhow};
-use std::collections::HashMap;
+use anyhow::{Result};
 
 pub type DbPool = r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>;
 
@@ -93,85 +92,8 @@ fn show_splashscreen(window: Window) {
 
 #[tauri::command]
 async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    if parameters.classes.is_empty() {
-        return Err("No classes set to scrape".to_string());
-    }
-
-    let connect_info_mutex = Arc::clone(&state.connect_info);
-    let db_pool = state.db_pool.clone();
-
-    let result: Result<Vec<Vec<Class>>, anyhow::Error> = async move {
-        let mut classes_to_scrape_params: Vec<ClassParam> = Vec::new();
-        let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new();
-        let mut scrape_indices: Vec<usize> = Vec::new();
-
-        for (index, class_param) in parameters.classes.iter().enumerate() {
-            let name = format!("{}{}", class_param.code, class_param.name);
-            let database_classes = ClassRepository::get_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
-                 eprintln!("Warning: Failed to query cache for {}: {}", name, e);
-                 Vec::new()
-            });
-
-            if !database_classes.is_empty() {
-                cached_results.insert(index, database_classes);
-            } else {
-                classes_to_scrape_params.push(class_param.clone());
-                scrape_indices.push(index);
-            }
-        }
-
-        let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
-        if !classes_to_scrape_params.is_empty() {
-            let connect_info = connect_info_mutex.lock().await.clone();
-            // Note: The check for Chrome updates is now handled at startup.
-            // It is not re-checked here to avoid unnecessary delays.
-            let driver = start_chromedriver(&connect_info).await?;
-            
-            let scrape_params_for_call = ScrapeClassesParameters {
-                 params_checkbox: parameters.params_checkbox, 
-                 classes: classes_to_scrape_params, 
-                 events: parameters.events.clone(),
-            };
-
-            let scraped_data = perform_schedule_scrape(&scrape_params_for_call, driver).await?;
-            
-            if let Err(e) = ClassRepository::save_sections_batch(&scraped_data, &db_pool).await {
-                 eprintln!("Warning: Failed to save scraped class sections: {}", e);
-            }
-
-            if scraped_data.len() == scrape_indices.len() {
-                for (i, data) in scraped_data.into_iter().enumerate() {
-                    let original_index = scrape_indices[i];
-                    scraped_results_map.insert(original_index, data);
-                }
-            } else {
-                 return Err(anyhow!("Mismatch between scraped results and requested classes"));
-            }
-        }
-
-        let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); parameters.classes.len()];
-        for (index, cached_data) in cached_results {
-             if index < combined_classes.len() { combined_classes[index] = cached_data; }
-        }
-        for (index, scraped_data) in scraped_results_map {
-             if index < combined_classes.len() { combined_classes[index] = scraped_data; }
-        }
-        
-        let filtered_classes = filter_classes(combined_classes, &parameters)?;
-        if filtered_classes.iter().all(|group| group.is_empty()) { return Ok(Vec::new()); }
-
-        let combinations_generated = generate_combinations(filtered_classes).await?;
-        let mut ids = Vec::with_capacity(combinations_generated.len());
-        for combination in &combinations_generated {
-            ids.push(serde_json::to_string(combination)?);
-        }
-
-        ScheduleRepository::save_batch(ids, &combinations_generated, &db_pool).await?;
-        Ok(combinations_generated)
-    }
-    .await;
-
-    result.map_err(|err| err.to_string())
+    setup_scrape(parameters, state).await
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
