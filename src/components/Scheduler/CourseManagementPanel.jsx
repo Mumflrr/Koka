@@ -210,6 +210,7 @@ const ClassesList = React.memo(({ classes, updateClass, deleteClass, addClass, s
     </div>
 ));
 
+//FIXME Reduce prop drilling
 const CourseManagementPanel = ({
     schedules, favoritedSchedules, selectedScheduleId, scrapeState, paramCheckboxes,
     classes, activeTab, renderFavorites, schedulerError, schedulesStringArray,

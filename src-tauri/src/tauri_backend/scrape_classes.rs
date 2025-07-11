@@ -181,8 +181,8 @@ async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver)
         table.find(By::Css("span.showCourseDetailsLink")).await?.click().await?;
 
         // Wait for dialog to appear 
-        //TODO: Implement better wait system
-        sleep(Duration::from_secs(1)).await;
+        //I've tried implementing a better wait system, but it hasn't worked out. Maybe one day
+        sleep(Duration::from_secs(5)).await;
         let dialog = driver.find(By::Id("dialog2")).await?;
         let dialog_text = dialog.text().await?;
 

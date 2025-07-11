@@ -201,6 +201,7 @@ const Scheduler = () => {
         );
     }
 
+    //FIXME Reduce prop drilling
     return (
         <div className={ss.schedulerPage}>
             <Sidebar />

@@ -5,14 +5,12 @@
 mod tauri_backend;
 mod database_functions;
 mod services;
-mod event_processor;
 mod objects;
 
 use database_functions::*;
 use tauri::{Manager, Window};
-use tauri_backend::{scrape_classes::{setup_scrape}};
+use tauri_backend::{scrape_classes::{setup_scrape}, event_processor::{EventProcessor, ProcessedEventsResult}};
 use services::*;
-use event_processor::{EventProcessor, ProcessedEventsResult};
 use objects::*;
 
 use std::{env};
