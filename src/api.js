@@ -21,40 +21,39 @@ export const systemAPI = {
   startupApp() {
     return invokeWrapper('startup_app');
   },
-
   closeSplashscreen() {
     return invokeWrapper('close_splashscreen');
   },
-
   showSplashscreen() {
     return invokeWrapper('show_splashscreen');
   },
-
   getDisplaySchedule() {
     return invokeWrapper('get_display_schedule');
   },
-
   setDisplaySchedule(scheduleIndex) {
+    // Backend still uses index for now, so we pass it.
+    // If backend is updated to use ID, this would change.
     return invokeWrapper('set_display_schedule', { id: scheduleIndex });
   }
 };
 
-// --- Events Table API ---
+// --- Events Table API (REFACTORED) ---
 export const eventsAPI = {
+  // Now sends 'eventData' and expects the full event object in return
   create(eventData) {
-    return invokeWrapper('create_event', { event: eventData, table: 'events' });
+    return invokeWrapper('create_event', { eventData });
   },
-
+  // No longer needs a table name
   getAll() {
-    return invokeWrapper('get_events', { table: 'events' });
+    return invokeWrapper('get_events');
   },
-
+  // No longer needs a table name
   update(eventData) {
-    return invokeWrapper('update_event', { event: eventData, table: 'events' });
+    return invokeWrapper('update_event', { event: eventData });
   },
-
+  // No longer needs a table name
   delete(eventId) {
-    return invokeWrapper('delete_event', { eventId, table: 'events' });
+    return invokeWrapper('delete_event', { eventId });
   }
 };
 
@@ -63,11 +62,9 @@ export const schedulesAPI = {
   generate(parameters) {
     return invokeWrapper('generate_schedules', { parameters });
   },
-
   getAll() {
     return invokeWrapper('get_schedules', { table: 'schedules' });
   },
-
   delete(scheduleIdString, isFavorited) {
     return invokeWrapper('delete_schedule', { id: scheduleIdString, isFavorited });
   }
@@ -78,7 +75,6 @@ export const favoritesAPI = {
   getAll() {
     return invokeWrapper('get_schedules', { table: 'favorites' });
   },
-
   changeFavorite(scheduleIdString, isFavorited, scheduleData) {
     return invokeWrapper('change_favorite_schedule', { id: scheduleIdString, isFavorited, schedule: scheduleData });
   }
@@ -87,15 +83,12 @@ export const favoritesAPI = {
 // --- Class Parameters Table API ---
 export const classParametersAPI = {
   getAll() {
-    return invokeWrapper('get_classes'); // Use get_classes since get_class_parameters doesn't exist
+    return invokeWrapper('get_classes');
   },
-
   update(classData) {
     return invokeWrapper('update_class', { class: classData });
   },
-
   remove(classId) {
     return invokeWrapper('remove_class', { id: classId });
   }
 };
-

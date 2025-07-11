@@ -1,46 +1,31 @@
-// src/components/Scheduler/CourseManagementPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
 import { stringifySchedule } from '../../Store.jsx';
 
-// --- Reusable Child Components ---
-// TODO Add Error for improper form validation
-// BUG Schedule index numbers do not reset after deleting and regenerating schedules
-// TODO add schedule renmaing ability
-
 const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
-    const [displayedCourseCode, setDisplayedCourseCode] = useState(`${classData.code || ''}${classData.name || ''}`);
-    const [formData, setFormData] = useState({
-        id: classData.id,
-        code: classData.code || '',
-        name: classData.name || '',
-        section: classData.section || '',
-        instructor: classData.instructor || '',
-    });
-    const [validation, setValidation] = useState({
-        courseCodeValid: true,
-        sectionCodeValid: true
-    });
+    const [displayedCourseCode, setDisplayedCourseCode] = useState('');
+    const [displayedSection, setDisplayedSection] = useState('');
+    const [formData, setFormData] = useState({ id: '', code: '', name: '', section: '', instructor: '' });
+    const [validation, setValidation] = useState({ courseCodeValid: true, sectionCodeValid: true });
     const [modifiedFields, setModifiedFields] = useState({});
 
     useEffect(() => {
-        setFormData({
+        const initialFormData = {
             id: classData.id,
             code: classData.code || '',
             name: classData.name || '',
             section: classData.section || '',
             instructor: classData.instructor || '',
-        });
-        setDisplayedCourseCode(
-            (classData.code && classData.name) ? `${classData.code}${classData.name}` : (classData.code || '')
-        );
+        };
+        setFormData(initialFormData);
+        setDisplayedCourseCode(`${initialFormData.code || ''}${initialFormData.name || ''}`);
+        // This call will now work correctly
+        setDisplayedSection(initialFormData.section);
         setValidation({ courseCodeValid: true, sectionCodeValid: true });
         setModifiedFields({});
-    }, [classData]);
+    }, [classData.id]);
 
-    const handleDelete = useCallback(() => {
-        onDelete(classData.id);
-    }, [onDelete, classData.id]);
+    const handleDelete = useCallback(() => onDelete(classData.id), [onDelete, classData.id]);
 
     const handleChange = useCallback((e) => {
         const { name, value } = e.target;
@@ -49,46 +34,63 @@ const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
         if (name === 'code') {
             setDisplayedCourseCode(value);
             const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
-            const courseCodeRegex = /^([A-Z]{1,4})(\d{3,4})$/;
+            const courseCodeRegex = /^([A-Z]{2,3})(\d{3})$/;
             const match = cleanedValue.match(courseCodeRegex);
+            
             if (match) {
                 setFormData(prev => ({ ...prev, code: match[1], name: match[2] }));
-                setValidation(prev => ({...prev, courseCodeValid: true}));
+                setValidation(prev => ({ ...prev, courseCodeValid: true }));
             } else {
-                setFormData(prev => ({ ...prev, code: value.substring(0,4), name: value.substring(4) }));
-                setValidation(prev => ({...prev, courseCodeValid: false}));
+                setValidation(prev => ({ ...prev, courseCodeValid: false }));
             }
         } else if (name === 'section') {
-            const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
-            const sectionRegex = /^\d{1,3}[A-Z]{0,2}$/;
-            const isValid = sectionRegex.test(cleanedValue) || value === '';
+            // This now works because setDisplayedSection is defined
+            setDisplayedSection(value); 
             setFormData(prev => ({ ...prev, [name]: value }));
-            setValidation(prev => ({...prev, sectionCodeValid: isValid}));
+
+            const cleanedValue = value.replace(/\s+/g, '').toUpperCase();
+            const sectionRegex = /^(\d{3}[A-Z]?)$/;
+            const isValid = sectionRegex.test(cleanedValue) || value.trim() === '';
+            
+            setValidation(prev => ({ ...prev, sectionCodeValid: isValid }));
+
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
         }
-    }, []);
-
-    const handleBlur = useCallback(async (e) => {
-        const { name } = e.target;
-        if (modifiedFields[name]) {
-            if (!validation.courseCodeValid && name === 'code') return;
-            if (!validation.sectionCodeValid && name === 'section') return;
-            
-            const dataToSend = {...formData};
-            if (name === 'code' && validation.courseCodeValid) {
-                 const cleanedValue = displayedCourseCode.replace(/\s+/g, '').toUpperCase();
-                 const courseCodeRegex = /^([A-Z]{1,4})(\d{3,4})$/;
-                 const match = cleanedValue.match(courseCodeRegex);
-                 if (match) {
-                    dataToSend.code = match[1];
-                    dataToSend.name = match[2];
-                 }
-            }
-            onUpdate(dataToSend);
-            setModifiedFields(prev => ({ ...prev, [name]: false }));
+    }, []); // No need to add setDisplayedSection to deps, it's stable
+    
+    const handleBlur = useCallback(() => {
+        if (!Object.values(modifiedFields).some(Boolean)) {
+            return;
         }
-    }, [modifiedFields, validation, formData, displayedCourseCode, onUpdate]);
+
+        const isFormValid = validation.courseCodeValid && validation.sectionCodeValid;
+        if (!isFormValid) {
+            console.warn("Save aborted due to validation errors.");
+            // Revert any invalid fields to their last known good state from the initial data
+            const originalData = classData;
+            setDisplayedCourseCode(`${originalData.code || ''}${originalData.name || ''}`);
+            setDisplayedSection(originalData.section || '');
+            setFormData({ // fully revert formData as well
+                id: originalData.id,
+                code: originalData.code || '',
+                name: originalData.name || '',
+                section: originalData.section || '',
+                instructor: formData.instructor // keep instructor changes as it has no validation
+            });
+            setValidation({ courseCodeValid: true, sectionCodeValid: true });
+            setModifiedFields({});
+            return;
+        }
+        
+        // Final Cleanup on Successful Save
+        const finalCleanedSection = formData.section.replace(/\s+/g, '').toUpperCase();
+        const finalFormData = { ...formData, section: finalCleanedSection };
+
+        onUpdate(finalFormData);
+        setModifiedFields({});
+    }, [modifiedFields, validation, formData, onUpdate, classData]);
+
 
     return (
       <div className={`${ss.classCard} ${!validation.courseCodeValid || !validation.sectionCodeValid ? ss.invalidCard : ''}`}>
@@ -104,10 +106,11 @@ const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
           </button>
         </div>
         <input
-          type="text" name="section" value={formData.section}
+          type="text" name="section" 
+          value={displayedSection}
           onChange={handleChange} onBlur={handleBlur}
           className={`${ss.inputField} ${!validation.sectionCodeValid ? ss.invalidInput : ''}`}
-          placeholder="Section (e.g. 001, 601, 01L)"
+          placeholder="Section (e.g. 001, 001L)"
         />
         <input
           type="text" name="instructor" value={formData.instructor}
@@ -128,26 +131,12 @@ const AddClassCard = React.memo(({ onClick, ss }) => (
 ));
 
 const SchedulesList = React.memo(({
-    renderFavorites,
-    favoritedSchedules,
-    schedules,
-    scrapeState,
-    favoritedScheduleStrings,
-    schedulesStringArray,
-    selectedScheduleIndex,
-    toggleRenderFavorites,
-    setSelectedSchedule,
-    setHoveredSchedule,
-    clearHoveredSchedule,
-    toggleFavoriteSchedule,
-    deleteSchedule,
-    getScheduleDisplayNumber,
-    ss
+    renderFavorites, favoritedSchedules, schedules, scrapeState, favoritedScheduleStrings,
+    selectedScheduleId, toggleRenderFavorites, setSelectedSchedule, setHoveredSchedule,
+    clearHoveredSchedule, toggleFavoriteSchedule, deleteSchedule, getScheduleDisplayNumber, ss
 }) => {
     const schedulesToRender = renderFavorites ? favoritedSchedules : schedules;
-    const isEmpty =
-        !schedulesToRender || !schedulesToRender.length ||
-        (schedulesToRender.length === 1 && (!schedulesToRender[0] || !schedulesToRender[0].length));
+    const isEmpty = !schedulesToRender?.some(s => s?.length > 0);
 
     return (
         <div className={ss.schedulesContainer}>
@@ -173,15 +162,14 @@ const SchedulesList = React.memo(({
                     if (!currentScheduleString) return null;
 
                     const isFavorite = favoritedScheduleStrings.has(currentScheduleString);
-                    const displayIndex = schedulesStringArray.indexOf(currentScheduleString);
                     const displayNum = getScheduleDisplayNumber(currentScheduleString);
-                    const isSelected = displayIndex !== -1 && displayIndex === selectedScheduleIndex;
+                    const isSelected = currentScheduleString === selectedScheduleId;
 
                     return (
                         <div
                             key={currentScheduleString || `schedule-item-${i}`}
                             className={`${ss.scheduleItem} ${isSelected ? ss['selected-schedule'] : ''}`}
-                            onClick={() => setSelectedSchedule(displayIndex)}
+                            onClick={() => setSelectedSchedule(schedule)}
                             onMouseEnter={() => setHoveredSchedule(schedule)}
                             onMouseLeave={clearHoveredSchedule}
                         >
@@ -222,11 +210,8 @@ const ClassesList = React.memo(({ classes, updateClass, deleteClass, addClass, s
     </div>
 ));
 
-
-// --- Main Panel Component ---
-
 const CourseManagementPanel = ({
-    schedules, favoritedSchedules, selectedScheduleIndex, scrapeState, paramCheckboxes,
+    schedules, favoritedSchedules, selectedScheduleId, scrapeState, paramCheckboxes,
     classes, activeTab, renderFavorites, schedulerError, schedulesStringArray,
     favoritedScheduleStrings, generateSchedules, clearScrapeStatus, toggleFavoriteSchedule,
     deleteSchedule, setSelectedSchedule, setHoveredSchedule, clearHoveredSchedule,
@@ -303,8 +288,7 @@ const CourseManagementPanel = ({
                             schedules={schedules}
                             scrapeState={scrapeState}
                             favoritedScheduleStrings={favoritedScheduleStrings}
-                            schedulesStringArray={schedulesStringArray}
-                            selectedScheduleIndex={selectedScheduleIndex}
+                            selectedScheduleId={selectedScheduleId}
                             toggleRenderFavorites={toggleRenderFavorites}
                             setSelectedSchedule={setSelectedSchedule}
                             setHoveredSchedule={setHoveredSchedule}

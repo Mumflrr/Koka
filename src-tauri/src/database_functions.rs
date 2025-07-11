@@ -1,6 +1,7 @@
-use crate::{Class, ClassParam, ConnectInfo, DbPool, Event};
+use crate::{objects::NewEvent, Class, ClassParam, ConnectInfo, DbPool, Event};
 use anyhow::anyhow;
 use rusqlite::{params, OptionalExtension, Transaction};
+use uuid::Uuid;
 
 // Configuration constants
 const DATA_TABLE_ID: i32 = 0;
@@ -21,17 +22,31 @@ fn validate_table_name(table: &str) -> Result<(), anyhow::Error> {
 pub struct EventRepository;
 
 impl EventRepository {
-    pub async fn save(table: &str, event: Event, pool: &DbPool) -> Result<(), anyhow::Error> {
+    pub async fn save(table: &str, new_event: NewEvent, pool: &DbPool) -> Result<Event, anyhow::Error> {
         validate_table_name(table)?;
         let table = table.to_string();
         let pool = pool.clone();
+
+        let event_to_save = Event {
+            id: Uuid::new_v4().to_string(),
+            title: new_event.title,
+            start_time: new_event.start_time,
+            end_time: new_event.end_time,
+            day: new_event.day,
+            professor: new_event.professor,
+            description: new_event.description,
+        };
+
+        let event_clone_for_thread = event_to_save.clone();
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
             let mut conn = pool.get()?;
             let tx = conn.transaction()?;
-            Self::save_event_in_transaction(&tx, &table, &event)?;
+            Self::save_event_in_transaction(&tx, &table, &event_clone_for_thread)?;
             tx.commit()?;
             Ok(())
-        }).await?
+        }).await??;
+
+        Ok(event_to_save)
     }
 
     pub async fn update(table: &str, event: Event, pool: &DbPool) -> Result<(), anyhow::Error> {

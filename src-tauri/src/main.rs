@@ -51,6 +51,8 @@ fn show_splashscreen(window: Window) {
 
 #[tauri::command]
 async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
+    // NOTE: The logic to convert the 'day' bitmask to a day array for the scraper
+    // should now happen inside `setup_scrape` or a function it calls.
     setup_scrape(parameters, state).await
         .map_err(|err| err.to_string())
 }
@@ -65,30 +67,34 @@ async fn delete_schedule(id: String, is_favorited: bool, state: tauri::State<'_,
         .map_err(|e| format!("Failed to delete from schedules: {}", e))
 }
 
+// REFACTORED: Takes NewEvent (without ID), returns a full Event (with ID)
 #[tauri::command]
-async fn create_event(event: Event, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> { 
-    EventRepository::save(&table, event, &state.db_pool).await
+async fn create_event(event_data: NewEvent, state: tauri::State<'_, AppState>) -> Result<Event, String> { 
+    EventRepository::save("events", event_data, &state.db_pool).await
         .map_err(|e| format!("Failed to save event: {}", e))
 }
 
+// REFACTORED: Simplified signature (no table name)
 #[tauri::command]
-async fn get_events(table: String, state: tauri::State<'_, AppState>) -> Result<ProcessedEventsResult, String> {
-    let raw_events = EventRepository::load_all(&table, &state.db_pool).await
+async fn get_events(state: tauri::State<'_, AppState>) -> Result<ProcessedEventsResult, String> {
+    let raw_events = EventRepository::load_all("events", &state.db_pool).await
         .map_err(|e| format!("Failed to load events: {}", e))?;
     
     let processed_events = EventProcessor::process_events(raw_events);
     Ok(processed_events)
 }
 
+// REFACTORED: Simplified signature (no table name)
 #[tauri::command]
-async fn delete_event(event_id: String, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    EventRepository::delete(&table, event_id, &state.db_pool).await
+async fn delete_event(event_id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    EventRepository::delete("events", event_id, &state.db_pool).await
         .map_err(|e| format!("Failed to delete event: {}", e))
 }
 
+// REFACTORED: Simplified signature (no table name)
 #[tauri::command]
-async fn update_event(event: Event, table: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    EventRepository::update(&table, event, &state.db_pool).await
+async fn update_event(event: Event, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    EventRepository::update("events", event, &state.db_pool).await
         .map_err(|e| format!("Failed to update event: {}", e))
 }
 
@@ -160,9 +166,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             generate_schedules, close_splashscreen, startup_app, show_splashscreen,
-            create_event, get_events, delete_event, update_event, change_favorite_schedule,
-            get_schedules, delete_schedule, get_classes, update_class, remove_class,
-            get_display_schedule, set_display_schedule,
+            // REFACTORED: Event handlers are now cleaner
+            create_event, get_events, delete_event, update_event, 
+            change_favorite_schedule, get_schedules, delete_schedule, get_classes, 
+            update_class, remove_class, get_display_schedule, set_display_schedule,
         ])
         .run(tauri::generate_context!())?;
     Ok(())

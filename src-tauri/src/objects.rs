@@ -53,6 +53,16 @@ pub struct ClassParam {
     pub instructor: String, 
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct NewEvent {
+    pub title: String,
+    pub start_time: i32,
+    pub end_time: i32,
+    pub day: i32,
+    pub professor: String,
+    pub description: String,
+}
+
 impl fmt::Display for Class {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}, {}, <", self.code, self.name)?;
