@@ -4,6 +4,9 @@ import { Trash2, Plus, X } from 'lucide-react';
 import { stringifySchedule } from '../../Store.jsx';
 
 // --- Reusable Child Components ---
+// TODO Add Error for improper form validation
+// BUG Not numerical order
+// TODO add schedule renmaing ability
 
 const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
     const [displayedCourseCode, setDisplayedCourseCode] = useState(`${classData.code || ''}${classData.name || ''}`);

@@ -55,12 +55,7 @@ export const eventsAPI = {
 
   delete(eventId) {
     return invokeWrapper('delete_event', { eventId, table: 'events' });
-  }, 
-
-  update(eventData) {
-    return invokeWrapper('update_event', { event: eventData, table: 'events' });
   }
-  
 };
 
 // --- Schedules Table API ---

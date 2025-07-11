@@ -5,11 +5,13 @@
 mod tauri_backend;
 mod database_functions;
 mod services;
+mod event_processor;
 
 use database_functions::*;
 use tauri::{Manager, Window};
 use tauri_backend::{scrape_classes::{setup_scrape}};
 use services::*;
+use event_processor::{EventProcessor, ProcessedEventsResult};
 
 use serde::{Serialize, Deserialize};
 use std::{env, fmt};
@@ -113,9 +115,12 @@ async fn create_event(event: Event, table: String, state: tauri::State<'_, AppSt
 }
 
 #[tauri::command]
-async fn get_events(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Event>, String> {
-    EventRepository::load_all(&table, &state.db_pool).await
-        .map_err(|e| format!("Failed to load events: {}", e))
+async fn get_events(table: String, state: tauri::State<'_, AppState>) -> Result<ProcessedEventsResult, String> {
+    let raw_events = EventRepository::load_all(&table, &state.db_pool).await
+        .map_err(|e| format!("Failed to load events: {}", e))?;
+    
+    let processed_events = EventProcessor::process_events(raw_events);
+    Ok(processed_events)
 }
 
 #[tauri::command]

@@ -94,20 +94,20 @@ const useStore = create((set, get) => ({
     // Scheduler actions
     _updateSchedulerData: async (calledFromGenerate = false) => {
         try {
-            const loadedEvents = await eventsAPI.getAll();
+            // This now returns ProcessedEventsResult instead of raw events
+            const loadedEventsResult = await eventsAPI.getAll();
             const loadedSchedules = await schedulesAPI.getAll();
             const loadedFavorites = await favoritesAPI.getAll();
 
             const finalSchedules = (Array.isArray(loadedSchedules) && loadedSchedules.length > 0) ? loadedSchedules : [[]];
             
-            // Assign stable display numbers to new schedules
             get()._assignScheduleDisplayNumbers(finalSchedules);
 
             set(state => ({
-                userEvents: loadedEvents || [],
+                userEvents: loadedEventsResult || { eventsByDay: {}, noTimeEventsByDay: {} }, // Now expects processed format
                 schedules: finalSchedules,
                 favoritedSchedules: (Array.isArray(loadedFavorites) && loadedFavorites.length > 0) ? loadedFavorites : [],
-                schedulerError: calledFromGenerate ? state.schedulerError : null, // Preserve scrape status if called from generate
+                schedulerError: calledFromGenerate ? state.schedulerError : null,
             }));
         } catch (err) {
             console.error('Error refreshing scheduler data:', err);
@@ -249,64 +249,85 @@ const useStore = create((set, get) => ({
     },
 
     generateSchedules: async () => {
-        set({ scrapeState: { isScraping: true, status: "Starting scrape..." }, schedulerError: null });
-        const { paramCheckboxes, classes, userEvents } = get();
-        try {
-            const formattedUserEventsForScrape = userEvents.map(event => ({
-                time: [event.startTime, event.endTime],
-                days: bitmaskToDayArray(event.day)
-            }));
-            const result = await schedulesAPI.generate( {
-
-                    params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false],
-                    classes: classes,
-                    events: formattedUserEventsForScrape
-
-            })
-
-            if (typeof result === 'string') {
-                console.error("Scrape error:", result);
-                set({ 
-                    scrapeState: { isScraping: false, status: `Error: ${result}` }, 
-                    schedules: [[]], // Keep existing favorites
+    set({ scrapeState: { isScraping: true, status: "Starting scrape..." }, schedulerError: null });
+    const { paramCheckboxes, classes, userEvents } = get();
+    try {
+        // Extract raw events from the processed structure
+        const rawUserEvents = [];
+        
+        // Extract events from eventsByDay
+        if (userEvents.eventsByDay) {
+            Object.values(userEvents.eventsByDay).forEach(dayEvents => {
+                dayEvents.forEach(event => {
+                    // Only add if we haven't already added this event (avoid duplicates from multiple days)
+                    if (!rawUserEvents.find(existing => existing.id === event.id)) {
+                        rawUserEvents.push({
+                            id: event.id,
+                            title: event.title,
+                            startTime: event.startTime,
+                            endTime: event.endTime,
+                            day: event.day,
+                            professor: event.professor,
+                            description: event.description
+                        });
+                    }
                 });
-            } else if (Array.isArray(result)) {
-                const numSchedules = result.length;
-                const finalSchedules = numSchedules > 0 && result[0] && result[0].length > 0 ? result : [[]];
-                
-                // Clear old schedule display numbers when generating new schedules
-                set({
-                    scheduleDisplayNumbers: new Map(),
-                    nextScheduleNumber: 1
-                });
-                
-                // Assign display numbers to new schedules
-                get()._assignScheduleDisplayNumbers(finalSchedules);
-                
-                set(state => ({ // Pass a function to set to access current state for favorites
-                    scrapeState: {
-                        isScraping: false,
-                        status: numSchedules > 0 ? `Scrape completed, found ${numSchedules} schedules.` : "Scrape completed. No matching schedules found."
-                    },
-                    schedules: finalSchedules,
-                    selectedScheduleIndex: null,
-                }));
-                await systemAPI.setDisplaySchedule(null);
-                await get()._updateSchedulerData(true); // Refresh all lists, indicate it's from generate
-            } else {
-                console.error("Scrape returned unexpected data:", result);
-                set({ scrapeState: { isScraping: false, status: `Error: Received unexpected data from backend.` }, schedules: [[]] });
-            }
-        } catch (error) {
-            console.error("Scrape invocation failed:", error);
-            const errorMessage = error.message || (typeof error === 'string' ? error : 'Unknown error');
-            set({
-                scrapeState: { isScraping: false, status: `Scrape failed: ${errorMessage}` },
-                schedules: [[]],
-                schedulerError: `Unable to scrape: ${errorMessage}`
             });
         }
-    },
+        
+        // Extract events from noTimeEventsByDay
+        if (userEvents.noTimeEventsByDay) {
+            Object.values(userEvents.noTimeEventsByDay).forEach(dayEvents => {
+                dayEvents.forEach(event => {
+                    // Only add if we haven't already added this event (avoid duplicates from multiple days)
+                    if (!rawUserEvents.find(existing => existing.id === event.id)) {
+                        rawUserEvents.push({
+                            id: event.id,
+                            title: event.title,
+                            startTime: event.startTime,
+                            endTime: event.endTime,
+                            day: event.day,
+                            professor: event.professor,
+                            description: event.description
+                        });
+                    }
+                });
+            });
+        }
+
+        const formattedUserEventsForScrape = rawUserEvents.map(event => ({
+            time: [event.startTime, event.endTime],
+            days: bitmaskToDayArray(event.day)
+        }));
+
+        const result = await schedulesAPI.generate({
+            params_checkbox: [paramCheckboxes.box1, paramCheckboxes.box2, false],
+            classes: classes,
+            events: formattedUserEventsForScrape
+        });
+
+        if (typeof result === 'string') {
+            console.error("Scrape error:", result);
+            set({ 
+                scrapeState: { isScraping: false, status: `Error: ${result}` }, 
+                schedules: [[]], // Keep existing favorites
+            });
+        } else {
+            console.log("Scrape successful, result:", result);
+            set({ 
+                scrapeState: { isScraping: false, status: "Schedules generated successfully!" },
+                schedules: result || [[]],
+            });
+            get()._assignScheduleDisplayNumbers(result || [[]]);
+        }
+    } catch (error) {
+        console.error("Error during schedule generation:", error);
+        set({ 
+            scrapeState: { isScraping: false, status: `Error: ${error.message}` },
+            schedules: [[]],
+        });
+    }
+},
 
     toggleFavoriteSchedule: async (scheduleData, scheduleString, isCurrentlyFavorite) => {
         set(state => ({ 
