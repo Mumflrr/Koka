@@ -1,7 +1,6 @@
-use crate::{Class, ClassParam, ConnectInfo, DbPool};
+use crate::{Class, ClassParam, ConnectInfo, DbPool, Event};
 use anyhow::anyhow;
 use rusqlite::{params, OptionalExtension, Transaction};
-use serde::{Deserialize, Serialize};
 
 // Configuration constants
 const DATA_TABLE_ID: i32 = 0;
@@ -16,19 +15,6 @@ fn validate_table_name(table: &str) -> Result<(), anyhow::Error> {
     } else {
         Err(anyhow!("Invalid table name: {}", table))
     }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Event {
-    pub id: String,
-    pub title: String,
-    #[serde(rename = "startTime")]
-    pub start_time: i32,
-    #[serde(rename = "endTime")]
-    pub end_time: i32,
-    pub day: i32,
-    pub professor: String,
-    pub description: String,
 }
 
 // Repository for Event operations

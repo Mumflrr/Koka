@@ -6,63 +6,20 @@ mod tauri_backend;
 mod database_functions;
 mod services;
 mod event_processor;
+mod objects;
 
 use database_functions::*;
 use tauri::{Manager, Window};
 use tauri_backend::{scrape_classes::{setup_scrape}};
 use services::*;
 use event_processor::{EventProcessor, ProcessedEventsResult};
+use objects::*;
 
-use serde::{Serialize, Deserialize};
-use std::{env, fmt};
+use std::{env};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use anyhow::{Result};
-
-pub type DbPool = r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>;
-
-struct AppState {
-    db_pool: DbPool,
-    connect_info: Arc<Mutex<ConnectInfo>>,
-    startup_complete: AtomicBool,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum EventType { Events, Schedules }
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Class { code: String, name: String, description: String, classes: Vec<TimeBlock>, }
-
-#[derive(Serialize, Deserialize, Clone)]
-struct TimeBlock { section: String, location: String, days: [((i32, i32), bool); 5], instructor: String, }
-
-#[derive(Serialize, Deserialize)]
-struct ScrapeClassesParameters { params_checkbox: [bool; 3], classes: Vec<ClassParam>, events: Vec<EventParam>, }
-
-#[derive(Serialize, Deserialize, Clone)]
-struct EventParam { time: (i32, i32), days: [bool; 5], }
-
-#[derive(Serialize, Deserialize, Clone)]
-struct ClassParam { id: String, code: String, name: String, section: String, instructor: String, }
-
-impl fmt::Display for Class {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}, {}, <", self.code, self.name)?;
-        for (idx, item) in self.classes.iter().enumerate() {
-            write!(f, "{}{}, [", if idx == 0 { "" } else { " & " }, item.section)?;
-            for day in item.days {
-                if day.1 { write!(f, "{:04}-{:04} ", day.0.0, day.0.1)?; }
-                else { write!(f, " NA ")?; }
-            }
-            write!(f, "], {}, {}", item.location, item.instructor)?;
-        }
-        write!(f, ">, {}", self.description)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
-struct ConnectInfo { os: String, version: String, }
 
 #[tauri::command]
 async fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {

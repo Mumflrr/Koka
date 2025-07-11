@@ -5,7 +5,7 @@ import { stringifySchedule } from '../../Store.jsx';
 
 // --- Reusable Child Components ---
 // TODO Add Error for improper form validation
-// BUG Not numerical order
+// BUG Schedule index numbers do not reset after deleting and regenerating schedules
 // TODO add schedule renmaing ability
 
 const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {

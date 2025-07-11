@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::database_functions::{Event};
+use crate::{Event};
 
 const START_HOUR: i32 = 8;
 const END_HOUR: i32 = 20;
