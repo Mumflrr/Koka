@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { NavLink } from 'react-router-dom'
-import "../App.css";
-import Sidebar from "./Sidebar/Sidebar";
+import "../../App.css";
+import Sidebar from "../Sidebar/Sidebar";
 
 function Home() {
     const [isScraping, setIsScraping] = useState(false);

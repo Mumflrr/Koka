@@ -1,7 +1,6 @@
 // src/components/CalendarGrid/CalendarGrid.jsx
 import React from 'react';
 import ss from './CalendarGrid.module.css'; // Styles for grid AND modals
-import { Trash2 } from 'lucide-react'; // Kept for Event component
 import { Modal, DetailsModal, EventForm } from './CalendarModals'; // Import modals
 
 const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
@@ -31,30 +30,14 @@ const addMinutesToTimeInt = (timeInt, minutesToAdd) => {
   return newHours * 100 + newMinutes;
 };
 
-// DayCheckbox moved to CalendarModals.jsx
-// Modal, DetailsModal, EventForm definitions removed, now imported.
-
-// Event component remains in CalendarGrid.jsx as it's part of the grid display
-const Event = ({ event, eventStyle, onDelete, onEdit, onShowDetails }) => {
+// Event component - removed delete button entirely, deletion only through EventForm modal
+const Event = ({ event, eventStyle, onEdit, onShowDetails }) => {
   const handleClick = (e) => {
     e.stopPropagation();
     if (event.isPreview) {
       onShowDetails?.(event);
     } else {
       onEdit?.(event);
-    }
-  };
-  
-  const handleDeleteClick = (e) => {
-    e.stopPropagation();
-    if (event.isPreview) return; // Cannot delete preview events this way
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      try {
-        onDelete(event.id);
-      } catch (err) {
-        console.error('Error deleting event:', err);
-        alert('Failed to delete event. Please try again.');
-      }
     }
   };
   
@@ -68,11 +51,7 @@ const Event = ({ event, eventStyle, onDelete, onEdit, onShowDetails }) => {
     <div className={eventClasses} style={eventStyle} onClick={handleClick}>
       <div className={ss['event-header']}>
         <div className={ss['event-title']}>{event.title}</div>
-        {!event.isPreview && (
-          <button className={ss['delete-button']} onClick={handleDeleteClick} aria-label="Delete event">
-            <Trash2 size={16} />
-          </button>
-        )}
+        {/* Removed delete button - deletion only through EventForm modal */}
       </div>
       {event.professor && <div className={ss['event-professor']}>{event.professor}</div>}
     </div>
@@ -176,11 +155,18 @@ const CalendarGrid = ({
     });
   };
 
-  // The actual deletion is handled by Event component's handleDeleteClick which calls onEventDelete prop
-  // This onDelete is passed to the EventForm for its delete button
-  const handleDeleteFromForm = (eventId) => {
-    onEventDelete(eventId);
-    handleCloseModal(); // Form should close after delete
+  // Make this function async and await the deletion
+  const handleDeleteFromForm = async (eventId) => {
+    try {
+      // Wait for the deletion to complete (including user confirmation)
+      await onEventDelete(eventId);
+      // Only close modal after successful deletion
+      handleCloseModal();
+    } catch (error) {
+      // If deletion fails or user cancels, keep modal open
+      console.error('Deletion failed or was cancelled:', error);
+      // Modal stays open so user can try again or cancel
+    }
   };
 
   return (
@@ -258,7 +244,7 @@ const CalendarGrid = ({
                         // zIndex based on if it's a preview or regular event
                         zIndex: event.isPreview ? (eventIndexInColumn + 1000) : (eventIndexInColumn + 1)
                       }}
-                      onDelete={onEventDelete} // Passed to Event component
+                      // Removed onDelete prop - deletion only through EventForm modal
                       onEdit={handleEditEvent}
                       onShowDetails={onShowDetails}
                     />
@@ -279,7 +265,7 @@ const CalendarGrid = ({
             }))}
             onSave={handleSaveEvent}
             onCancel={handleCloseModal}
-            onDelete={handleDeleteFromForm} // Use specific handler for form's delete
+            onDelete={handleDeleteFromForm} // Now async - waits for deletion to complete
             isEditing={modal.isEditing}
             styles={ss}
           />

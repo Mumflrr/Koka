@@ -1,12 +1,95 @@
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{Class, EventParam, ScrapeClassesParameters, TimeBlock};
+use crate::{database_functions::{ClassRepository, ScheduleRepository}, services::start_chromedriver, tauri_backend::class_combinations::generate_combinations, AppState, Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
 
+pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
+    if parameters.classes.is_empty() {
+        return Err(anyhow!("No classes set to scrape"));
+    }
+
+    let connect_info_mutex = Arc::clone(&state.connect_info);
+    let db_pool = state.db_pool.clone();
+
+    let result: Result<Vec<Vec<Class>>, anyhow::Error> = async move {
+        let mut classes_to_scrape_params: Vec<ClassParam> = Vec::new();
+        let mut cached_results: HashMap<usize, Vec<Class>> = HashMap::new();
+        let mut scrape_indices: Vec<usize> = Vec::new();
+
+        for (index, class_param) in parameters.classes.iter().enumerate() {
+            let name = format!("{}{}", class_param.code, class_param.name);
+            let database_classes = ClassRepository::get_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
+                 eprintln!("Warning: Failed to query cache for {}: {}", name, e);
+                 Vec::new()
+            });
+
+            if !database_classes.is_empty() {
+                cached_results.insert(index, database_classes);
+            } else {
+                classes_to_scrape_params.push(class_param.clone());
+                scrape_indices.push(index);
+            }
+        }
+
+        let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
+        if !classes_to_scrape_params.is_empty() {
+            let connect_info = connect_info_mutex.lock().await.clone();
+            // Note: The check for Chrome updates is now handled at startup.
+            // It is not re-checked here to avoid unnecessary delays.
+            let driver = start_chromedriver(&connect_info).await?;
+            
+            let scrape_params_for_call = ScrapeClassesParameters {
+                 params_checkbox: parameters.params_checkbox, 
+                 classes: classes_to_scrape_params, 
+                 events: parameters.events.clone(),
+            };
+
+            let scraped_data = perform_scrape(&scrape_params_for_call, driver).await?;
+            
+            if let Err(e) = ClassRepository::save_sections_batch(&scraped_data, &db_pool).await {
+                 eprintln!("Warning: Failed to save scraped class sections: {}", e);
+            }
+
+            if scraped_data.len() == scrape_indices.len() {
+                for (i, data) in scraped_data.into_iter().enumerate() {
+                    let original_index = scrape_indices[i];
+                    scraped_results_map.insert(original_index, data);
+                }
+            } else {
+                 return Err(anyhow!("Mismatch between scraped results and requested classes"));
+            }
+        }
+
+        let mut combined_classes: Vec<Vec<Class>> = vec![Vec::new(); parameters.classes.len()];
+        for (index, cached_data) in cached_results {
+             if index < combined_classes.len() { combined_classes[index] = cached_data; }
+        }
+        for (index, scraped_data) in scraped_results_map {
+             if index < combined_classes.len() { combined_classes[index] = scraped_data; }
+        }
+        
+        let filtered_classes = filter_classes(combined_classes, &parameters)?;
+        if filtered_classes.iter().all(|group| group.is_empty()) { return Ok(Vec::new()); }
+
+        let combinations_generated = generate_combinations(filtered_classes).await?;
+        let mut ids = Vec::with_capacity(combinations_generated.len());
+        for combination in &combinations_generated {
+            ids.push(serde_json::to_string(combination)?);
+        }
+
+        ScheduleRepository::save_batch(ids, &combinations_generated, &db_pool).await?;
+        Ok(combinations_generated)
+    }
+    .await;
+
+    return result
+}
+
+//TODO scrape teachers 
 // Performs the scraping
-pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
+async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     
@@ -98,8 +181,8 @@ pub async fn perform_schedule_scrape(parameters: &ScrapeClassesParameters, drive
         table.find(By::Css("span.showCourseDetailsLink")).await?.click().await?;
 
         // Wait for dialog to appear 
-        //TODO: Implement better wait system
-        sleep(Duration::from_secs(1)).await;
+        //I've tried implementing a better wait system, but it hasn't worked out. Maybe one day
+        sleep(Duration::from_secs(5)).await;
         let dialog = driver.find(By::Id("dialog2")).await?;
         let dialog_text = dialog.text().await?;
 
