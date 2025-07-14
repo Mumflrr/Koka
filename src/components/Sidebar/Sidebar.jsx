@@ -1,25 +1,26 @@
+// Sidebar/Sidebar.jsx - Reverted to the correct, simple structure
+
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Calendar, Utensils, Presentation, SearchIcon, Squirrel} from "lucide-react";
+import { LayoutDashboard, Utensils, Presentation, SearchIcon, Squirrel, Settings } from "lucide-react";
 import useStore from '../../Store.jsx';
 import ss from "./Sidebar.module.css";
 
 const SidebarItem = ({ icon: Icon, label, to }) => {
   return (
-
     <NavLink 
       to={to}
-      className={({ isActive }) => `${ss['sidebar-item']} ${isActive ? ss.active : ''}`}>
-      <span className={ss['sidebar-item-bar']}></span>
-        <Icon className={ss['sidebar-item-icon']} />
+      className={({ isActive }) => `${ss['sidebar-item']} ${isActive ? ss.active : ''}`}
+    >
+      <Icon className={ss['sidebar-item-icon']} />
       <span className={ss['sidebar-item-label']}>{label}</span>
     </NavLink>
   );
 };
 
 function Sidebar() {
-    const isExpanded = useStore(state => state.isExpanded)
-    const setIsExpanded = useStore(state => state.setIsExpanded)
+    const isExpanded = useStore(state => state.isExpanded);
+    const setIsExpanded = useStore(state => state.setIsExpanded);
     
     const sidebarItems = [
         { icon: LayoutDashboard, label: "Home", path: "/" },
@@ -31,11 +32,17 @@ function Sidebar() {
 
     return (
         <aside 
-            className={`${ss['sidebar']} ${isExpanded ? ss['expanded'] : ''}`}
+            className={`${ss.sidebar} ${isExpanded ? ss.expanded : ''}`}
             onMouseEnter={() => setIsExpanded(true)}
             onMouseLeave={() => setIsExpanded(false)}>
+            
+            {/* Reverted to the original, distinct header structure. */}
             <div className={ss['sidebar-header']}>
-                <span className={ss['sidebar-header-logo']}><img src="/plover-stencil.svg" className='logo plover' alt="Plover 'logo'" /></span>
+                <img 
+                    src="/plover-stencil.svg" 
+                    className={`${ss['sidebar-header-logo']} logo plover`} 
+                    alt="Plover 'logo'" 
+                />
                 <span className={ss['sidebar-header-title']}>Plover</span>
             </div>
 
@@ -45,13 +52,13 @@ function Sidebar() {
                         key={item.path}
                         icon={item.icon}
                         label={item.label}
-                        to={item.path}/>
+                        to={item.path}
+                    />
                 ))}
             </nav>
 
             <div className={ss['sidebar-footer']}>
-                {/*<IconButton icon={<Gear/>} size="lg" className={ss['sidebar-item-icon']}/> */}
-
+                <SidebarItem icon={Settings} label="Settings" to="/settings" />
             </div>
         </aside>
     );

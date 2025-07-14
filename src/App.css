@@ -42,6 +42,7 @@
     --bg-subtle: #f8fafc;
     --bg-dark-content: #222222; /* Original dark content background */
     --bg-dark-sidebar: #2F2F35;
+    --bg-dark-sidebar-hover: #3a3a41; /* Added for sidebar item hover */
     --border-color: #e2e8f0;
     --border-color-light: #f3f4f6;
     --border-color-input: #d1d5db;
@@ -63,9 +64,9 @@
 
     /* --- Sidebar Specific (for compatibility) --- */
     --sidebar-short-width: 5rem;
-    --sidebar-expanded-width: 13rem;
+    --sidebar-expanded-width: 14rem; /* Slightly wider for better spacing */
     --alert: #B52948;
-    --action: var(--color-secondary-action);
+    --action: var(--color-primary); /* Aliased to the new primary color */
     --main-light: var(--text-light);
     --main-dark: var(--bg-dark-sidebar);
 }
