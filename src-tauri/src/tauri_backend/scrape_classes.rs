@@ -87,7 +87,6 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
     return result
 }
 
-//TODO scrape teachers 
 // Performs the scraping
 async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack

@@ -9,7 +9,6 @@ function Settings() {
     return (
         <>
         <Sidebar/>
-        <h1 className="page-header">Settings</h1>
         </>
     );
 }

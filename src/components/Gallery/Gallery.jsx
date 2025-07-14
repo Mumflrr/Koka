@@ -1,17 +1,15 @@
-import React, { useState } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
 import "../../App.css";
 import Sidebar from "../Sidebar/Sidebar";
+import ss from './Gallery.module.css';
 
 
-function Organisms() {
+function Gallery() {
 
     return (
         <>
         <Sidebar/>
-        <h1 className='page-header'>Organisms</h1>
         </>
     );
 }
 
-export default Organisms;
+export default Gallery;
