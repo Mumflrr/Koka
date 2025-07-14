@@ -46,20 +46,6 @@ export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
         <h2 className={styles['modal-title']}>{event.title}</h2>
       </div>
       <div className={styles['form-grid']}>
-        <div className={styles['form-row']}>
-          <label className={styles['form-label']}>Time</label>
-          <p>{displayTime}</p>
-        </div>
-        <div className={styles['form-row']}>
-          <label className={styles['form-label']}>Days</label>
-          <p>{getDaysFromBitmask(event.day)}</p>
-        </div>
-        {event.professor && (
-          <div className={styles['form-row']}>
-            <label className={styles['form-label']}>Professor</label>
-            <p>{event.professor}</p>
-          </div>
-        )}
         {event.description && (
           <div className={styles['form-row']}>
             <label className={styles['form-label']}>Description</label>
@@ -67,7 +53,7 @@ export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
           </div>
         )}
       </div>
-      <div className={styles['button-container']} style={{justifyContent: 'flex-end'}}>
+      <div className={`${styles['button-container']} ${styles['button-container-end']}`}>
         <button className={`${styles.button} ${styles['button-primary']}`} onClick={onClose}>Close</button>
       </div>
     </Modal>
@@ -158,19 +144,10 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
           />
         </div>
       </div>
-      <div className={styles['button-container']} style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '8px'
-      }}>
+      <div className={`${styles['button-container']} ${styles['button-container-split']}`}>
         <button className={`${styles.button} ${styles['button-outline']}`} onClick={onCancel}>Cancel</button>
-        <div style={{ 
-          display: 'flex', 
-          gap: '8px',
-          flexShrink: 0
-        }}>
+        
+        <div className={styles['action-button-group']}>
           {isEditing && (
             <button className={`${styles.button} ${styles['button-danger']}`} onClick={handleDelete}>
               Delete

@@ -1,38 +1,80 @@
-.logo.plover:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
-
+/* App.css */
 * {
-    margin:0;
-    padding:0;
-    transition:225ms ease;
+    margin: 0;
+    padding: 0;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
-    transition:225ms ease;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    transition: 225ms ease;
     z-index: 0;
 }
 
 :root {
+    /* --- Base --- */
     font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-    background-color: #222222;
-    color: var(--main-light);
-    --main-light: #F9F9F9;
-    --main-dark: #2F2F35;
-    --alert: #B52948;
-    --action: #24CFC5;
-    --action-dark: #1c42a3;
-
-    --sidebar-short-width: 5rem;
-    --sidebar-expanded-width: 13rem;
-
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-text-size-adjust: 100%;
-
     overscroll-behavior: none;
     overflow: hidden;
+
+    /* --- Color Palette (Design Tokens) --- */
+    /* Brand & Action */
+    --color-primary: #3b82f6;      /* Main blue from Scheduler */
+    --color-primary-hover: #2563eb;
+    --color-secondary-action: #24CFC5; /* Teal from old --action */
+    --color-danger: #dc3545;
+    --color-danger-hover: #c82333;
+    --color-warning: #fbbf24;
+    --color-success-bg: #dcfce7;
+    --color-success-text: #166534;
+    --color-error-bg: #fee2e2;
+    --color-error-text: #b91c1c;
+
+    /* Text */
+    --text-light: #F9F9F9;
+    --text-primary: #1f2937;
+    --text-secondary: #475569;
+    --text-subtle: #64748b;
+
+    /* Backgrounds & Borders */
+    --bg-page: #f9fafb; /* The light gray background for specific pages */
+    --bg-surface: #ffffff;
+    --bg-subtle: #f8fafc;
+    --bg-dark-content: #222222; /* Original dark content background */
+    --bg-dark-sidebar: #2F2F35;
+    --border-color: #e2e8f0;
+    --border-color-light: #f3f4f6;
+    --border-color-input: #d1d5db;
+
+    /* --- Sizing & Spacing (Tokens) --- */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+
+    /* --- Borders & Shadows (Tokens) --- */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+    /* --- Sidebar Specific (for compatibility) --- */
+    --sidebar-short-width: 5rem;
+    --sidebar-expanded-width: 13rem;
+    --alert: #B52948;
+    --action: var(--color-secondary-action);
+    --main-light: var(--text-light);
+    --main-dark: var(--bg-dark-sidebar);
 }
 
-h1 {
-    color: var(--main-light);
+body {
+  background-color: var(--bg-dark-content); 
+  color: var(--text-light); /* Default text color for dark background */
+}
+
+.logo.plover:hover {
+  filter: drop-shadow(0 0 2em #61dafb);
 }

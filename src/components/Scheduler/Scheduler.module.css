@@ -2,101 +2,94 @@
 .container {
     display: flex;
     height: 100vh;
-    background-color: #f9fafb; /* Light gray background for the whole page */
-    color: #1f2937;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
 }
 
 .mainContent {
     flex-grow: 1;
     display: grid;
-    /* Main content is calendar, control panel is on the side */
-    grid-template-columns: minmax(0, 1fr) 400px; /* Flexible calendar, fixed-width panel */
-    gap: 1.5rem;
-    padding: 1.5rem;
-    padding-left: calc(var(--sidebar-short-width) + 1.5rem);
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    padding-left: calc(var(--sidebar-short-width) + var(--spacing-lg));
     height: 100vh;
-    box-sizing: border-box; /* Include padding in height calculation */
-    background-color: #222222;
+    box-sizing: border-box;
+    background-color: var(--bg-dark-content); 
 }
 
-.calendarContainer {
-    background-color: white;
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    height: calc(100vh - 3rem); /* Full height minus padding */
-    overflow: hidden; /* Ensures calendar grid respects the border radius */
-    display: flex;
-    flex-direction: column;
+.calendarContainer, .controlPanel {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    height: calc(100vh - (var(--spacing-lg) * 2)); /* Full height minus padding */
+    overflow: hidden;
+    box-sizing: border-box;
+    color: var(--text-primary);
 }
 
 /* --- Control Panel --- */
 .controlPanel {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    background-color: #ffffff;
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    padding: 1.5rem;
-    height: calc(100vh - 3rem); /* Full height minus padding */
-    box-sizing: border-box;
-    overflow: hidden;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
 }
 
 .generationControls {
-    flex-shrink: 0; /* Don't shrink the controls */
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-md);
 }
 
 .paramToggles {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 /* --- Tabbed Interface for Lists --- */
 .listContainer {
-    flex: 1; /* Take remaining space */
+    flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Allow shrinking */
+    min-height: 0;
 }
 
 .listTabs {
     display: flex;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
 }
 
 .tabButton {
     flex-grow: 1;
-    padding: 0.75rem 0.5rem;
+    padding: var(--spacing-md) var(--spacing-sm);
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     cursor: pointer;
     font-size: 1rem;
     font-weight: 500;
-    color: #6b7280;
+    color: var(--text-subtle);
     transition: all 0.2s ease-in-out;
 }
 
 .tabButton:hover {
-    color: #374151;
-    background-color: #f9fafb;
+    color: var(--text-primary);
+    background-color: var(--bg-subtle);
 }
 
 .tabButton.active {
-    color: #3b82f6;
-    border-bottom-color: #3b82f6;
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
 }
 
 .listContent {
     flex: 1;
     overflow-y: auto;
-    padding-top: 0.5rem;
+    padding-top: var(--spacing-sm);
 }
 
 /* --- Schedules List --- */
@@ -111,10 +104,10 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 0.5rem;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-md);
     cursor: pointer;
     transition: background-color 0.2s ease;
-    border-bottom: 1px solid #f3f4f6; /* very light separator */
+    border-bottom: 1px solid var(--border-color-light);
 }
 
 .scheduleItem:last-child {
@@ -122,11 +115,11 @@
 }
 
 .scheduleItem:hover {
-    background-color: #f9fafb;
+    background-color: var(--bg-subtle);
 }
 
 .scheduleItem.selected-schedule {
-    background-color: #eff6ff; /* Light blue */
+    background-color: #eff6ff; /* Light blue - could be a variable too */
     border-color: #dbeafe;
 }
 
@@ -135,20 +128,20 @@
     border: none;
     cursor: pointer;
     font-size: 1.5rem;
-    color: #d1d5db; /* Lighter gray */
+    color: var(--border-color-input);
     transition: color 0.2s ease;
-    padding: 4px;
+    padding: var(--spacing-xs);
 }
 
 .favorite-button:hover, .favorite-button.favorited {
-    color: #facc15; /* A brighter, more modern gold */
+    color: #facc15;
 }
 
 .listActions {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
     flex-shrink: 0;
 }
 
@@ -156,48 +149,48 @@
 .classesContainer {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-md);
 }
 
 .classCard {
-    background-color: #f9fafb; /* Slightly off-white to stand out */
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    padding: 1rem;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    box-sizing: border-box; /* Ensure padding is included in width calculations */
+    gap: var(--spacing-sm);
+    box-sizing: border-box;
 }
 
 .cardHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem; /* Add gap to ensure proper spacing */
+    gap: var(--spacing-sm);
 }
 
 .inputField {
-    background-color: white;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    padding: 0.5rem 0.75rem;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color-input);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
     font-size: 0.875rem;
     width: 100%;
-    box-sizing: border-box; /* Include padding and border in width calculation */
+    box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
-    min-width: 0; /* Allow input to shrink if needed */
+    min-width: 0;
 }
 
 .inputField:focus {
     outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 1px #3b82f6;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .addClassCard {
-    border: 2px dashed #d1d5db;
-    border-radius: 0.5rem;
+    border: 2px dashed var(--border-color-input);
+    border-radius: var(--radius-lg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -207,15 +200,15 @@
 }
 
 .addClassCard:hover {
-    border-color: #3b82f6;
-    background-color: #eff6ff;
+    border-color: var(--color-primary);
+    background-color: #eff6ff; /* Light blue */
 }
 
 .addButtonCard {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    color: #6b7280;
+    gap: var(--spacing-sm);
+    color: var(--text-subtle);
     background: none;
     border: none;
     cursor: pointer;
@@ -224,13 +217,13 @@
 }
 
 .addClassCard:hover .addButtonCard {
-    color: #3b82f6;
+    color: var(--color-primary);
 }
 
 /* --- Buttons & Controls --- */
 .button {
     padding: 0.625rem 1rem;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-md);
     font-weight: 500;
     cursor: pointer;
     border: 1px solid transparent;
@@ -239,12 +232,12 @@
 }
 
 .button-primary {
-    background-color: #3b82f6;
-    color: white;
+    background-color: var(--color-primary);
+    color: var(--text-light);
 }
 
 .button-primary:hover {
-    background-color: #2563eb;
+    background-color: var(--color-primary-hover);
 }
 
 .button-primary:disabled {
@@ -254,17 +247,16 @@
 
 .toggleButton {
     background-color: #f3f4f6;
-    color: #4b5563;
-    border: 2px solid transparent; /* Use 2px border for consistency */
+    color: var(--text-secondary);
+    border: 2px solid transparent;
     margin: 0;
     box-sizing: border-box;
 }
 
-/* Updated toggle button styling for waitlist/open sections - inward border */
 .toggleButton.active {
-    background-color: #e5e7eb; /* Darker gray instead of blue fill */
-    color: #374151;
-    border-color: #3b82f6; /* Blue border when active, goes inward */
+    background-color: #e5e7eb;
+    color: var(--text-primary);
+    border-color: var(--color-primary);
 }
 
 .toggleButton:hover {
@@ -277,57 +269,65 @@
     border: none;
     cursor: pointer;
     color: #9ca3af;
-    padding: 0.5rem; /* Increased padding for better centering */
-    border-radius: 0.375rem; /* Slightly larger border radius */
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 2rem; /* Ensure minimum width for consistent sizing */
-    min-height: 2rem; /* Ensure minimum height for consistent sizing */
-    flex-shrink: 0; /* Prevent shrinking */
+    min-width: 2rem;
+    min-height: 2rem;
+    flex-shrink: 0;
 }
 
 .iconButton:hover {
-    color: #374151;
+    color: var(--text-primary);
     background-color: #e5e7eb;
 }
 
 /* --- Status & Messages --- */
-.empty-message {
+.empty-message, .loading-indicator {
     text-align: center;
     padding: 2rem 1rem;
-    color: #6b7280;
+    color: var(--text-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
 }
 
 .status-message {
-    padding: 0.75rem;
-    margin-top: 1rem;
-    border-radius: 0.375rem;
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    border-radius: var(--radius-md);
     font-size: 0.875rem;
     position: relative;
 }
 
 .status-error {
-    background-color: #fee2e2;
-    color: #b91c1c;
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
+}
+
+.status-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success-text);
 }
 
 .closeButton {
   position: absolute;
   top: 50%;
-  right: 0.5rem;
+  right: var(--spacing-sm);
   transform: translateY(-50%);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 0.25rem;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   color: inherit;
   opacity: 0.7;
-  transition: opacity 0.2s ease;
 }
 
 .closeButton:hover {
@@ -335,42 +335,16 @@
   background-color: rgba(0, 0, 0, 0.1);
 }
 
-.status-error .closeButton:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.status-success .closeButton:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-.inputContainer {
-  position: relative;
-  width: 100%;
-}
-
 .errorMessage {
-  color: #dc3545;
+  color: var(--color-danger);
   font-size: 0.75rem;
-  margin-top: 0.25rem;
+  margin-top: var(--spacing-xs);
   font-weight: 500;
 }
 
-.status-success {
-    background-color: #dcfce7;
-    color: #166534;
-}
-
-.loading-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: #6b7280;
-    padding: 0.5rem;
-}
-
 .spinner {
-    border: 3px solid #e5e7eb;
-    border-top: 3px solid #3b82f6;
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--color-primary);
     border-radius: 50%;
     width: 20px;
     height: 20px;
