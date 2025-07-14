@@ -3,8 +3,8 @@
 version = 4
 
 [[package]]
-name = "Plover"
-version = "0.1.0"
+name = "Koaburra"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "r2d2",

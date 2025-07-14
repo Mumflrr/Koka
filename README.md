@@ -1,4 +1,4 @@
-# Plover
+# Koaburra
 A little project of mine for learning Rust, React, database management, and web scraping
 
 ## Requirements
@@ -13,7 +13,6 @@ A little project of mine for learning Rust, React, database management, and web 
 - Security if I want to implement way to store credentials
 - Implementing pre req checks (theoretically possible but loads of works)
 - Improve splashscreen opening/closing timings
-- waitlist/open sections per class
 
 ### Questions
 If you want to contact me please don't I already have too much to think about T_T

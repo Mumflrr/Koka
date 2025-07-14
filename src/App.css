@@ -75,7 +75,3 @@ body {
   background-color: var(--bg-dark-content); 
   color: var(--text-light); /* Default text color for dark background */
 }
-
-.logo.plover:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}

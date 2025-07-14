@@ -1,6 +1,3 @@
-// Sidebar/Sidebar.jsx - Reverted to the correct, simple structure
-
-import React from "react";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Utensils, Presentation, SearchIcon, Squirrel, Settings } from "lucide-react";
 import useStore from '../../Store.jsx';
@@ -38,11 +35,11 @@ function Sidebar() {
             
             <div className={ss['sidebar-header']}>
                 <img 
-                    src="/plover-stencil.svg" 
+                    src="/koaburra-stencil.svg" 
                     className={`${ss['sidebar-header-logo']} logo plover`} 
                     alt="Plover 'logo'" 
                 />
-                <span className={ss['sidebar-header-title']}>Plover</span>
+                <span className={ss['sidebar-header-title']}>Koaburroo</span>
             </div>
 
             <nav className={ss['sidebar-nav']}>

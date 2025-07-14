@@ -1,4 +1,4 @@
-name: 'Publish Plover Release'
+name: 'Publish Koaburra Release'
 
 on:
   push:
@@ -115,12 +115,12 @@ jobs:
               4. **Important:** The first time you run it, right-click (or Ctrl-click) on `Plover.app` and select "Open" from the menu. You may see a warning; click "Open" again. This is usually only needed for the first launch.
 
             ### Linux
-            - **For Debian/Ubuntu-based distributions:** Download and install the `.deb` file (e.g., `sudo dpkg -i plover_*.deb && sudo apt-get install -f`).
+            - **For Debian/Ubuntu-based distributions:** Download and install the `.deb` file (e.g., `sudo dpkg -i koaburroo_*.deb && sudo apt-get install -f`).
             - **For other distributions:** Download the `.AppImage` file. Make it executable (`chmod +x Plover_*.AppImage`) and then run it (`./Plover_*.AppImage`).
 
             ## Additional Information
-            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/plover)
-            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/plover/issues)
+            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/Koburra)
+            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/koburra/issues)
 
             Thank you for using Plover! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
           releaseDraft: true
