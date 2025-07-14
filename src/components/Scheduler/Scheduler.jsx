@@ -325,8 +325,6 @@ const Scheduler = () => {
     }
 
     // --- MAIN RENDER ---
-    
-    //FIXME Reduce prop drilling
     return (
         <div className={ss.container}>
             <Sidebar />
@@ -346,35 +344,7 @@ const Scheduler = () => {
                 </div>
                 
                 {/* Course management and schedule generation panel */}
-                {/* Pass all props explicitly for stability and clear data flow */}
-                <CourseManagementPanel
-                    schedules={schedules}
-                    favoritedSchedules={favoritedSchedules}
-                    selectedScheduleId={selectedScheduleId}
-                    scrapeState={scrapeState}
-                    paramCheckboxes={paramCheckboxes}
-                    classes={classes}
-                    activeTab={activeTab}
-                    renderFavorites={renderFavorites}
-                    schedulerError={schedulerError}
-                    schedulesStringArray={schedulesStringArray}
-                    favoritedScheduleStrings={favoritedScheduleStrings}
-                    generateSchedules={generateSchedules}
-                    clearScrapeStatus={clearScrapeStatus}
-                    toggleFavoriteSchedule={toggleFavoriteSchedule}
-                    deleteSchedule={deleteSchedule}
-                    setSelectedSchedule={setSelectedSchedule}
-                    setHoveredSchedule={setHoveredSchedule}
-                    clearHoveredSchedule={clearHoveredSchedule}
-                    toggleRenderFavorites={toggleRenderFavorites}
-                    setActiveTab={setActiveTab}
-                    toggleParamCheckbox={toggleParamCheckbox}
-                    addClass={addClass}
-                    updateClass={updateClass}
-                    deleteClass={deleteClass}
-                    getScheduleDisplayNumber={getScheduleDisplayNumber}
-                    ss={ss}
-                />
+                <CourseManagementPanel ss={ss}/>
             </main>
         </div>
     );

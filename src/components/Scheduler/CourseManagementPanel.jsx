@@ -1,7 +1,8 @@
 // src/components/Scheduler/CourseManagementPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
-import { stringifySchedule } from '../../Store.jsx';
+import useStore, { stringifySchedule } from '../../Store.jsx';
+
 
 /**
  * @fileoverview Course Management Panel components for schedule generation and course editing
@@ -28,14 +29,6 @@ import { stringifySchedule } from '../../Store.jsx';
  * @param {Function} props.onDelete - Callback to delete course
  * @param {Object} props.ss - CSS module styles object
  * @returns {JSX.Element} Editable course card with validation
- * 
- * @example
- * <ClassCard
- *   classData={{ id: "1", code: "CSC", name: "116", section: "001", instructor: "Smith,John" }}
- *   onUpdate={handleUpdate}
- *   onDelete={handleDelete}
- *   ss={styles}
- * />
  */
 const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
     // === DISPLAY STATE ===
@@ -412,58 +405,38 @@ const ClassesList = React.memo(({ classes, updateClass, deleteClass, addClass, s
  * Contains generation controls, parameter toggles, and tabbed interface for schedules/courses
  * 
  * @component
- * @param {Object} props - Component props (extensive prop drilling - see FIXME)
- * @param {Array} props.schedules - Generated schedules array
- * @param {Array} props.favoritedSchedules - Favorited schedules array
- * @param {string|null} props.selectedScheduleId - Currently selected schedule ID
- * @param {Object} props.scrapeState - Schedule generation state
- * @param {boolean} props.scrapeState.isScraping - Whether generation is in progress
- * @param {string} props.scrapeState.status - Generation status message
- * @param {Object} props.paramCheckboxes - Parameter checkbox states
- * @param {boolean} props.paramCheckboxes.box1 - "Open Sections Only" checkbox
- * @param {boolean} props.paramCheckboxes.box2 - "Waitlist OK" checkbox
- * @param {Array} props.classes - Course parameter objects
- * @param {string} props.activeTab - Currently active tab ('schedules' or 'classes')
- * @param {boolean} props.renderFavorites - Whether showing favorites view
- * @param {string|null} props.schedulerError - Error message from scheduler operations
- * @param {Array} props.schedulesStringArray - Array of stringified schedules
- * @param {Set} props.favoritedScheduleStrings - Set of favorited schedule strings
- * @param {Function} props.generateSchedules - Generate new schedules
- * @param {Function} props.clearScrapeStatus - Clear generation status
- * @param {Function} props.toggleFavoriteSchedule - Toggle schedule favorite status
- * @param {Function} props.deleteSchedule - Delete schedule
- * @param {Function} props.setSelectedSchedule - Select/pin schedule
- * @param {Function} props.setHoveredSchedule - Set hovered schedule
- * @param {Function} props.clearHoveredSchedule - Clear hovered schedule
- * @param {Function} props.toggleRenderFavorites - Toggle favorites view
- * @param {Function} props.setActiveTab - Set active tab
- * @param {Function} props.toggleParamCheckbox - Toggle parameter checkbox
- * @param {Function} props.addClass - Add new course
- * @param {Function} props.updateClass - Update course data
- * @param {Function} props.deleteClass - Delete course
- * @param {Function} props.getScheduleDisplayNumber - Get schedule display number
  * @param {Object} props.ss - CSS module styles object
  * @returns {JSX.Element} Complete course management interface
- * 
- * @example
- * <CourseManagementPanel
- *   schedules={schedules}
- *   classes={classes}
- *   activeTab="schedules"
- *   generateSchedules={handleGenerate}
- *   // ... other props
- *   ss={styles}
- * />
  */
 //FIXME Reduce prop drilling
-const CourseManagementPanel = ({
-    schedules, favoritedSchedules, selectedScheduleId, scrapeState, paramCheckboxes,
-    classes, activeTab, renderFavorites, schedulerError, schedulesStringArray,
-    favoritedScheduleStrings, generateSchedules, clearScrapeStatus, toggleFavoriteSchedule,
-    deleteSchedule, setSelectedSchedule, setHoveredSchedule, clearHoveredSchedule,
-    toggleRenderFavorites, setActiveTab, toggleParamCheckbox, addClass, updateClass,
-    deleteClass, getScheduleDisplayNumber, ss
-}) => {
+const CourseManagementPanel = ({ ss }) => {
+    const schedules = useStore(state => state.schedules);
+    const favoritedSchedules = useStore(state => state.favoritedSchedules);
+    const selectedScheduleId = useStore(state => state.selectedScheduleId);
+    const scrapeState = useStore(state => state.scrapeState);
+    const paramCheckboxes = useStore(state => state.paramCheckboxes);
+    const classes = useStore(state => state.classes);
+    const activeTab = useStore(state => state.activeTab);
+    const renderFavorites = useStore(state => state.renderFavorites);
+    const schedulerError = useStore(state => state.schedulerError);
+    const generateSchedules = useStore(state => state.generateSchedules);
+    const clearScrapeStatus = useStore(state => state.clearScrapeStatus);
+    const toggleFavoriteSchedule = useStore(state => state.toggleFavoriteSchedule);
+    const deleteSchedule = useStore(state => state.deleteSchedule);
+    const setSelectedSchedule = useStore(state => state.setSelectedSchedule);
+    const setHoveredSchedule = useStore(state => state.setHoveredSchedule);
+    const clearHoveredSchedule = useStore(state => state.clearHoveredSchedule);
+    const toggleRenderFavorites = useStore(state => state.toggleRenderFavorites);
+    const setActiveTab = useStore(state => state.setActiveTab);
+    const toggleParamCheckbox = useStore(state => state.toggleParamCheckbox);
+    const addClass = useStore(state => state.addClass);
+    const updateClass = useStore(state => state.updateClass);
+    const deleteClass = useStore(state => state.deleteClass);
+    const getScheduleDisplayNumber = useStore(state => state.getScheduleDisplayNumber);
+
+    // Derived values
+    const favoritedScheduleStrings = new Set(favoritedSchedules.map(s => stringifySchedule(s)).filter(Boolean));
+
     // Extract scrape state for easier access
     const { isScraping, status: scrapeStatus } = scrapeState;
 
