@@ -2,21 +2,75 @@
 import React from 'react';
 import { X, Trash2 } from 'lucide-react';
 
-// ss (styles object) will be passed as a prop from CalendarGrid.jsx
-// This avoids needing to manage a separate CSS module for modals immediately
-// or duplicating style imports if modals were to be used elsewhere with different styles.
+/**
+ * @fileoverview Calendar modal components for event creation, editing, and viewing
+ * Contains reusable modal components that work with the CalendarGrid system
+ * Styles are passed as props to maintain flexibility and avoid CSS module dependencies
+ */
 
-const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F']; // Used by EventForm
-const dayIndexToBit = (index) => 1 << (index + 1); // Used by EventForm
-const isDaySelected = (dayBits, dayIndex) => (dayBits & (1 << (dayIndex + 1))) !== 0; // Used by EventForm
+// === DAY MANAGEMENT CONSTANTS AND UTILITIES ===
 
-// Helper to get day names for display, used by DetailsModal
+/** @constant {Array<string>} Short day labels for form checkboxes (Mon-Fri) */
+const dayShortLabels = ['M', 'Tu', 'W', 'Th', 'F'];
+
+/**
+ * Converts day index to corresponding bit position in bitmask
+ * Uses 1-based bit positioning to match backend expectations
+ * @param {number} index - Day index (0 for Monday, 1 for Tuesday, etc.)
+ * @returns {number} Bit value for the day (2 for Monday, 4 for Tuesday, etc.)
+ * 
+ * @example
+ * dayIndexToBit(0) // Returns 2 (Monday bit)
+ * dayIndexToBit(1) // Returns 4 (Tuesday bit)
+ * dayIndexToBit(4) // Returns 32 (Friday bit)
+ */
+const dayIndexToBit = (index) => 1 << (index + 1);
+
+/**
+ * Checks if a specific day is selected in the bitmask
+ * @param {number} dayBits - Day bitmask containing selected days
+ * @param {number} dayIndex - Day index to check (0-4 for Mon-Fri)
+ * @returns {boolean} True if the day is selected in the bitmask
+ * 
+ * @example
+ * isDaySelected(6, 0) // Returns true (Monday is selected in bitmask 6)
+ * isDaySelected(6, 1) // Returns true (Tuesday is selected in bitmask 6)
+ * isDaySelected(6, 2) // Returns false (Wednesday is not selected in bitmask 6)
+ */
+const isDaySelected = (dayBits, dayIndex) => (dayBits & (1 << (dayIndex + 1))) !== 0;
+
+/**
+ * Converts day bitmask to human-readable day names for display
+ * @param {number} dayBitmask - Bitmask representing selected days
+ * @returns {string} Comma-separated list of day names or fallback message
+ * 
+ * @example
+ * getDaysFromBitmask(6) // Returns "Monday, Tuesday"
+ * getDaysFromBitmask(31) // Returns "Monday, Tuesday, Wednesday, Thursday"
+ * getDaysFromBitmask(0) // Returns "No scheduled days"
+ */
 const getDaysFromBitmask = (dayBitmask) => {
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   if (!dayBitmask) return 'No scheduled days';
   return dayNames.filter((_, i) => (dayBitmask & (1 << (i + 1))) !== 0).join(', ');
 };
 
+// === FORM COMPONENTS ===
+
+/**
+ * Individual day checkbox component for event form
+ * Displays a styled checkbox with day label for day selection
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.day - Short day label to display (e.g., "M", "Tu")
+ * @param {number} props.index - Day index for bit calculation (0-4)
+ * @param {boolean} props.checked - Whether this day is currently selected
+ * @param {Function} props.onChange - Callback when checkbox state changes
+ * @param {number} props.onChange.index - Day index passed to callback
+ * @param {Object} props.styles - CSS module styles object
+ * @returns {JSX.Element} Styled checkbox with day label
+ */
 const DayCheckbox = ({ day, index, checked, onChange, styles }) => (
   <label className={`${styles['day-checkbox']} ${checked ? styles.selected : ''}`}>
     <input type="checkbox" checked={checked} onChange={() => onChange(index)} />
@@ -24,6 +78,25 @@ const DayCheckbox = ({ day, index, checked, onChange, styles }) => (
   </label>
 );
 
+// === MODAL COMPONENTS ===
+
+/**
+ * Base modal wrapper component with backdrop and close functionality
+ * Provides consistent modal behavior and styling across different modal types
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {boolean} props.isOpen - Whether the modal is currently visible
+ * @param {Function} props.onClose - Callback to close the modal
+ * @param {React.ReactNode} props.children - Modal content to render
+ * @param {Object} props.styles - CSS module styles object
+ * @returns {JSX.Element} Modal wrapper with backdrop and close button
+ * 
+ * @example
+ * <Modal isOpen={showModal} onClose={handleClose} styles={ss}>
+ *   <div>Modal content here</div>
+ * </Modal>
+ */
 export const Modal = ({ isOpen, onClose, children, styles }) => (
   <div className={`${styles['slide-modal-container']} ${isOpen ? styles['modal-open'] : ''}`} onClick={onClose}>
     <div className={styles['slide-modal']} onClick={e => e.stopPropagation()}>
@@ -35,8 +108,26 @@ export const Modal = ({ isOpen, onClose, children, styles }) => (
   </div>
 );
 
+/**
+ * Modal for displaying read-only event details
+ * Used primarily for preview events from generated schedules
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {boolean} props.isOpen - Whether the modal is currently visible
+ * @param {Function} props.onClose - Callback to close the modal
+ * @param {Object|null} props.event - Event object to display details for
+ * @param {string} props.event.title - Event title
+ * @param {string} [props.event.description] - Event description (optional)
+ * @param {string|number} props.event.startTime - Start time (formatted or integer)
+ * @param {string|number} props.event.endTime - End time (formatted or integer)
+ * @param {Object} props.styles - CSS module styles object
+ * @returns {JSX.Element|null} Details modal or null if no event provided
+ */
 export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
   if (!event) return null;
+  
+  // Handle time display for events with no specific times
   const displayTime = (event.startTime === '00:00' && event.endTime === '00:00') 
     ? 'N/A' : `${event.startTime} - ${event.endTime}`;
 
@@ -60,12 +151,44 @@ export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
   );
 };
 
+/**
+ * Form modal for creating and editing user events
+ * Provides comprehensive event editing with validation and day selection
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.event - Event data object for form fields
+ * @param {string|null} props.event.id - Event ID (null for new events)
+ * @param {string} props.event.title - Event title
+ * @param {string} props.event.startTime - Start time in HH:MM format
+ * @param {string} props.event.endTime - End time in HH:MM format
+ * @param {number} props.event.day - Day bitmask for selected days
+ * @param {string} props.event.professor - Professor/instructor name
+ * @param {string} props.event.description - Event description
+ * @param {Function} props.setEvent - Function to update event data
+ * @param {Function} props.onSave - Callback to save the event
+ * @param {Function} props.onCancel - Callback to cancel editing
+ * @param {Function} [props.onDelete] - Callback to delete the event (editing mode only)
+ * @param {boolean} [props.isEditing=false] - Whether in edit mode vs create mode
+ * @param {Object} props.styles - CSS module styles object
+ * @returns {JSX.Element} Event form with all input fields and action buttons
+ */
 export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditing = false, styles }) => {
+  /**
+   * Handles toggling of day selection in the form
+   * Uses XOR operation to toggle the specific day bit
+   * @param {number} dayIndex - Index of day to toggle (0-4 for Mon-Fri)
+   */
   const handleDayToggle = (dayIndex) => {
     const dayBit = dayIndexToBit(dayIndex);
     setEvent(prev => ({ ...prev, day: prev.day ^ dayBit }));
   };
 
+  /**
+   * Handles event deletion with proper async flow
+   * Calls the delete callback and lets the store handle confirmation and modal closure
+   * Modal stays open until deletion is confirmed or cancelled
+   */
   const handleDelete = () => {
     if (onDelete) {
       onDelete(event.id); // This calls Store's deleteUserEvent which shows confirmation
@@ -76,10 +199,14 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
 
   return (
     <>
+      {/* Modal Header */}
       <div className={styles['modal-header']}>
         <h2 className={styles['modal-title']}>{isEditing ? 'Edit Event' : 'New Event'}</h2>
       </div>
+      
+      {/* Form Fields */}
       <div className={styles['form-grid']}>
+        {/* Title Field - Required */}
         <div className={styles['form-row']}>
           <label className={styles['form-label']}>Title*</label>
           <input
@@ -89,6 +216,8 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
             onChange={(e) => setEvent(prev => ({ ...prev, title: e.target.value }))}
           />
         </div>
+        
+        {/* Day Selection - Required */}
         <div className={styles['form-row']}>
           <label className={styles['form-label']}>Days*</label>
           <div className={styles['days-grid']}>
@@ -104,6 +233,8 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
             ))}
           </div>
         </div>
+        
+        {/* Time Fields - Required */}
         <div className={styles['form-row']}>
           <label className={styles['form-label']}>Time*</label>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -125,6 +256,8 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
             />
           </div>
         </div>
+        
+        {/* Professor Field - Optional */}
         <div className={styles['form-row']}>
           <label className={styles['form-label']}>Professor</label>
           <input
@@ -134,6 +267,8 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
             onChange={(e) => setEvent(prev => ({ ...prev, professor: e.target.value }))}
           />
         </div>
+        
+        {/* Description Field - Optional */}
         <div className={styles['form-row']}>
           <label className={styles['form-label']}>Description</label>
           <textarea
@@ -144,15 +279,22 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
           />
         </div>
       </div>
+      
+      {/* Action Buttons */}
       <div className={`${styles['button-container']} ${styles['button-container-split']}`}>
+        {/* Cancel Button */}
         <button className={`${styles.button} ${styles['button-outline']}`} onClick={onCancel}>Cancel</button>
         
+        {/* Action Button Group */}
         <div className={styles['action-button-group']}>
+          {/* Delete Button - Only shown in edit mode */}
           {isEditing && (
             <button className={`${styles.button} ${styles['button-danger']}`} onClick={handleDelete}>
               Delete
             </button>
           )}
+          
+          {/* Save/Create Button - Disabled if required fields are missing */}
           <button 
             className={`${styles.button} ${styles['button-primary']}`}
             onClick={onSave}

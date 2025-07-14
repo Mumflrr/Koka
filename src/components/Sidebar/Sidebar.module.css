@@ -24,7 +24,7 @@
 .sidebar-header {
     display: flex;
     align-items: center;
-    padding: var(--spacing-lg) 24px;
+    padding: var(--spacing-sm) 24px;
     position: relative;
     height: calc(2rem + 2 * var(--spacing-lg));
 }

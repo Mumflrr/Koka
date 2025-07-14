@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import { systemAPI, eventsAPI, schedulesAPI, favoritesAPI, classParametersAPI } from './api';
 
-// Helper function to stringify schedules for use as unique keys
+/**
+ * Helper function to stringify schedules for use as unique keys
+ * Ensures consistent serialization by sorting object keys
+ * @param {Object} schedule - The schedule object to stringify
+ * @returns {string|null} - JSON string representation or null if error
+ */
 const stringifySchedule = (schedule) => {
     try {
-        // A more stable stringify by sorting keys
         return JSON.stringify(schedule, (key, value) => {
             if (value && typeof value === 'object' && !Array.isArray(value)) {
                 return Object.keys(value)
@@ -22,7 +26,13 @@ const stringifySchedule = (schedule) => {
     }
 };
 
-// Helper function to add a new event to the processed events state object
+/**
+ * Helper function to add a new event to the processed events state object
+ * Categorizes events by day and whether they have specific times
+ * @param {Object} currentState - Current events state object
+ * @param {Object} newEvent - Event object to add
+ * @returns {Object} - New state object with event added
+ */
 const addEventToState = (currentState, newEvent) => {
     const newState = JSON.parse(JSON.stringify(currentState)); // Deep copy
     const day = newEvent.day.toString();
@@ -42,7 +52,13 @@ const addEventToState = (currentState, newEvent) => {
     return newState;
 };
 
-// Helper function to remove an event from the processed events state object
+/**
+ * Helper function to remove an event from the processed events state object
+ * Searches through all days and event categories to find and remove the event
+ * @param {Object} currentState - Current events state object
+ * @param {string|number} eventId - ID of event to remove
+ * @returns {Object} - New state object with event removed
+ */
 const removeEventFromState = (currentState, eventId) => {
     const newState = JSON.parse(JSON.stringify(currentState)); // Deep copy
 
@@ -55,32 +71,78 @@ const removeEventFromState = (currentState, eventId) => {
     return newState;
 };
 
-
+/**
+ * Main Zustand store for the scheduling application
+ * Manages all application state including events, schedules, UI state, and class parameters
+ */
 const useStore = create((set, get) => ({
     // --- State ---
+    
+    /** @type {boolean} - Whether the sidebar is expanded */
     isExpanded: false,
+    
+    /** @type {Object} - User events organized by day and time category */
     userEvents: { eventsByDay: {}, noTimeEventsByDay: {} },
+    
+    /** @type {Array} - Array of generated schedules */
     schedules: [[]],
+    
+    /** @type {Array} - Array of user-favorited schedules */
     favoritedSchedules: [],
-    selectedScheduleId: null, // REFACTORED: from index to stable ID
+    
+    /** @type {string|null} - ID of currently selected/pinned schedule */
+    selectedScheduleId: null,
+    
+    /** @type {Object|null} - Currently hovered schedule for preview */
     currentHoveredSchedule: null,
+    
+    /** @type {Object|null} - Event object for details modal */
     detailsEvent: null,
+    
+    /** @type {boolean} - Loading state for scheduler operations */
     schedulerLoading: true,
+    
+    /** @type {string|null} - Error message for scheduler operations */
     schedulerError: null,
+    
+    /** @type {Object} - State for schedule generation process */
     scrapeState: { isScraping: false, status: "" },
+    
+    /** @type {Object} - Parameter checkboxes for schedule generation */
     paramCheckboxes: { box1: false, box2: false },
+    
+    /** @type {Array} - Array of class parameter objects */
     classes: [],
+    
+    /** @type {string} - Currently active tab in the UI */
     activeTab: 'schedules',
+    
+    /** @type {boolean} - Whether to render favorites view */
     renderFavorites: false,
+    
+    /** @type {Map} - Maps schedule strings to display numbers */
     scheduleDisplayNumbers: new Map(),
+    
+    /** @type {number} - Next available schedule display number */
     nextScheduleNumber: 1,
 
     // --- Actions ---
 
     // Sidebar
+    /**
+     * Sets the sidebar expansion state
+     * @param {boolean} value - Whether sidebar should be expanded
+     * @returns {void}
+     */
     setIsExpanded: (value) => set({ isExpanded: value }),
 
-    // Scheduler Display Number Helpers
+    // Schedule Display Number Helpers
+    /**
+     * Assigns display numbers to schedules for UI identification
+     * @param {Array} schedules - Array of schedule objects
+     * @returns {void}
+     * @private
+     */
     _assignScheduleDisplayNumbers: (schedules) => {
         const state = get();
         const currentMapping = new Map(state.scheduleDisplayNumbers);
@@ -99,13 +161,31 @@ const useStore = create((set, get) => ({
             nextScheduleNumber: nextNumber
         });
     },
+
+    /**
+     * Gets the display number for a schedule
+     * @param {string} scheduleString - Stringified schedule
+     * @returns {number|string} - Display number or "?" if not found
+     */
     getScheduleDisplayNumber: (scheduleString) => {
         const state = get();
         return state.scheduleDisplayNumbers.get(scheduleString) || "?";
     },
+
+    /**
+     * Clears scraping status and errors
+     * @returns {void}
+     */
     clearScrapeStatus: () => set({ scrapeState: { isScraping: false, status: "" }, schedulerError: null }),
 
     // Core Data Loading
+    /**
+     * Updates scheduler data from backend APIs
+     * Fetches events, schedules, and favorites concurrently
+     * @returns {Promise<void>}
+     * @throws {Error} When API calls fail
+     * @private
+     */
     _updateSchedulerData: async () => {
         try {
             const [loadedEventsResult, loadedSchedules, loadedFavorites] = await Promise.all([
@@ -129,6 +209,13 @@ const useStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Loads all data needed for the scheduler page
+     * Called on initial page load
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When initial data loading fails
+     */
     loadSchedulerPage: async () => {
         set({ schedulerLoading: true, schedulerError: null });
         try {
@@ -163,6 +250,17 @@ const useStore = create((set, get) => ({
     },
 
     // Event CRUD Actions
+    /**
+     * Creates a new user event
+     * @param {Object} newEventData - Event data object
+     * @param {string} newEventData.title - Event title (required)
+     * @param {number} newEventData.day - Day bitmask
+     * @param {number} newEventData.startTime - Start time in minutes
+     * @param {number} newEventData.endTime - End time in minutes
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When event creation fails
+     */
     createUserEvent: async (newEventData) => {
         set({ schedulerError: null });
         // Minimal validation, backend handles the rest
@@ -186,6 +284,14 @@ const useStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Updates an existing user event
+     * @param {Object} updatedEventData - Updated event data
+     * @param {string|number} updatedEventData.id - Event ID (required)
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When event update fails
+     */
     updateUserEvent: async (updatedEventData) => {
         set({ schedulerError: null });
         if (!updatedEventData || !updatedEventData.id) {
@@ -205,6 +311,13 @@ const useStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Deletes a user event
+     * @param {string|number} eventId - ID of event to delete
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} If eventId is invalid or deletion fails
+     */
     deleteUserEvent: async (eventId) => {
         set({ schedulerError: null });
         if (!eventId) {
@@ -228,6 +341,23 @@ const useStore = create((set, get) => ({
     },
 
     // Schedule Generation & Management
+    /**
+     * Generates new schedules based on current parameters and events
+     * Uses class parameters, user events, and checkbox settings to create optimized schedules
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When schedule generation fails
+     * @example
+     * // Generate schedules with current state
+     * await generateSchedules();
+     * 
+     * @description This function:
+     * 1. Extracts user events from the organized state structure
+     * 2. Formats events for backend consumption
+     * 3. Calls the schedules API with parameters, classes, and events
+     * 4. Updates the UI state with generated schedules
+     * 5. Clears any previously pinned schedule
+     */
     generateSchedules: async () => {
         set({ scrapeState: { isScraping: true, status: "Preparing data..." }, schedulerError: null });
         const { paramCheckboxes, classes, userEvents } = get();
@@ -244,8 +374,7 @@ const useStore = create((set, get) => ({
                     }
                 });
 
-            // REFACTORED: No longer need bitmaskToDayArray. Backend handles it.
-            // We just send the event object as is.
+            // Format events for backend consumption
             const formattedUserEventsForScrape = rawUserEvents.map(event => ({
                 time: [event.startTime, event.endTime],
                 days: event.day // Send the raw bitmask
@@ -274,6 +403,13 @@ const useStore = create((set, get) => ({
         }
     },
     
+    /**
+     * Sets or toggles the selected/pinned schedule
+     * @param {Object} scheduleData - Schedule object to select
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When schedule selection fails
+     */
     setSelectedSchedule: async (scheduleData) => {
         set({ schedulerError: null });
         const scheduleId = stringifySchedule(scheduleData);
@@ -295,6 +431,14 @@ const useStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Deletes a schedule from either regular schedules or favorites
+     * @param {string} scheduleIdString - Stringified schedule ID
+     * @param {boolean} isCurrentlyFavorite - Whether schedule is currently favorited
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When schedule deletion fails
+     */
     deleteSchedule: async (scheduleIdString, isCurrentlyFavorite) => {
         set({ currentHoveredSchedule: null, schedulerError: null });
         try {
@@ -320,6 +464,15 @@ const useStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Toggles the favorite status of a schedule
+     * @param {Object} scheduleData - Schedule object
+     * @param {string} scheduleString - Stringified schedule
+     * @param {boolean} isCurrentlyFavorite - Current favorite status
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When favorite toggle fails
+     */
     toggleFavoriteSchedule: async (scheduleData, scheduleString, isCurrentlyFavorite) => {
         set({ schedulerError: null });
         try {
@@ -333,12 +486,50 @@ const useStore = create((set, get) => ({
     },
 
     // Other UI State Actions
+    /**
+     * Sets the currently hovered schedule for preview
+     * @param {Object} scheduleData - Schedule object to hover
+     * @returns {void}
+     */
     setHoveredSchedule: (scheduleData) => set({ currentHoveredSchedule: scheduleData }),
+
+    /**
+     * Clears the currently hovered schedule
+     * @returns {void}
+     */
     clearHoveredSchedule: () => set({ currentHoveredSchedule: null }),
+
+    /**
+     * Shows the event details modal
+     * @param {Object} event - Event object to show details for
+     * @returns {void}
+     */
     showEventDetailsModal: (event) => set({ detailsEvent: event }),
+
+    /**
+     * Closes the event details modal
+     * @returns {void}
+     */
     closeEventDetailsModal: () => set({ detailsEvent: null }),
+
+    /**
+     * Toggles between regular schedules and favorites view
+     * @returns {void}
+     */
     toggleRenderFavorites: () => set(state => ({ renderFavorites: !state.renderFavorites, currentHoveredSchedule: null })),
+
+    /**
+     * Sets the active tab in the UI
+     * @param {string} tabName - Name of tab to activate
+     * @returns {void}
+     */
     setActiveTab: (tabName) => set({ activeTab: tabName }),
+
+    /**
+     * Toggles a parameter checkbox for schedule generation
+     * @param {string} boxName - Name of checkbox to toggle (box1, box2)
+     * @returns {void}
+     */
     toggleParamCheckbox: (boxName) => {
         set(state => ({
             paramCheckboxes: { ...state.paramCheckboxes, [boxName]: !state.paramCheckboxes[boxName] }
@@ -346,6 +537,10 @@ const useStore = create((set, get) => ({
     },
 
     // Class Parameter Actions
+    /**
+     * Adds a new empty class to the parameters list
+     * @returns {void}
+     */
     addClass: () => {
         const newClass = {
             id: `${Date.now().toString()}-${Math.random().toString(36).substring(2,9)}`,
@@ -353,6 +548,15 @@ const useStore = create((set, get) => ({
         };
         set(state => ({ classes: [...state.classes, newClass] }));
     },
+
+    /**
+     * Updates an existing class parameter
+     * @param {Object} classData - Updated class data
+     * @param {string} classData.id - Class ID (required)
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When class update fails
+     */
     updateClass: async (classData) => {
         const originalClasses = [...get().classes];
         set(state => ({
@@ -365,6 +569,14 @@ const useStore = create((set, get) => ({
             set({ schedulerError: 'Failed to update class.', classes: originalClasses });
         }
     },
+
+    /**
+     * Deletes a class parameter
+     * @param {string} classId - ID of class to delete
+     * @returns {Promise<void>}
+     * @async
+     * @throws {Error} When class deletion fails
+     */
     deleteClass: async (classId) => {
         const originalClasses = get().classes;
         set(state => ({ classes: state.classes.filter(item => item.id !== classId) }));

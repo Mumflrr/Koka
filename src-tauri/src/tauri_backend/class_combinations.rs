@@ -1,5 +1,25 @@
+//! Schedule combination generation module using backtracking algorithm
+//! 
+//! This module generates all valid schedule combinations from filtered course data
+//! using an optimized backtracking approach with index-based references to minimize
+//! memory allocation during the recursive exploration process.
+
 use crate::Class;
 
+/**
+ * Generates all valid schedule combinations from course groups using backtracking
+ * 
+ * This function implements an optimized combination generation algorithm:
+ * 1. Creates index-based references to avoid cloning during backtracking
+ * 2. Flattens nested course structure for efficient access
+ * 3. Uses recursive backtracking to explore all possible combinations
+ * 4. Validates time conflicts between courses in different groups
+ * 5. Only clones Class objects at the end for final results
+ * 
+ * @param {Vec<Vec<Class>>} classes - Course groups where each inner Vec contains sections for one course
+ * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} All valid schedule combinations or error
+ * @throws {anyhow::Error} If backtracking algorithm encounters unexpected state
+ */
 pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
 
     // Create indices for each class to avoid cloning during backtracking
@@ -44,7 +64,23 @@ pub async fn generate_combinations(classes: Vec<Vec<Class>>) -> Result<Vec<Vec<C
     Ok(final_results)
 }
 
-// Backtracking function to explore all possible combinations
+/**
+ * Recursive backtracking function to explore all possible schedule combinations
+ * 
+ * This function implements the core backtracking algorithm:
+ * 1. Base case: when all course groups have been processed, save valid schedule
+ * 2. For each class in current group: check compatibility with existing schedule
+ * 3. If compatible: add to schedule and recurse to next group
+ * 4. Backtrack: remove class and try next option in current group
+ * 5. Ensures exactly one class is selected from each course group
+ * 
+ * @param {&[&Class]} flattened_classes - Flat array of all class references for efficient access
+ * @param {&[Vec<usize>]} class_indices - Index mapping from course groups to flattened array positions
+ * @param {&mut Vec<usize>} current_schedule - Current partial schedule being built (indices only)
+ * @param {usize} current_group - Index of course group currently being processed
+ * @param {&mut Vec<Vec<usize>>} results - Accumulator for all valid schedule combinations found
+ * @param {usize} total_groups - Total number of course groups that must be included in schedule
+ */
 fn backtrack(
     flattened_classes: &[&Class],
     class_indices: &[Vec<usize>],
@@ -88,8 +124,21 @@ fn backtrack(
     }
 }
 
-
-// Check if a class is compatible with the current schedule
+/**
+ * Checks if a new class is compatible with all classes in the current schedule
+ * 
+ * This function performs comprehensive time conflict detection:
+ * 1. Compares new class against every class already in the schedule
+ * 2. For each pair: checks all sections of both classes for conflicts
+ * 3. For each day of the week: validates time ranges don't overlap
+ * 4. Uses standard interval overlap detection (exclusive boundaries)
+ * 5. Returns false immediately if any conflict is found
+ * 
+ * @param {&[&Class]} all_classes - Flat array of all class references
+ * @param {usize} new_class_idx - Index of new class being considered for addition
+ * @param {&[usize]} schedule_indices - Indices of classes already in current schedule
+ * @returns {bool} True if new class has no time conflicts, false if any conflict detected
+ */
 fn is_compatible(all_classes: &[&Class], new_class_idx: usize, schedule_indices: &[usize]) -> bool {
     let new_class = all_classes[new_class_idx];
 

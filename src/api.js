@@ -31,27 +31,21 @@ export const systemAPI = {
     return invokeWrapper('get_display_schedule');
   },
   setDisplaySchedule(scheduleIndex) {
-    // Backend still uses index for now, so we pass it.
-    // If backend is updated to use ID, this would change.
     return invokeWrapper('set_display_schedule', { id: scheduleIndex });
   }
 };
 
 // --- Events Table API (REFACTORED) ---
 export const eventsAPI = {
-  // Now sends 'eventData' and expects the full event object in return
   create(eventData) {
     return invokeWrapper('create_event', { eventData });
   },
-  // No longer needs a table name
   getAll() {
     return invokeWrapper('get_events');
   },
-  // No longer needs a table name
   update(eventData) {
     return invokeWrapper('update_event', { event: eventData });
   },
-  // No longer needs a table name
   delete(eventId) {
     return invokeWrapper('delete_event', { eventId });
   }

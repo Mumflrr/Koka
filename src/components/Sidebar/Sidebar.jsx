@@ -36,7 +36,6 @@ function Sidebar() {
             onMouseEnter={() => setIsExpanded(true)}
             onMouseLeave={() => setIsExpanded(false)}>
             
-            {/* Reverted to the original, distinct header structure. */}
             <div className={ss['sidebar-header']}>
                 <img 
                     src="/plover-stencil.svg" 

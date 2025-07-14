@@ -1,3 +1,9 @@
+//! Web scraping module for extracting course data from university systems
+//! 
+//! This module handles the complete workflow of scraping class information from myPack,
+//! including authentication, course search, data extraction, and result processing.
+//! It manages Chrome browser automation, caching strategies, and schedule generation.
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use thirtyfour::prelude::*;
 use anyhow::anyhow;
@@ -5,6 +11,26 @@ use tokio::time::{sleep, Instant};
 
 use crate::{database_functions::{ClassRepository, ScheduleRepository}, services::start_chromedriver, tauri_backend::class_combinations::generate_combinations, AppState, Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
 
+/**
+ * Main orchestrator function for the complete scraping and schedule generation workflow
+ * 
+ * This function manages the entire process:
+ * 1. Validates input parameters and checks for empty class lists
+ * 2. Implements intelligent caching by checking database for existing course data
+ * 3. Performs web scraping only for courses not found in cache
+ * 4. Combines cached and freshly scraped data
+ * 5. Filters results based on user constraints (sections, instructors, time conflicts)
+ * 6. Generates schedule combinations from filtered data
+ * 7. Saves results to database for future use
+ * 
+ * @param {ScrapeClassesParameters} parameters - Complete scraping configuration
+ * @param {Vec<ClassParam>} parameters.classes - Course codes and sections to scrape
+ * @param {Vec<bool>} parameters.params_checkbox - Search constraints (open sections, waitlist, etc.)
+ * @param {Vec<EventParam>} parameters.events - User events to avoid time conflicts
+ * @param {tauri::State<AppState>} state - Application state with database and Chrome connection info
+ * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} Generated schedule combinations or error
+ * @throws {anyhow::Error} If no classes provided, web scraping fails, or database operations fail
+ */
 pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
     if parameters.classes.is_empty() {
         return Err(anyhow!("No classes set to scrape"));
@@ -87,7 +113,22 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
     return result
 }
 
-// Performs the scraping
+/**
+ * Performs the actual web scraping of course data from myPack university system
+ * 
+ * This function handles the complete browser automation workflow:
+ * 1. Navigates to myPack portal and handles authentication flow
+ * 2. Waits for user to complete login and two-factor authentication (120s timeout)
+ * 3. Configures search filters based on user preferences (open sections, waitlist, etc.)
+ * 4. For each requested course: searches, extracts details, and scrapes all sections
+ * 5. Extracts course descriptions, prerequisites, and unit information
+ * 6. Properly closes browser resources when complete
+ * 
+ * @param {&ScrapeClassesParameters} parameters - Scraping configuration with courses and filters
+ * @param {WebDriver} driver - Chrome WebDriver instance for browser automation
+ * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} Scraped course data organized by course or error
+ * @throws {anyhow::Error} If myPack access fails, authentication times out, or scraping encounters errors
+ */
 async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
@@ -221,6 +262,21 @@ async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver)
     Ok(results)
 }
 
+/**
+ * Filters scraped course data based on user preferences and constraints
+ * 
+ * This function applies multiple filtering criteria to course sections:
+ * 1. Validates that sections have valid time blocks
+ * 2. Matches specific section numbers if requested by user
+ * 3. Matches instructor names (case-insensitive) if specified
+ * 4. Checks for time conflicts with user-defined events
+ * 5. Maintains course group structure even if all sections are filtered out
+ * 
+ * @param {Vec<Vec<Class>>} input_classes - Scraped course data organized by course groups
+ * @param {&ScrapeClassesParameters} parameters - User filtering preferences and constraints
+ * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} Filtered course data maintaining group structure
+ * @throws {anyhow::Error} If input validation fails or filtering encounters errors
+ */
 pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClassesParameters) -> Result<Vec<Vec<Class>>, anyhow::Error> {
 
     if input_classes.is_empty() {
@@ -293,7 +349,21 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
     Ok(filtered_result)
 }
 
-
+/**
+ * Extracts individual course sections and their time blocks from search results table
+ * 
+ * This function parses the complex HTML structure of myPack search results:
+ * 1. Finds all section containers within the search results table
+ * 2. For each section: extracts multiple time blocks (lecture, lab, recitation, etc.)
+ * 3. Parses section numbers, days, times, locations, and instructor information
+ * 4. Handles special cases like online courses and distance education
+ * 5. Converts day strings to boolean arrays and time strings to structured data
+ * 
+ * @param {&WebElement} driver - WebElement representing the search results table
+ * @param {&Vec<String>} predetermined_info - Pre-extracted course info [code, name, section, description]
+ * @returns {WebDriverResult<Vec<Class>>} Array of course sections with complete time block data
+ * @throws {WebDriverError} If HTML parsing fails or required elements are not found
+ */
 async fn scrape_search_results(driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
@@ -372,7 +442,20 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: &Vec<Str
     Ok(results)
 }
 
-// Check if times overlap with any events
+/**
+ * Validates that a course time block doesn't conflict with user-defined events
+ * 
+ * This function performs comprehensive time conflict detection:
+ * 1. Iterates through each day of the week (Monday-Friday)
+ * 2. Skips days where the course doesn't meet
+ * 3. For each active day: checks all user events for day overlap
+ * 4. Performs time range overlap detection using interval arithmetic
+ * 5. Returns false immediately if any conflict is found
+ * 
+ * @param {&Vec<EventParam>} events - User-defined events with time and day constraints
+ * @param {&[((i32, i32), bool); 5]} days - Course time blocks for each weekday [((start, end), active)]
+ * @returns {bool} True if no conflicts found, false if any time overlap detected
+ */
 fn validate_time_ok(events: &Vec<EventParam>, days: &[((i32, i32), bool); 5]) -> bool {
     
     // For each day in the week
@@ -399,7 +482,20 @@ fn validate_time_ok(events: &Vec<EventParam>, days: &[((i32, i32), bool); 5]) ->
     true
 }
 
-// Optimized time conversion function
+/**
+ * Converts time string and day information into structured time block data
+ * 
+ * This function processes HTML-formatted time strings from myPack:
+ * 1. Cleans HTML tags and whitespace from time strings
+ * 2. Parses time ranges in "HH:MM AM - HH:MM PM" format
+ * 3. Converts to military time integers for easier comparison
+ * 4. Combines with day boolean array to create complete time block structure
+ * 5. Handles edge cases like empty times and malformed data
+ * 
+ * @param {&str} time_str - HTML-formatted time string from myPack (may contain tags)
+ * @param {[bool; 5]} days - Boolean array indicating which weekdays are active
+ * @returns {[((i32, i32), bool); 5]} Structured time data: [((start_time, end_time), is_active)]
+ */
 fn convert_time(time_str: &str, days: [bool; 5]) ->  [((i32, i32), bool); 5] {
     let mut time = [((-1, -1), false); 5];
 
@@ -442,7 +538,19 @@ fn convert_time(time_str: &str, days: [bool; 5]) ->  [((i32, i32), bool); 5] {
     time
 }
 
-// Helper function to parse a single time component like "11:45 AM"
+/**
+ * Parses individual time components from 12-hour format to military time integers
+ * 
+ * This function handles the conversion of time strings like "11:45 AM" to integers:
+ * 1. Splits time string into time part and AM/PM period
+ * 2. Extracts hours and minutes from HH:MM format
+ * 3. Converts to 24-hour military time (handles 12 AM/PM edge cases)
+ * 4. Returns time as integer in HHMM format for easy comparison
+ * 5. Returns -1 for malformed input to indicate parsing failure
+ * 
+ * @param {&str} time - Time string in "HH:MM AM/PM" format
+ * @returns {i32} Military time as integer (HHMM format) or -1 if parsing fails
+ */
 fn parse_time_component(time: &str) -> i32 {
     let parts: Vec<&str> = time.split_whitespace().collect();
     
@@ -482,7 +590,21 @@ fn parse_time_component(time: &str) -> i32 {
     adjusted_hours * 100 + minutes
 }
 
-// Extract text between a prefix and suffix from text
+/**
+ * Extracts text content between specified prefix and suffix markers
+ * 
+ * This utility function performs case-insensitive text extraction:
+ * 1. Searches for prefix marker in lowercase for case-insensitive matching
+ * 2. Finds the starting position after the prefix
+ * 3. Searches for suffix marker from the start position
+ * 4. Extracts and trims the text between markers
+ * 5. Returns empty string if prefix not found, or text to end if no suffix
+ * 
+ * @param {&str} text - Source text to search within
+ * @param {&str} prefix - Starting marker to search for (case-insensitive)
+ * @param {&str} suffix - Ending marker to search for (case-insensitive)
+ * @returns {String} Extracted and trimmed text between markers, or empty string if not found
+ */
 fn extract_text_after(text: &str, prefix: &str, suffix: &str) -> String {
     // Case-insensitive search using lowercase for comparison only
     let text_lower = text.to_lowercase();
