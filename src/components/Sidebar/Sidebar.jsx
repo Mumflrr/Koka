@@ -39,7 +39,7 @@ function Sidebar() {
                     className={`${ss['sidebar-header-logo']} logo koaburra`} 
                     alt="Koaburra 'logo'" 
                 />
-                <span className={ss['sidebar-header-title']}>Koaburra</span>
+                <span className={ss['sidebar-header-title']}>Koka</span>
             </div>
 
             <nav className={ss['sidebar-nav']}>

@@ -99,9 +99,38 @@ const useStore = create((set, get) => ({
 
     setIsExpanded: (value) => set({ isExpanded: value }),
 
+    _loadPersistedScheduleNumbers: () => {
+        try {
+            const savedNumbers = localStorage.getItem('scheduleDisplayNumbers');
+            const savedNextNumber = localStorage.getItem('nextScheduleNumber');
+            
+            if (savedNumbers && savedNextNumber) {
+                const numbersMap = new Map(JSON.parse(savedNumbers));
+                const nextNumber = parseInt(savedNextNumber, 10);
+                
+                set({
+                    scheduleDisplayNumbers: numbersMap,
+                    nextScheduleNumber: nextNumber
+                });
+            }
+        } catch (error) {
+            console.error('Error loading persisted schedule numbers:', error);
+        }
+    },
+
+    _persistScheduleNumbers: () => {
+        try {
+            const { scheduleDisplayNumbers, nextScheduleNumber } = get();
+            localStorage.setItem('scheduleDisplayNumbers', JSON.stringify([...scheduleDisplayNumbers]));
+            localStorage.setItem('nextScheduleNumber', nextScheduleNumber.toString());
+        } catch (error) {
+            console.error('Error persisting schedule numbers:', error);
+        }
+    },
+
     _assignScheduleDisplayNumbers: (schedules) => {
         const state = get();
-        const currentMapping = new Map(state.scheduleDisplaynumbers);
+        const currentMapping = new Map(state.scheduleDisplayNumbers);
         let nextNumber = state.nextScheduleNumber;
 
         schedules.forEach(schedule => {
@@ -116,6 +145,9 @@ const useStore = create((set, get) => ({
             scheduleDisplayNumbers: currentMapping,
             nextScheduleNumber: nextNumber
         });
+
+        // Persist the updated numbers
+        get()._persistScheduleNumbers();
     },
 
     getScheduleDisplayNumber: (scheduleString) => {
@@ -163,6 +195,10 @@ const useStore = create((set, get) => ({
 
     loadSchedulerPage: async () => {
         set({ schedulerLoading: true, schedulerError: null });
+        
+        // Load persisted schedule numbers before loading schedules
+        get()._loadPersistedScheduleNumbers();
+        
         try {
             await get()._updateSchedulerData();
 
@@ -315,10 +351,9 @@ const useStore = create((set, get) => ({
                     // Ensure schedules is set to the result, or an empty array if null.
                     schedules: result || [],
                     selectedScheduleId: null,
-                    scheduleDisplayNumbers: new Map(),
-                    nextScheduleNumber: 1,
                 });
                 await systemAPI.setDisplaySchedule(null);
+                // Assign display numbers to new schedules while preserving existing ones
                 get()._assignScheduleDisplayNumbers(result || []);
             }
         } catch (error) {
@@ -373,6 +408,8 @@ const useStore = create((set, get) => ({
             if (originalState.selectedScheduleId === scheduleIdString) {
                 await systemAPI.setDisplaySchedule(null);
             }
+            // Persist the updated numbers after deletion
+            get()._persistScheduleNumbers();
         } catch (error) {
             console.error("Failed to delete schedule:", error);
             set({ 
