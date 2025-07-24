@@ -1,4 +1,4 @@
-# Koaburra
+# Koka
 A little project of mine for learning Rust, React, database management, and web scraping
 
 ## Requirements
