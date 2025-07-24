@@ -35,11 +35,11 @@ function Sidebar() {
             
             <div className={ss['sidebar-header']}>
                 <img 
-                    src="/koaburra-stencil.svg" 
-                    className={`${ss['sidebar-header-logo']} logo plover`} 
-                    alt="Plover 'logo'" 
+                    src="/koaburra.svg" 
+                    className={`${ss['sidebar-header-logo']} logo koaburra`} 
+                    alt="Koaburra 'logo'" 
                 />
-                <span className={ss['sidebar-header-title']}>Koaburroo</span>
+                <span className={ss['sidebar-header-title']}>Koaburra</span>
             </div>
 
             <nav className={ss['sidebar-nav']}>
