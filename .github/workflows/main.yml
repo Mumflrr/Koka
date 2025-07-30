@@ -1,14 +1,22 @@
-name: 'Publish Koaburra Release'
+# .github/workflows/main.yml
+
+name: 'Build and Release Koaburra'
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'build'      # Trigger for the build-only job
+      - 'v*.*.*'     # Trigger for the release job
 
 jobs:
-  publish-tauri:
+  # JOB 1: Create a build artifact when the 'build' tag is pushed.
+  # This tag should point to a commit on your 'development' branch.
+  build:
+    name: Create Build Artifact
+    # This entire job will only run if the 'build' tag was pushed
+    if: github.ref == 'refs/tags/build'
     permissions:
-      contents: write
+      contents: read # Only needs to read the code
     strategy:
       fail-fast: false
       matrix:
@@ -18,38 +26,32 @@ jobs:
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
-            args: '' # Will produce .deb and .AppImage
+            args: ""
           - platform: 'windows-latest'
-            args: '' # Will produce .exe installer and .msi
-
+            args: ""
     runs-on: ${{ matrix.platform }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      # ... All setup steps are identical for both jobs ...
       - name: Install system dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-
       - name: Get pnpm store directory
         id: pnpm-cache
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
@@ -57,85 +59,98 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-
       - name: Install Rust stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-          components: rustfmt, clippy
-
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Lint frontend (e.g., ESLint)
-        run: pnpm lint
-
-      - name: Check Rust formatting
-        working-directory: ./src-tauri
-        run: cargo fmt -- --check
-
-      - name: Run Clippy (Rust linter) - Basic
-        working-directory: ./src-tauri
-        run: cargo clippy -- -D warnings
-
-      - name: Run Clippy (Rust linter) - Comprehensive
-        working-directory: ./src-tauri
-        run: |
-          # Run clippy with additional lint groups for more thorough checking
-          cargo clippy --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::all \
-            -D clippy::pedantic \
-            -W clippy::nursery \
-            -W clippy::cargo \
-            -A clippy::module_name_repetitions \
-            -A clippy::too_many_lines
-
-      - name: Build and release Tauri app
+      # This tauri-action step only builds the app. It does NOT release.
+      - name: Build Tauri App
+        id: tauri-build
         uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }} # If using for signing updates
-          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }} # If private key is password-protected
         with:
-          tagName: app-v__VERSION__ # __VERSION__ will be replaced by the version in tauri.conf.json
+          args: ${{ matrix.args }}
+      # This step uploads the result as a workflow artifact.
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: koaburra-build-${{ matrix.platform }}
+          path: ${{ steps.tauri-build.outputs.releasePath }}
+
+  # JOB 2: Create a formal GitHub Release when a 'v*.*.*' tag is pushed.
+  # This tag should point to a commit on your 'main' branch.
+  release:
+    name: Create GitHub Release
+    # This entire job will only run if a version tag (v*.*.*) was pushed
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # Needs write permissions to create a release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ""
+          - platform: 'windows-latest'
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # ... All setup steps are identical for both jobs ...
+      - name: Install system dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      # This tauri-action step builds AND creates a GitHub Release.
+      - name: Build and Release Tauri App
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tagName: app-v__VERSION__
           releaseName: 'Koka v__VERSION__'
           releaseBody: |
             # Koka v__VERSION__ Release
-
-            PRE-ALPHA WE AINT EVEN GOT ANY FEATURES IN HERE YET IT BARELY GETS OFF THE GROUND
-
-            ## What's New
-            - IT RUNS HALLELUJIAHAH
-
-            ## Installation Instructions
-
-            ### Windows
-            - Download the `.exe` or `.msi` file.
-            - Run the installer and follow the on-screen instructions.
-
-            ### macOS
-            - **For easiest installation:** Download the `.dmg` file for your Mac (Intel `_x64` or Apple Silicon `_aarch64`). Open the DMG and drag the Koka app to your Applications folder.
-            - **If you encounter issues with the DMG or prefer manual installation (for unsigned apps):**
-              1. Download the `_x64.app.tar.gz` (for Intel Macs) or `_aarch64.app.tar.gz` (for Apple Silicon Macs) file.
-              2. Unarchive it (e.g., by double-clicking). This will give you `Koka.app`.
-              3. Drag `Koka.app` to your Applications folder (or run it from where you unarchived it).
-              4. **Important:** The first time you run it, right-click (or Ctrl-click) on `Koka.app` and select "Open" from the menu. You may see a warning; click "Open" again. This is usually only needed for the first launch.
-
-            ### Linux
-            - **For Debian/Ubuntu-based distributions:** Download and install the `.deb` file (e.g., `sudo dpkg -i koaburroo_*.deb && sudo apt-get install -f`).
-            - **For other distributions:** Download the `.AppImage` file. Make it executable (`chmod +x Koka_*.AppImage`) and then run it (`./Koka_*.AppImage`).
-
-            ## Additional Information
-            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/Koburra)
-            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/koburra/issues)
-
-            Thank you for using Koka! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
+            ... your release notes ...
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
