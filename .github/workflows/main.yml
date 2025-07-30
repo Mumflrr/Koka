@@ -5,18 +5,16 @@ name: 'Build and Release Koaburra'
 on:
   push:
     tags:
-      - 'build'      # Trigger for the build-only job
-      - 'v*.*.*'     # Trigger for the release job
+      - 'build'
+      - 'v*.*.*'
 
 jobs:
-  # JOB 1: Create a build artifact when the 'build' tag is pushed.
-  # This tag should point to a commit on your 'development' branch.
+  # JOB 1: Build, Lint, and create a test artifact
   build:
     name: Create Build Artifact
-    # This entire job will only run if the 'build' tag was pushed
     if: github.ref == 'refs/tags/build'
     permissions:
-      contents: read # Only needs to read the code
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +31,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      # ... All setup steps are identical for both jobs ...
+
+      # --- Setup Steps (same for both jobs) ---
       - name: Install system dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -69,27 +68,31 @@ jobs:
           workspaces: './src-tauri -> target'
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-      # This tauri-action step only builds the app. It does NOT release.
-      - name: Build Tauri App
-        id: tauri-build
+
+      - name: Run ESLint
+        run: pnpm lint # Assumes you have a "lint" script in your package.json
+
+      - name: Run Clippy (Rust Linter)
+        run: cargo clippy -- -D warnings
+        working-directory: ./src-tauri
+
+      - name: Build Tauri App and Upload Artifacts
         uses: tauri-apps/tauri-action@v0
         with:
+          # This new option tells the action to upload artifacts itself
+          uploadArtifacts: true
+          # The artifact name will be "app-artifacts". You can change it.
+          # The final zip will contain all your platform-specific files.
+          artifactName: "app-artifacts"
           args: ${{ matrix.args }}
-      # This step uploads the result as a workflow artifact.
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: koaburra-build-${{ matrix.platform }}
-          path: ${{ steps.tauri-build.outputs.releasePath }}
+        # NOTE: We no longer need the separate 'actions/upload-artifact' step.
 
-  # JOB 2: Create a formal GitHub Release when a 'v*.*.*' tag is pushed.
-  # This tag should point to a commit on your 'main' branch.
+  # JOB 2: Create a formal GitHub Release (no changes here)
   release:
     name: Create GitHub Release
-    # This entire job will only run if a version tag (v*.*.*) was pushed
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write # Needs write permissions to create a release
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +109,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      # ... All setup steps are identical for both jobs ...
+      # ... All the same setup steps as the build job ...
       - name: Install system dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -142,7 +145,7 @@ jobs:
           workspaces: './src-tauri -> target'
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-      # This tauri-action step builds AND creates a GitHub Release.
+      # This step remains the same: builds and creates the GitHub release
       - name: Build and Release Tauri App
         uses: tauri-apps/tauri-action@v0
         with:
