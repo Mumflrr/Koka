@@ -1,0 +1,357 @@
+/* --- General & Layout --- */
+.container {
+    display: flex;
+    height: 100vh;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+}
+
+.mainContent {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    padding-left: calc(var(--sidebar-short-width) + var(--spacing-lg));
+    height: 100vh;
+    box-sizing: border-box;
+    background-color: var(--bg-dark-content); 
+}
+
+.calendarContainer, .controlPanel {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    height: calc(100vh - (var(--spacing-lg) * 2)); /* Full height minus padding */
+    overflow: hidden;
+    box-sizing: border-box;
+    color: var(--text-primary);
+}
+
+/* --- Control Panel --- */
+.controlPanel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
+}
+
+.generationControls {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.paramToggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
+/* --- Tabbed Interface for Lists --- */
+.listContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.listTabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.tabButton {
+    flex-grow: 1;
+    padding: var(--spacing-md) var(--spacing-sm);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-subtle);
+    transition: all 0.2s ease-in-out;
+}
+
+.tabButton:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-subtle);
+}
+
+.tabButton.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+.listContent {
+    flex: 1;
+    overflow-y: auto;
+    padding-top: var(--spacing-sm);
+}
+
+/* --- Schedules List --- */
+.schedulesContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.scheduleItem {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.5rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.scheduleItem:last-child {
+    border-bottom: none;
+}
+
+.scheduleItem:hover {
+    background-color: var(--bg-subtle);
+}
+
+.scheduleItem.selected-schedule {
+    background-color: #eff6ff; /* Light blue - could be a variable too */
+    border-color: #dbeafe;
+}
+
+.favorite-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: var(--border-color-input);
+    transition: color 0.2s ease;
+    padding: var(--spacing-xs);
+}
+
+.favorite-button:hover, .favorite-button.favorited {
+    color: #facc15;
+}
+
+.listActions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    flex-shrink: 0;
+}
+
+/* --- Classes List & Cards --- */
+.classesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.classCard {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    box-sizing: border-box;
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.inputField {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color-input);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.875rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 0;
+}
+
+.inputField:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.addClassCard {
+    border: 2px dashed var(--border-color-input);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 6rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addClassCard:hover {
+    border-color: var(--color-primary);
+    background-color: #eff6ff; /* Light blue */
+}
+
+.addButtonCard {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--text-subtle);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.addClassCard:hover .addButtonCard {
+    color: var(--color-primary);
+}
+
+/* --- Buttons & Controls --- */
+.button {
+    padding: 0.625rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    text-align: center;
+}
+
+.button-primary {
+    background-color: var(--color-primary);
+    color: var(--text-light);
+}
+
+.button-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.button-primary:disabled {
+    background-color: #93c5fd;
+    cursor: not-allowed;
+}
+
+.toggleButton {
+    background-color: #f3f4f6;
+    color: var(--text-secondary);
+    border: 2px solid transparent;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.toggleButton.active {
+    background-color: #e5e7eb;
+    color: var(--text-primary);
+    border-color: var(--color-primary);
+}
+
+.toggleButton:hover {
+    background-color: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.iconButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    min-height: 2rem;
+    flex-shrink: 0;
+}
+
+.iconButton:hover {
+    color: var(--text-primary);
+    background-color: #e5e7eb;
+}
+
+/* --- Status & Messages --- */
+.empty-message, .loading-indicator {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.status-message {
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    position: relative;
+}
+
+.status-error {
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
+}
+
+.status-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+.closeButton {
+  position: absolute;
+  top: 50%;
+  right: var(--spacing-sm);
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.closeButton:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.errorMessage {
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  margin-top: var(--spacing-xs);
+  font-weight: 500;
+}
+
+.spinner {
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--color-primary);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

@@ -1,70 +1,55 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/tauri";
-import { listen } from "@tauri-apps/api/event";
-import Home from './components/Home';
+import { systemAPI } from './api';
+import Home from './components/Home/Home';
+import Courses from './components/Courses/Courses';
+import Dining from './components/Dining/Dining';
+import Gallery from './components/Gallery/Gallery';
+import Settings from './components/Settings/Settings';
+import Scheduler from './components/Scheduler/Scheduler';
 import './App.css';
 
 function App() {
-    const [isStartupComplete, setIsStartupComplete] = useState(false);
 
-    const showSplashscreen = useCallback( () => {
-        try {
-            invoke("show_splashscreen");
-            console.log("Splash screen shown");
-        } catch (error) {
-            console.error("Failed to show splash screen:", error);
-        }
-    }, []);
-
-    const startupApp = useCallback(async () => {
-        if (isStartupComplete) return; // Prevent duplicate calls
-        try {
-            await invoke("startup_app");
-            console.log("App started successfully");
-            setIsStartupComplete(true);
-        } catch (error) {
-            console.error("Failed to startup app: ", error);
-        }
-    }, [isStartupComplete]);
-
-    const closeSplashscreen = useCallback(async () => {
-        try {
-            await invoke("close_splashscreen");
-            console.log("Splash screen closed");
-        } catch (error) {
-            console.error("Failed to close splash screen:", error);
-        }
-    }, []);
-
+    // FIXME: Make waiting for splashscreen actually work
     useEffect(() => {
-        const setupListener = async () => {
-            const unsubscribe = await listen("scrape_result", (event) => {
-                const result = event.payload;
-                console.log("Scrape result:", result);
-                // You can handle the scrape result here if needed
-            });
+        const initializeApp = async () => {
+            try {
+                // 1. Show the splash screen first.
+                await systemAPI.showSplashscreen();
+                console.log("Splash screen shown");
 
-            return () => {
-                unsubscribe.then((f) => f()); // Unsubscribe when component unmounts
-            };
+                // 2. Wait for the entire backend setup to complete.
+                await systemAPI.startupApp();
+                console.log("App startup logic completed successfully.");
+
+                // 3. Only after the backend is ready, close the splash screen.
+                await systemAPI.closeSplashscreen();
+                console.log("Splash screen closed");
+            } catch (error) {
+                console.error("Error during app initialization:", error);
+                // In case of an error, still try to close the splashscreen
+                // to prevent the user from being stuck.
+                try {
+                    await systemAPI.closeSplashscreen();
+                } catch (closeError) {
+                    console.error("Failed to close splashscreen:", closeError);
+                }
+            }
         };
 
-        showSplashscreen();
-        startupApp();
-        closeSplashscreen();
-        setupListener();
-    }, [showSplashscreen, startupApp, closeSplashscreen]);
-
-    if (!isStartupComplete) {
-        return <div>Loading...</div>; // Or your splash screen component
-    }
+        initializeApp();
+    }, []); // The empty dependency array ensures this runs only once on component mount.
 
     return (
         <BrowserRouter>
             <Routes>
                 <Route path='/' element={<Home />} />
-                {/* Add other routes here */}
+                <Route path='/courses' element={<Courses />}/>
+                <Route path='/dining' element={<Dining />}/>
+                <Route path='/gallery' element={<Gallery />}/>
+                <Route path='/settings' element={<Settings />}/>
+                <Route path='/scheduler' element={<Scheduler />}/>
             </Routes>
         </BrowserRouter>
     );

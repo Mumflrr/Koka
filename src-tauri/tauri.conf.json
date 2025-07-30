@@ -5,12 +5,20 @@
     "devPath": "http://localhost:1420"
   },
   "package": {
-    "productName": "Plover",
-    "version": "0.0.2"
+    "productName": "Koka",
+    "version": "0.4.0"
   },
   "tauri": {
     "allowlist": {
       "all": false,
+      "dialog": {
+        "all": true,
+        "ask": false,
+        "confirm": false,
+        "message": false,
+        "open": false,
+        "save": false
+      },
       "shell": {
         "all": false,
         "open": true
@@ -18,7 +26,7 @@
     },
     "windows": [
         {
-            "width": 900,
+            "width": 1000,
             "height": 300,
             "decorations": false,
             "url": "splashscreen.html",
@@ -27,11 +35,11 @@
             "visible": false
         },
         {
-            "title": "Plover",
-            "width": 900,
-            "height": 600,
-            "minWidth": 700,
-            "minHeight": 450,
+            "title": "Koka",
+            "width": 1000,
+            "height": 669,
+            "minWidth": 860,
+            "minHeight": 575,
             "label": "main",
             "url": "index.html",
             "visible": false
@@ -43,7 +51,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.plover.app",
+      "identifier": "com.koka.app",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",

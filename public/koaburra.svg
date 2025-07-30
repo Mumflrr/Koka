@@ -1,0 +1,39 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+
+  
+  <!-- Main head (koala-style round head) -->
+  <circle cx="100" cy="100" r="60" fill="#808080"/>
+  
+  <!-- Koala ears (large and fluffy) -->
+  <circle cx="70" cy="70" r="25" fill="#696969"/>
+  <circle cx="130" cy="70" r="25" fill="#696969"/>
+  <!-- Inner ear (pink) -->
+  <circle cx="70" cy="70" r="15" fill="#FFB6C1"/>
+  <circle cx="130" cy="70" r="15" fill="#FFB6C1"/>
+  
+  <!-- Kookaburra beak (prominent and distinctive) -->
+  <polygon points="100,110 140,105 140,125 100,120" fill="#DAA520"/>
+  <!-- Beak highlight -->
+  <polygon points="100,110 135,107 135,115 100,115" fill="#F0E68C"/>
+  
+  <!-- Eyes (large koala-style but alert like kookaburra) -->
+  <circle cx="85" cy="90" r="8" fill="#000"/>
+  <circle cx="115" cy="90" r="8" fill="#000"/>
+  <!-- Eye highlights -->
+  <circle cx="87" cy="88" r="3" fill="#FFF"/>
+  <circle cx="117" cy="88" r="3" fill="#FFF"/>
+  
+  <!-- Kookaburra wing pattern accents on sides of head -->
+  <ellipse cx="60" cy="105" rx="15" ry="8" fill="#4169E1" transform="rotate(-20 60 105)"/>
+  <ellipse cx="140" cy="105" rx="15" ry="8" fill="#4169E1" transform="rotate(20 140 105)"/>
+  
+  <!-- Small crest detail (kookaburra feature) -->
+  <ellipse cx="100" cy="50" rx="8" ry="12" fill="#654321"/>
+  <ellipse cx="95" cy="47" rx="5" ry="8" fill="#8B4513"/>
+  
+  <!-- Subtle texture lines on fur -->
+  <path d="M 70 120 Q 75 115 80 120" stroke="#696969" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M 120 120 Q 125 115 130 120" stroke="#696969" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M 85 130 Q 90 125 95 130" stroke="#696969" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M 105 130 Q 110 125 115 130" stroke="#696969" stroke-width="1" fill="none" opacity="0.5"/>
+</svg>

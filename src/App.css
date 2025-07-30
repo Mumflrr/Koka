@@ -1,108 +1,77 @@
-.logo.plover:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
+/* App.css */
+* {
+    margin: 0;
+    padding: 0;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    transition: 225ms ease;
+    z-index: 0;
 }
+
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+    /* --- Base --- */
+    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+    overflow: hidden;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+    /* --- Color Palette (Design Tokens) --- */
+    /* Brand & Action */
+    --color-primary: #3b82f6;      /* Main blue from Scheduler */
+    --color-primary-hover: #2563eb;
+    --color-secondary-action: #24CFC5; /* Teal from old --action */
+    --color-danger: #dc3545;
+    --color-danger-hover: #c82333;
+    --color-warning: #fbbf24;
+    --color-success-bg: #dcfce7;
+    --color-success-text: #166534;
+    --color-error-bg: #fee2e2;
+    --color-error-text: #b91c1c;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+    /* Text */
+    --text-light: #F9F9F9;
+    --text-primary: #1f2937;
+    --text-secondary: #475569;
+    --text-subtle: #64748b;
+
+    /* Backgrounds & Borders */
+    --bg-page: #f9fafb; /* The light gray background for specific pages */
+    --bg-surface: #ffffff;
+    --bg-subtle: #f8fafc;
+    --bg-dark-content: #222222; /* Original dark content background */
+    --bg-dark-sidebar: #2F2F35;
+    --bg-dark-sidebar-hover: #3a3a41; /* Added for sidebar item hover */
+    --border-color: #e2e8f0;
+    --border-color-light: #f3f4f6;
+    --border-color-input: #d1d5db;
+
+    /* --- Sizing & Spacing (Tokens) --- */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+
+    /* --- Borders & Shadows (Tokens) --- */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+    /* --- Sidebar Specific (for compatibility) --- */
+    --sidebar-short-width: 5rem;
+    --sidebar-expanded-width: 14rem; /* Slightly wider for better spacing */
+    --alert: #B52948;
+    --action: var(--color-primary); /* Aliased to the new primary color */
+    --main-light: var(--text-light);
+    --main-dark: var(--bg-dark-sidebar);
 }
 
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+body {
+  background-color: var(--bg-dark-content); 
+  color: var(--text-light); /* Default text color for dark background */
 }

@@ -1,8 +1,10 @@
-name: 'publish'
+name: 'Publish Koaburra Release'
+
 on:
   push:
     branches:
       - main
+
 jobs:
   publish-tauri:
     permissions:
@@ -16,40 +18,79 @@ jobs:
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
-            args: ''
+            args: '' # Will produce .deb and .AppImage
           - platform: 'windows-latest'
-            args: ''
+            args: '' # Will produce .exe installer and .msi
+
     runs-on: ${{ matrix.platform }}
+
     steps:
-      - uses: actions/checkout@v4
-      - name: install dependencies (ubuntu only)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (Ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: setup node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: install pnpm
+
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-      - name: install Rust stable
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Rust stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - name: Rust cache
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-      - name: install frontend dependencies
-        run: pnpm install
-      - uses: tauri-apps/tauri-action@v0
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend (e.g., ESLint)
+        run: pnpm lint
+
+      - name: Check Rust formatting
+        working-directory: ./src-tauri
+        run: cargo fmt -- --check
+
+      - name: Run Clippy (Rust linter)
+        working-directory: ./src-tauri
+        run: cargo clippy -- -D warnings # Fails on warnings
+
+      - name: Build and release Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }} # If using for signing updates
+          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }} # If private key is password-protected
         with:
-          tagName: app-v__VERSION__
+          tagName: app-v__VERSION__ # __VERSION__ will be replaced by the version in tauri.conf.json
           releaseName: 'Plover v__VERSION__'
           releaseBody: |
             # Plover v__VERSION__ Release
@@ -62,20 +103,24 @@ jobs:
             ## Installation Instructions
 
             ### Windows
-            - Download the `.exe` file
-            - Run the installer and follow the on-screen instructions (if there are any?? I didn't make any...)
+            - Download the `.exe` or `.msi` file.
+            - Run the installer and follow the on-screen instructions.
 
             ### macOS
-            - Download the appropriate `.dmg` file for your Mac (Intel or Apple Silicon)
-            - Open the DMG file and drag the Plover app to your Applications folder
+            - **For easiest installation:** Download the `.dmg` file for your Mac (Intel `_x64` or Apple Silicon `_aarch64`). Open the DMG and drag the Plover app to your Applications folder.
+            - **If you encounter issues with the DMG or prefer manual installation (for unsigned apps):**
+              1. Download the `_x64.app.tar.gz` (for Intel Macs) or `_aarch64.app.tar.gz` (for Apple Silicon Macs) file.
+              2. Unarchive it (e.g., by double-clicking). This will give you `Plover.app`.
+              3. Drag `Plover.app` to your Applications folder (or run it from where you unarchived it).
+              4. **Important:** The first time you run it, right-click (or Ctrl-click) on `Plover.app` and select "Open" from the menu. You may see a warning; click "Open" again. This is usually only needed for the first launch.
 
             ### Linux
-            - For Ubuntu and Debian-based distributions: Download and install the `.deb` file
-            - For other distributions: Use the `.AppImage` file (make it executable with `chmod +x`)
+            - **For Debian/Ubuntu-based distributions:** Download and install the `.deb` file (e.g., `sudo dpkg -i koaburroo_*.deb && sudo apt-get install -f`).
+            - **For other distributions:** Download the `.AppImage` file. Make it executable (`chmod +x Plover_*.AppImage`) and then run it (`./Plover_*.AppImage`).
 
             ## Additional Information
-            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/plover)
-            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/plover/issues)
+            - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/Koburra)
+            - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/koburra/issues)
 
             Thank you for using Plover! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
           releaseDraft: true

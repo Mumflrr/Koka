@@ -1,4 +1,4 @@
-# Plover
+# Koka
 A little project of mine for learning Rust, React, database management, and web scraping
 
 ## Requirements
@@ -8,9 +8,11 @@ A little project of mine for learning Rust, React, database management, and web 
 ## How to operate
 - To be determined :3 (Too early in development, am just running src code in env, but want to make application standalone first)
 
-## Things to keep an eye on:
-- Splashscreen flashing white on loading if the image has not fully loaded before window is shown
-- Security if I want to implement way to store shibboleth credentials
+## Future plans:
+- Handle no wifi situations (version getting, scraping, setting up, etc)
+- Security if I want to implement way to store credentials
+- Implementing pre req checks (theoretically possible but loads of works)
+- Improve splashscreen opening/closing timings
 
 ### Questions
 If you want to contact me please don't I already have too much to think about T_T
