@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "eslint 'src/**/*.jsx' --fix"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@rsuite/icons": "^1.3.0",
