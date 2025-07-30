@@ -1,5 +1,6 @@
 // src/components/CalendarGrid/CalendarGrid.jsx
 import React from 'react';
+import PropTypes from 'prop-types';
 import ss from './CalendarGrid.module.css'; // Styles for grid AND modals
 import { Modal, DetailsModal, EventForm } from './CalendarModals'; // Import modals
 
@@ -112,6 +113,27 @@ const Event = ({ event, eventStyle, onEdit, onShowDetails }) => {
       {event.professor && <div className={ss['event-professor']}>{event.professor}</div>}
     </div>
   );
+};
+
+// PropTypes for Event component
+Event.propTypes = {
+  event: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    title: PropTypes.string.isRequired,
+    professor: PropTypes.string,
+    isPreview: PropTypes.bool,
+    startTime: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    endTime: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    day: PropTypes.number,
+    description: PropTypes.string,
+    topPosition: PropTypes.string,
+    heightPosition: PropTypes.string,
+    width: PropTypes.string,
+    left: PropTypes.string
+  }).isRequired,
+  eventStyle: PropTypes.object.isRequired,
+  onEdit: PropTypes.func,
+  onShowDetails: PropTypes.func
 };
 
 // === MAIN CALENDAR GRID COMPONENT ===
@@ -424,6 +446,20 @@ const CalendarGrid = ({
       </div>
     </div>
   );
+};
+
+// PropTypes for CalendarGrid component
+CalendarGrid.propTypes = {
+  events: PropTypes.objectOf(PropTypes.array).isRequired,
+  noTimeEvents: PropTypes.objectOf(PropTypes.array),
+  startHour: PropTypes.number,
+  endHour: PropTypes.number,
+  onEventCreate: PropTypes.func.isRequired,
+  onEventDelete: PropTypes.func.isRequired,
+  onEventUpdate: PropTypes.func.isRequired,
+  onShowDetails: PropTypes.func.isRequired,
+  detailsEvent: PropTypes.object,
+  onCloseDetails: PropTypes.func.isRequired
 };
 
 export default CalendarGrid;

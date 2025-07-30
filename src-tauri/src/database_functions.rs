@@ -237,8 +237,8 @@ impl ClassRepository {
      * @returns {Result<(), anyhow::Error>} Success or error
      * @throws {anyhow::Error} If JSON serialization fails or database operation fails
      */
-    pub async fn save_sections_batch(classes: &Vec<Vec<Class>>, pool: &DbPool) -> Result<(), anyhow::Error> {
-        let classes_clone = classes.clone();
+    pub async fn save_sections_batch(classes: &[Vec<Class>], pool: &DbPool) -> Result<(), anyhow::Error> {
+        let classes_clone = classes.to_owned();
         let pool = pool.clone();
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
             let mut conn = pool.get()?;
@@ -311,7 +311,7 @@ impl ClassParamRepository {
         tokio::task::spawn_blocking(move || -> Result<Vec<ClassParam>, anyhow::Error> {
             let conn = pool.get()?;
             let mut stmt = conn.prepare("SELECT data FROM class_parameters")?;
-            let rows = stmt.query_map([], |row| Ok(row.get(0)?))?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
             let mut result = Vec::new();
             for row in rows {
                 let data: String = row?;
@@ -389,7 +389,7 @@ impl ScheduleRepository {
             let conn = pool.get()?;
             let prepared_statement = format!("SELECT data FROM {}", table);
             let mut stmt = conn.prepare(&prepared_statement)?;
-            let rows = stmt.query_map([], |row| Ok(row.get(0)?))?;
+            let rows = stmt.query_map([], |row| row.get(0))?;
             let mut result = Vec::new();
             for row in rows {
                 let data: String = row?;
@@ -413,8 +413,8 @@ impl ScheduleRepository {
      * @returns {Result<(), anyhow::Error>} Success or error
      * @throws {anyhow::Error} If JSON serialization fails or database operation fails
      */
-    pub async fn save_batch(ids: Vec<String>, schedules: &Vec<Vec<Class>>, pool: &DbPool) -> Result<(), anyhow::Error> {
-        let schedules_clone = schedules.clone();
+    pub async fn save_batch(ids: Vec<String>, schedules: &[Vec<Class>], pool: &DbPool) -> Result<(), anyhow::Error> {
+        let schedules_clone = schedules.to_owned();
         let ids_clone = ids.clone();
         let pool = pool.clone();
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
@@ -474,7 +474,7 @@ impl FavoriteRepository {
      * This function provides toggle behavior:
      * - If schedule is provided: adds to favorites
      * - If schedule is None: removes from favorites
-     * Uses transaction to ensure atomic operation
+     *   Uses transaction to ensure atomic operation
      * 
      * @param {String} id - Unique schedule identifier
      * @param {Option<Vec<Class>>} schedule - Schedule data to add (None to remove)

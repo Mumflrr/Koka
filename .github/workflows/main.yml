@@ -79,9 +79,22 @@ jobs:
         working-directory: ./src-tauri
         run: cargo fmt -- --check
 
-      - name: Run Clippy (Rust linter)
+      - name: Run Clippy (Rust linter) - Basic
         working-directory: ./src-tauri
-        run: cargo clippy -- -D warnings # Fails on warnings
+        run: cargo clippy -- -D warnings
+
+      - name: Run Clippy (Rust linter) - Comprehensive
+        working-directory: ./src-tauri
+        run: |
+          # Run clippy with additional lint groups for more thorough checking
+          cargo clippy --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::all \
+            -D clippy::pedantic \
+            -W clippy::nursery \
+            -W clippy::cargo \
+            -A clippy::module_name_repetitions \
+            -A clippy::too_many_lines
 
       - name: Build and release Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -91,9 +104,9 @@ jobs:
           # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }} # If private key is password-protected
         with:
           tagName: app-v__VERSION__ # __VERSION__ will be replaced by the version in tauri.conf.json
-          releaseName: 'Plover v__VERSION__'
+          releaseName: 'Koka v__VERSION__'
           releaseBody: |
-            # Plover v__VERSION__ Release
+            # Koka v__VERSION__ Release
 
             PRE-ALPHA WE AINT EVEN GOT ANY FEATURES IN HERE YET IT BARELY GETS OFF THE GROUND
 
@@ -107,22 +120,22 @@ jobs:
             - Run the installer and follow the on-screen instructions.
 
             ### macOS
-            - **For easiest installation:** Download the `.dmg` file for your Mac (Intel `_x64` or Apple Silicon `_aarch64`). Open the DMG and drag the Plover app to your Applications folder.
+            - **For easiest installation:** Download the `.dmg` file for your Mac (Intel `_x64` or Apple Silicon `_aarch64`). Open the DMG and drag the Koka app to your Applications folder.
             - **If you encounter issues with the DMG or prefer manual installation (for unsigned apps):**
               1. Download the `_x64.app.tar.gz` (for Intel Macs) or `_aarch64.app.tar.gz` (for Apple Silicon Macs) file.
-              2. Unarchive it (e.g., by double-clicking). This will give you `Plover.app`.
-              3. Drag `Plover.app` to your Applications folder (or run it from where you unarchived it).
-              4. **Important:** The first time you run it, right-click (or Ctrl-click) on `Plover.app` and select "Open" from the menu. You may see a warning; click "Open" again. This is usually only needed for the first launch.
+              2. Unarchive it (e.g., by double-clicking). This will give you `Koka.app`.
+              3. Drag `Koka.app` to your Applications folder (or run it from where you unarchived it).
+              4. **Important:** The first time you run it, right-click (or Ctrl-click) on `Koka.app` and select "Open" from the menu. You may see a warning; click "Open" again. This is usually only needed for the first launch.
 
             ### Linux
             - **For Debian/Ubuntu-based distributions:** Download and install the `.deb` file (e.g., `sudo dpkg -i koaburroo_*.deb && sudo apt-get install -f`).
-            - **For other distributions:** Download the `.AppImage` file. Make it executable (`chmod +x Plover_*.AppImage`) and then run it (`./Plover_*.AppImage`).
+            - **For other distributions:** Download the `.AppImage` file. Make it executable (`chmod +x Koka_*.AppImage`) and then run it (`./Koka_*.AppImage`).
 
             ## Additional Information
             - For full release notes and documentation, visit our [GitHub repository](https://github.com/Mumflrr/Koburra)
             - Report any issues or provide feedback on our [Issues page](https://github.com/Mumflrr/koburra/issues)
 
-            Thank you for using Plover! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
+            Thank you for using Koka! We hope you enjoy this new release. Or don't. Honestly I wouldn't.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

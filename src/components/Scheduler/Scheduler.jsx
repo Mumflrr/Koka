@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import useStore, { stringifySchedule } from '../../Store.jsx';
 import CalendarGrid from './CalendarGrid/CalendarGrid.jsx';
 import Sidebar from "../Sidebar/Sidebar";
 import CourseManagementPanel from './CourseManagementPanel';
 import ss from './Scheduler.module.css';
+
+//FIXME async classes not showing
+//FIXME schedule numbers still escalating 
 
 /**
  * Processes preview events from schedule data for calendar display
@@ -128,9 +131,6 @@ const Scheduler = () => {
     /** @type {Array} Generated schedules array */
     const schedules = useStore(state => state.schedules);
     
-    /** @type {Array} User-favorited schedules */
-    const favoritedSchedules = useStore(state => state.favoritedSchedules);
-    
     /** @type {string|null} Currently selected/pinned schedule ID */
     const selectedScheduleId = useStore(state => state.selectedScheduleId);
     
@@ -148,18 +148,6 @@ const Scheduler = () => {
     
     /** @type {Object} Schedule generation state and status */
     const scrapeState = useStore(state => state.scrapeState);
-    
-    /** @type {Object} Parameter checkboxes for schedule generation */
-    const paramCheckboxes = useStore(state => state.paramCheckboxes);
-    
-    /** @type {Array} Class parameter objects for schedule generation */
-    const classes = useStore(state => state.classes);
-    
-    /** @type {string} Currently active tab in management panel */
-    const activeTab = useStore(state => state.activeTab);
-    
-    /** @type {boolean} Whether to render favorites view */
-    const renderFavorites = useStore(state => state.renderFavorites);
 
     // --- ACTION SELECTORS ---
     // Select all actions individually for stability and preventing unnecessary re-renders
@@ -168,22 +156,8 @@ const Scheduler = () => {
     const createUserEvent = useStore(state => state.createUserEvent);
     const updateUserEvent = useStore(state => state.updateUserEvent);
     const deleteUserEvent = useStore(state => state.deleteUserEvent);
-    const generateSchedules = useStore(state => state.generateSchedules);
-    const clearScrapeStatus = useStore(state => state.clearScrapeStatus);
-    const toggleFavoriteSchedule = useStore(state => state.toggleFavoriteSchedule);
-    const deleteSchedule = useStore(state => state.deleteSchedule);
-    const setSelectedSchedule = useStore(state => state.setSelectedSchedule);
-    const setHoveredSchedule = useStore(state => state.setHoveredSchedule);
-    const clearHoveredSchedule = useStore(state => state.clearHoveredSchedule);
     const showEventDetailsModal = useStore(state => state.showEventDetailsModal);
     const closeEventDetailsModal = useStore(state => state.closeEventDetailsModal);
-    const toggleRenderFavorites = useStore(state => state.toggleRenderFavorites);
-    const setActiveTab = useStore(state => state.setActiveTab);
-    const toggleParamCheckbox = useStore(state => state.toggleParamCheckbox);
-    const addClass = useStore(state => state.addClass);
-    const updateClass = useStore(state => state.updateClass);
-    const deleteClass = useStore(state => state.deleteClass);
-    const getScheduleDisplayNumber = useStore(state => state.getScheduleDisplayNumber);
 
     // --- EFFECTS ---
     
@@ -224,7 +198,7 @@ const Scheduler = () => {
         // Extract preview events from schedule data structure
         const previewEvents = scheduleToDisplay.flatMap((courseData) => {
             if (!courseData?.classes?.length) return [];
-            
+
             return courseData.classes.flatMap((classMeeting) => {
                 if (!classMeeting?.days?.length) return null;
 
@@ -232,7 +206,8 @@ const Scheduler = () => {
                 let dayBitmask = 0;
                 let meetingStartTimeInt = null;
                 let meetingEndTimeInt = null;
-                
+                let hasAnyActiveDay = false;
+
                 classMeeting.days.forEach((dayInfo, dayUiIndex) => {
                     if (!Array.isArray(dayInfo) || dayInfo.length < 2 || !Array.isArray(dayInfo[0]) || dayInfo[0].length < 2) return;
                     const [timePair, isActive] = dayInfo;
@@ -242,18 +217,36 @@ const Scheduler = () => {
                             meetingStartTimeInt = timePair[0];
                             meetingEndTimeInt = timePair[1];
                         }
+                        hasAnyActiveDay = true;
                     }
                 });
 
-                if (dayBitmask === 0) return null;
-
-                // Create preview event object
-                return {
+                const eventBase = {
                     id: `preview-${courseData.id}-${classMeeting.section}`,
                     isPreview: true,
                     title: `${courseData.code || ''} ${courseData.name || ''}`.trim() + (classMeeting.section ? ` - Sec ${classMeeting.section}` : ''),
                     professor: classMeeting.instructor || '',
                     description: courseData.description || '',
+                };
+
+                // If no active days, treat as async/no-time event for all weekdays (Mon-Fri)
+                if (!hasAnyActiveDay) {
+                    // Place in the top bar for each weekday (dayBitIndex 1-5)
+                    return [1,2,3,4,5].map(dayBitIndex => ({
+                        ...eventBase,
+                        startTime: 0,
+                        endTime: 0,
+                        day: 1 << dayBitIndex,
+                    }));
+                }
+
+                // Otherwise, normal event
+                if (dayBitmask === 0 || meetingStartTimeInt === null) {
+                    return null;
+                }
+
+                return {
+                    ...eventBase,
                     startTime: meetingStartTimeInt,
                     endTime: meetingEndTimeInt,
                     day: dayBitmask,
@@ -263,7 +256,7 @@ const Scheduler = () => {
 
         // Process preview events and merge with user events
         const { eventsByDay: previewEventsByDay, noTimeEventsByDay: previewNoTimeEventsByDay } = processPreviewEvents(previewEvents);
-        
+
         // Merge preview events with user events
         Object.keys(previewEventsByDay).forEach(dayKey => {
             finalEventsByDay[dayKey] = [...(finalEventsByDay[dayKey] || []), ...previewEventsByDay[dayKey]];
@@ -274,18 +267,11 @@ const Scheduler = () => {
 
         return { eventsByDay: finalEventsByDay, noTimeEventsByDay: finalNoTimeEventsByDay };
     }, [userEvents, currentHoveredSchedule, selectedScheduleId, schedules]);
-    
-    /**
-     * Memoized array of stringified schedules for efficient comparison
-     * Used by management panel for schedule identification
-     */
-    const schedulesStringArray = useMemo(() => schedules.map(s => stringifySchedule(s)).filter(Boolean), [schedules]);
-    
-    /**
-     * Memoized set of favorited schedule strings for O(1) lookup
-     * Used to determine favorite status in schedule lists
-     */
-    const favoritedScheduleStrings = useMemo(() => new Set(favoritedSchedules.map(s => stringifySchedule(s)).filter(Boolean)), [favoritedSchedules]);
+
+    // --- RESET SCHEDULE INDEX ON GENERATE ---
+    // If you have a schedule index in your store, reset it when generating schedules.
+    // For example, in your schedule generation action:
+    // setScheduleIndex(1); // <-- Reset to 1 each time you generate schedules
 
     // --- CONDITIONAL RENDERING ---
     

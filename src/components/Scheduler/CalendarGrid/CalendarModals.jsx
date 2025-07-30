@@ -1,6 +1,6 @@
 // src/components/CalendarGrid/CalendarModals.jsx
-import React from 'react';
-import { X, Trash2 } from 'lucide-react';
+import PropTypes from 'prop-types';
+import { X } from 'lucide-react';
 
 /**
  * @fileoverview Calendar modal components for event creation, editing, and viewing
@@ -39,22 +39,6 @@ const dayIndexToBit = (index) => 1 << (index + 1);
  */
 const isDaySelected = (dayBits, dayIndex) => (dayBits & (1 << (dayIndex + 1))) !== 0;
 
-/**
- * Converts day bitmask to human-readable day names for display
- * @param {number} dayBitmask - Bitmask representing selected days
- * @returns {string} Comma-separated list of day names or fallback message
- * 
- * @example
- * getDaysFromBitmask(6) // Returns "Monday, Tuesday"
- * getDaysFromBitmask(31) // Returns "Monday, Tuesday, Wednesday, Thursday"
- * getDaysFromBitmask(0) // Returns "No scheduled days"
- */
-const getDaysFromBitmask = (dayBitmask) => {
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  if (!dayBitmask) return 'No scheduled days';
-  return dayNames.filter((_, i) => (dayBitmask & (1 << (i + 1))) !== 0).join(', ');
-};
-
 // === FORM COMPONENTS ===
 
 /**
@@ -77,6 +61,15 @@ const DayCheckbox = ({ day, index, checked, onChange, styles }) => (
     <span className={styles['days-text']}>{day}</span>
   </label>
 );
+
+// PropTypes for DayCheckbox
+DayCheckbox.propTypes = {
+  day: PropTypes.string.isRequired,
+  index: PropTypes.number.isRequired,
+  checked: PropTypes.bool.isRequired,
+  onChange: PropTypes.func.isRequired,
+  styles: PropTypes.object.isRequired
+};
 
 // === MODAL COMPONENTS ===
 
@@ -108,6 +101,14 @@ export const Modal = ({ isOpen, onClose, children, styles }) => (
   </div>
 );
 
+// PropTypes for Modal
+Modal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
+  styles: PropTypes.object.isRequired
+};
+
 /**
  * Modal for displaying read-only event details
  * Used primarily for preview events from generated schedules
@@ -126,10 +127,6 @@ export const Modal = ({ isOpen, onClose, children, styles }) => (
  */
 export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
   if (!event) return null;
-  
-  // Handle time display for events with no specific times
-  const displayTime = (event.startTime === '00:00' && event.endTime === '00:00') 
-    ? 'N/A' : `${event.startTime} - ${event.endTime}`;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} styles={styles}>
@@ -149,6 +146,19 @@ export const DetailsModal = ({ isOpen, onClose, event, styles }) => {
       </div>
     </Modal>
   );
+};
+
+// PropTypes for DetailsModal
+DetailsModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  event: PropTypes.shape({
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    startTime: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    endTime: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+  }),
+  styles: PropTypes.object.isRequired
 };
 
 /**
@@ -306,4 +316,23 @@ export const EventForm = ({ event, setEvent, onSave, onCancel, onDelete, isEditi
       </div>
     </>
   );
+};
+
+// PropTypes for EventForm
+EventForm.propTypes = {
+  event: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    title: PropTypes.string.isRequired,
+    startTime: PropTypes.string.isRequired,
+    endTime: PropTypes.string.isRequired,
+    day: PropTypes.number.isRequired,
+    professor: PropTypes.string.isRequired,
+    description: PropTypes.string.isRequired
+  }).isRequired,
+  setEvent: PropTypes.func.isRequired,
+  onSave: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  onDelete: PropTypes.func,
+  isEditing: PropTypes.bool,
+  styles: PropTypes.object.isRequired
 };

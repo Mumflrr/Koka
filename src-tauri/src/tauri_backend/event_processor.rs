@@ -221,13 +221,13 @@ impl EventProcessor {
                         // Add to timed events for this day
                         events_by_day
                             .entry(day_key)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(event.clone());
                     } else {
                         // Add to no-time events for this day
                         no_time_events_by_day
                             .entry(day_key)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(event.clone());
                     }
                 }
@@ -248,7 +248,7 @@ impl EventProcessor {
      * 
      * @param {&mut Vec<ProcessedEvent>} day_events - Events for a single day (modified in-place)
      */
-    fn calculate_overlap_groups(day_events: &mut Vec<ProcessedEvent>) {
+    fn calculate_overlap_groups(day_events: &mut [ProcessedEvent]) {
         // Sort events by start time for chronological processing
         day_events.sort_by(|a, b| a.start_time_int.cmp(&b.start_time_int));
 
@@ -307,7 +307,7 @@ impl EventProcessor {
      * 
      * @param {&mut Vec<ProcessedEvent>} day_events - Events to position (modified in-place)
      */
-    fn calculate_positioning(day_events: &mut Vec<ProcessedEvent>) {
+    fn calculate_positioning(day_events: &mut [ProcessedEvent]) {
         for event in day_events.iter_mut() {
             // Calculate time offsets in minutes from calendar start
             let start_minutes = Self::get_minutes_since_start(event.start_time_int);

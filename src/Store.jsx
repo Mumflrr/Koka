@@ -303,7 +303,13 @@ const useStore = create((set, get) => ({
     },
 
     generateSchedules: async () => {
-        set({ scrapeState: { isScraping: true, status: "Preparing data..." }, schedulerError: null });
+        set({
+            scrapeState: { isScraping: true, status: "Preparing data..." },
+            schedulerError: null,
+            // Reset schedule display numbers and next number at the start
+            scheduleDisplayNumbers: new Map(),
+            nextScheduleNumber: 1,
+        });
         const { paramCheckboxes, classes, userEvents } = get();
         try {
             const rawUserEvents = [];
@@ -341,20 +347,19 @@ const useStore = create((set, get) => ({
             if (typeof result === 'string') {
                 set({ scrapeState: { isScraping: false, status: `Error: ${result}` }});
             } else {
-                // FIX: Provide a more descriptive status message based on the result.
                 const successMessage = result && result.length > 0 
                     ? `${result.length} schedule(s) generated successfully!` 
                     : "No matching schedules found. Try adjusting your courses or parameters.";
 
+                // Assign display numbers to new schedules, starting from 1
+                get()._assignScheduleDisplayNumbers(result || []);
+
                 set({
                     scrapeState: { isScraping: false, status: successMessage },
-                    // Ensure schedules is set to the result, or an empty array if null.
                     schedules: result || [],
                     selectedScheduleId: null,
                 });
                 await systemAPI.setDisplaySchedule(null);
-                // Assign display numbers to new schedules while preserving existing ones
-                get()._assignScheduleDisplayNumbers(result || []);
             }
         } catch (error) {
             console.error("Error during schedule generation:", error);
