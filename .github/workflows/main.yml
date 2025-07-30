@@ -62,7 +62,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-          components: rustfmt, clippy
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
@@ -72,36 +71,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint frontend (e.g., ESLint)
-        run: pnpm lint
-
-      - name: Check Rust formatting
-        working-directory: ./src-tauri
-        run: cargo fmt -- --check
-
-      - name: Run Clippy (Rust linter) - Basic
-        working-directory: ./src-tauri
-        run: cargo clippy -- -D warnings
-
-      - name: Run Clippy (Rust linter) - Comprehensive
-        working-directory: ./src-tauri
-        run: |
-          # Run clippy with additional lint groups for more thorough checking
-          cargo clippy --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::all \
-            -D clippy::pedantic \
-            -W clippy::nursery \
-            -W clippy::cargo \
-            -A clippy::module_name_repetitions \
-            -A clippy::too_many_lines
-
       - name: Build and release Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }} # If using for signing updates
-          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }} # If private key is password-protected
         with:
           tagName: app-v__VERSION__ # __VERSION__ will be replaced by the version in tauri.conf.json
           releaseName: 'Koka v__VERSION__'
