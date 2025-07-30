@@ -1,5 +1,6 @@
 // src/components/Scheduler/CourseManagementPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { Trash2, Plus, X } from 'lucide-react';
 import useStore, { stringifySchedule } from '../../Store.jsx';
 
@@ -74,7 +75,7 @@ const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
         setDisplayedInstructor(initialFormData.instructor);
         setValidation({ courseCodeValid: true, sectionCodeValid: true, instructorValid: true });
         setModifiedFields({});
-    }, [classData.id]);
+    }, [classData.id, classData.code, classData.instructor, classData.name, classData.section]);
 
     // === EVENT HANDLERS ===
     
@@ -243,13 +244,30 @@ const ClassCard = React.memo(({ classData, onUpdate, onDelete, ss }) => {
     );
 });
 
+// Set display name for ClassCard
+ClassCard.displayName = 'ClassCard';
+
+// PropTypes for ClassCard
+ClassCard.propTypes = {
+  classData: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    code: PropTypes.string,
+    name: PropTypes.string,
+    section: PropTypes.string,
+    instructor: PropTypes.string
+  }).isRequired,
+  onUpdate: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired,
+  ss: PropTypes.object.isRequired
+};
+
 // === ADD COURSE BUTTON COMPONENT ===
 
 /**
  * Simple button component for adding new course cards
  * Displays a styled add button with icon and text
  * 
- * @component
+ * @component AddClassCard
  * @param {Object} props - Component props
  * @param {Function} props.onClick - Callback when add button is clicked
  * @param {Object} props.ss - CSS module styles object
@@ -264,6 +282,15 @@ const AddClassCard = React.memo(({ onClick, ss }) => (
   </div>
 ));
 
+// Set display name for AddClassCard
+AddClassCard.displayName = 'AddClassCard';
+
+// PropTypes for AddClassCard
+AddClassCard.propTypes = {
+  onClick: PropTypes.func.isRequired,
+  ss: PropTypes.object.isRequired
+};
+
 // === SCHEDULES LIST COMPONENT ===
 
 /**
@@ -271,7 +298,7 @@ const AddClassCard = React.memo(({ onClick, ss }) => (
  * Handles switching between regular schedules and favorites view
  * Provides schedule selection, favoriting, and deletion functionality
  * 
- * @component
+ * @component SchedulesList
  * @param {Object} props - Component props
  * @param {boolean} props.renderFavorites - Whether to show favorites or regular schedules
  * @param {Array} props.favoritedSchedules - Array of favorited schedule objects
@@ -365,13 +392,37 @@ const SchedulesList = React.memo(({
     );
 });
 
+// Set display name for SchedulesList
+SchedulesList.displayName = 'SchedulesList';
+
+// PropTypes for SchedulesList
+SchedulesList.propTypes = {
+  renderFavorites: PropTypes.bool.isRequired,
+  favoritedSchedules: PropTypes.array.isRequired,
+  schedules: PropTypes.array.isRequired,
+  scrapeState: PropTypes.shape({
+    isScraping: PropTypes.bool.isRequired,
+    status: PropTypes.string.isRequired
+  }).isRequired,
+  favoritedScheduleStrings: PropTypes.instanceOf(Set).isRequired,
+  selectedScheduleId: PropTypes.string,
+  toggleRenderFavorites: PropTypes.func.isRequired,
+  setSelectedSchedule: PropTypes.func.isRequired,
+  setHoveredSchedule: PropTypes.func.isRequired,
+  clearHoveredSchedule: PropTypes.func.isRequired,
+  toggleFavoriteSchedule: PropTypes.func.isRequired,
+  deleteSchedule: PropTypes.func.isRequired,
+  getScheduleDisplayNumber: PropTypes.func.isRequired,
+  ss: PropTypes.object.isRequired
+};
+
 // === COURSES LIST COMPONENT ===
 
 /**
  * Component for displaying and managing the list of course parameters
  * Shows all course cards and the add course button
  * 
- * @component
+ * @component ClassesList
  * @param {Object} props - Component props
  * @param {Array} props.classes - Array of course objects
  * @param {Function} props.updateClass - Update course data callback
@@ -396,6 +447,24 @@ const ClassesList = React.memo(({ classes, updateClass, deleteClass, addClass, s
         <AddClassCard onClick={addClass} ss={ss} />
     </div>
 ));
+
+// Set display name for ClassesList
+ClassesList.displayName = 'ClassesList';
+
+// PropTypes for ClassesList
+ClassesList.propTypes = {
+  classes: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    code: PropTypes.string,
+    name: PropTypes.string,
+    section: PropTypes.string,
+    instructor: PropTypes.string
+  })).isRequired,
+  updateClass: PropTypes.func.isRequired,
+  deleteClass: PropTypes.func.isRequired,
+  addClass: PropTypes.func.isRequired,
+  ss: PropTypes.object.isRequired
+};
 
 // === MAIN COURSE MANAGEMENT PANEL ===
 
@@ -562,6 +631,14 @@ const CourseManagementPanel = ({ ss }) => {
             </div>
         </aside>
     );
+};
+
+// Set display name for CourseManagementPanel
+CourseManagementPanel.displayName = 'CourseManagementPanel';
+
+// PropTypes for CourseManagementPanel
+CourseManagementPanel.propTypes = {
+  ss: PropTypes.object.isRequired
 };
 
 export default CourseManagementPanel;

@@ -78,13 +78,9 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
                  eprintln!("Warning: Failed to save scraped class sections: {}", e);
             }
 
-            if scraped_data.len() == scrape_indices.len() {
-                for (i, data) in scraped_data.into_iter().enumerate() {
-                    let original_index = scrape_indices[i];
-                    scraped_results_map.insert(original_index, data);
-                }
-            } else {
-                 return Err(anyhow!("Mismatch between scraped results and requested classes"));
+            for (i, data) in scraped_data.into_iter().enumerate() {
+                let original_index = scrape_indices[i];
+                scraped_results_map.insert(original_index, data);
             }
         }
 
@@ -110,7 +106,7 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
     }
     .await;
 
-    return result
+    result
 }
 
 /**
@@ -209,6 +205,14 @@ async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver)
         // Click the search button
         let search_button = driver.find(By::Id("class-search-btn")).await?;
         search_button.click().await?;
+
+        let header = driver.query(By::ClassName("red")).first().await?;
+        header.wait_until().displayed().await?;
+        let text = header.text().await?.chars().next().unwrap();
+        if text == '0' {
+            driver.find(By::Css("button.ui-dialog-titlebar-close")).await?.click().await?;
+            continue
+        };
 
         // Narrow scope down to table (once is shows up)
         let table = driver.query(By::Id("classSearchTable")).first().await?;
@@ -360,11 +364,11 @@ pub fn filter_classes(input_classes: Vec<Vec<Class>>, parameters: &ScrapeClasses
  * 5. Converts day strings to boolean arrays and time strings to structured data
  * 
  * @param {&WebElement} driver - WebElement representing the search results table
- * @param {&Vec<String>} predetermined_info - Pre-extracted course info [code, name, section, description]
+ * @param {&[String]} predetermined_info - Pre-extracted course info [code, name, section, description]
  * @returns {WebDriverResult<Vec<Class>>} Array of course sections with complete time block data
  * @throws {WebDriverError} If HTML parsing fails or required elements are not found
  */
-async fn scrape_search_results(driver: &WebElement, predetermined_info: &Vec<String>) -> WebDriverResult<Vec<Class>> {
+async fn scrape_search_results(driver: &WebElement, predetermined_info: &[String]) -> WebDriverResult<Vec<Class>> {
     let mut results = Vec::new();
     
     // Find all instances of the class
@@ -410,20 +414,19 @@ async fn scrape_search_results(driver: &WebElement, predetermined_info: &Vec<Str
     
             // Get location
             data_array[3] = temp;
-            let location_result: String;
-            if days_bool.iter().all(|&value| value == false) {
-                location_result = "Distance Education - Online".to_string();
+            let location_result: String = if days_bool.iter().all(|&value| !value) {
+                "Distance Education - Online".to_string()
             }
             else {
-                location_result = extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string();
-            }
+                extract_text_after(data_array[3].as_str(), "(", ")").trim().to_string()
+            };
     
             // Push time block to this section
             class_sections.push(TimeBlock {
                 section: data_array[0].clone(),
                 location: location_result,
                 instructor: data_array[4].clone(),
-                days: days,
+                days,
             });
     
         }
@@ -461,7 +464,7 @@ fn validate_time_ok(events: &Vec<EventParam>, days: &[((i32, i32), bool); 5]) ->
     // For each day in the week
     for (day_index, day) in days.iter().enumerate() {
         // Check if bool flag is false, signifying no class that day
-        if day.1 == false {
+        if !day.1 {
             continue;
         }
     

@@ -1,6 +1,6 @@
 import "../../App.css";
 import Sidebar from "../Sidebar/Sidebar";
-import ss from './Dining.module.css';
+//import ss from './Dining.module.css';
 
 function Dining() {
 

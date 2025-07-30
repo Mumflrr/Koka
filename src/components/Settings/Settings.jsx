@@ -1,7 +1,6 @@
-import React, { useState } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
 import "../../App.css";
 import Sidebar from "../Sidebar/Sidebar";
+//import ss from "./Settings.module.css"
 
 
 function Settings() {

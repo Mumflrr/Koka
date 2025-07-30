@@ -1,6 +1,6 @@
 import "../../App.css";
 import Sidebar from "../Sidebar/Sidebar";
-import ss from './Gallery.module.css';
+//import ss from './Gallery.module.css';
 
 
 function Gallery() {
