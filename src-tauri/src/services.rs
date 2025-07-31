@@ -139,7 +139,7 @@ pub async fn setup_program(
 
     // 3. Fetch the latest version from the web.
     let latest_version = fetch_latest_chrome_version().await?;
-    println!("Latest Chrome version available: {}", latest_version);
+    println!("Latest Chrome version available: {latest_version}");
     println!("Stored Chrome version: {}", stored_info.version);
 
     // 4. Compare versions and decide if an update is needed.
@@ -187,7 +187,7 @@ pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver,
     Command::new(&driver_path)
         .args(["--port=9515", "--verbose", "--log-path=chromedriver.log"])
         .spawn()
-        .with_context(|| format!("Failed to start chromedriver from path: {:?}", driver_path))?;
+        .with_context(|| format!("Failed to start chromedriver from path: {driver_path:?}"))?;
     
     // Wait up to 5 seconds for ChromeDriver to start
     for _ in 0..10 {
@@ -236,13 +236,13 @@ fn determine_os_string() -> String {
 #[cfg(target_os = "windows")]
 fn quit_chromedriver() -> Result<(), anyhow::Error> {
     let output = Command::new("tasklist")
-        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
+        .args(["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
         .output()?;
     let output_str = String::from_utf8(output.stdout)?;
     if output_str.contains("chromedriver.exe") {
         println!("Chromedriver processes found. Terminating...");
         let kill_output = Command::new("taskkill")
-            .args(&["/F", "/IM", "chromedriver.exe"])
+            .args(["/F", "/IM", "chromedriver.exe"])
             .output()?;
         if !kill_output.status.success() {
             let error_message = String::from_utf8(kill_output.stderr)?;
