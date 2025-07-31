@@ -236,13 +236,13 @@ fn determine_os_string() -> String {
 #[cfg(target_os = "windows")]
 fn quit_chromedriver() -> Result<(), anyhow::Error> {
     let output = Command::new("tasklist")
-        .args(&["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
+        .args(["/FI", "IMAGENAME eq chromedriver.exe", "/FO", "CSV", "/NH"])
         .output()?;
     let output_str = String::from_utf8(output.stdout)?;
     if output_str.contains("chromedriver.exe") {
         println!("Chromedriver processes found. Terminating...");
         let kill_output = Command::new("taskkill")
-            .args(&["/F", "/IM", "chromedriver.exe"])
+            .args(["/F", "/IM", "chromedriver.exe"])
             .output()?;
         if !kill_output.status.success() {
             let error_message = String::from_utf8(kill_output.stderr)?;
