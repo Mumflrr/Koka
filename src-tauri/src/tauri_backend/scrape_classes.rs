@@ -47,7 +47,7 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
         for (index, class_param) in parameters.classes.iter().enumerate() {
             let name = format!("{}{}", class_param.code, class_param.name);
             let database_classes = ClassRepository::get_by_name(name.clone(), &db_pool).await.unwrap_or_else(|e| {
-                 eprintln!("Warning: Failed to query cache for {}: {}", name, e);
+                 eprintln!("Warning: Failed to query cache for {name}: {e}");
                  Vec::new()
             });
 
@@ -75,7 +75,7 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
             let scraped_data = perform_scrape(&scrape_params_for_call, driver).await?;
             
             if let Err(e) = ClassRepository::save_sections_batch(&scraped_data, &db_pool).await {
-                 eprintln!("Warning: Failed to save scraped class sections: {}", e);
+                 eprintln!("Warning: Failed to save scraped class sections: {e}");
             }
 
             for (i, data) in scraped_data.into_iter().enumerate() {
@@ -242,11 +242,7 @@ async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver)
 
         // Format the complete description
         let full_description = format!(
-            "Units: {} | Prerequisites: {} | Description: {}",
-            units,
-            prerequisites,
-            description
-        );
+            "Units: {units} | Prerequisites: {prerequisites} | Description: {description}");
     
         // Now scrape the search results
         let predetermined_info = vec!(class.code.clone(), class.name.clone(), class.section.clone(), full_description);

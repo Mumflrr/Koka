@@ -126,7 +126,7 @@ impl EventRepository {
         let pool = pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Vec<Event>, anyhow::Error> {
             let conn = pool.get()?;
-            let statement = format!("SELECT id, title, start_time, end_time, day, professor, description FROM {}", table);
+            let statement = format!("SELECT id, title, start_time, end_time, day, professor, description FROM {table}");
             let mut stmt = conn.prepare(&statement)?;
             let events = stmt.query_map([], |row| {
                 Ok(Event {
@@ -159,7 +159,7 @@ impl EventRepository {
         let pool = pool.clone();
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
             let conn = pool.get()?;
-            let statement = format!("DELETE FROM {} WHERE id = ?1", table);
+            let statement = format!("DELETE FROM {table} WHERE id = ?1");
             conn.execute(&statement, params![event_id])?;
             Ok(())
         }).await?
@@ -177,8 +177,7 @@ impl EventRepository {
      */
     fn save_event_in_transaction(tx: &Transaction, table: &str, event: &Event) -> Result<(), anyhow::Error> {
         let insert_statement = format!(
-            "INSERT OR REPLACE INTO {} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)", 
-            table
+            "INSERT OR REPLACE INTO {table} (id, title, start_time, end_time, day, professor, description) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
         );
         tx.execute(&insert_statement, params![
             event.id, event.title, event.start_time, event.end_time, 
@@ -199,8 +198,7 @@ impl EventRepository {
      */
     fn update_event_in_transaction(tx: &Transaction, table: &str, event: &Event) -> Result<(), anyhow::Error> {
         let update_statement = format!(
-            "UPDATE {} SET title = ?2, start_time = ?3, end_time = ?4, day = ?5, professor = ?6, description = ?7 WHERE id = ?1", 
-            table
+            "UPDATE {table} SET title = ?2, start_time = ?3, end_time = ?4, day = ?5, professor = ?6, description = ?7 WHERE id = ?1"
         );
         let rows_affected = tx.execute(&update_statement, params![
             event.id, event.title, event.start_time, event.end_time, 
@@ -387,7 +385,7 @@ impl ScheduleRepository {
         let pool = pool.clone();
         tokio::task::spawn_blocking(move || -> Result<Vec<Vec<Class>>, anyhow::Error> {
             let conn = pool.get()?;
-            let prepared_statement = format!("SELECT data FROM {}", table);
+            let prepared_statement = format!("SELECT data FROM {table}");
             let mut stmt = conn.prepare(&prepared_statement)?;
             let rows = stmt.query_map([], |row| row.get(0))?;
             let mut result = Vec::new();
@@ -669,7 +667,7 @@ pub fn load_connect_info(pool: &DbPool, os: String) -> Result<ConnectInfo, anyho
             Ok(info)
         },
         None => {
-            println!("No connect info in DB. Inserting initial data for os: {}", os);
+            println!("No connect info in DB. Inserting initial data for os: {os}");
             conn.execute(
                 "INSERT INTO data (id, os, version, schedule) VALUES (?1, ?2, '', NULL)", 
                 params![DATA_TABLE_ID, &os]

@@ -116,7 +116,7 @@ impl EventProcessor {
             return "00:00".to_string();
         }
         // Ensure 4-digit format with leading zeros
-        let time_str = format!("{:04}", time_int);
+        let time_str = format!("{time_int:04}");
         // Insert colon between hours and minutes
         format!("{}:{}", &time_str[0..2], &time_str[2..4])
     }
@@ -291,7 +291,7 @@ impl EventProcessor {
             
             // Set positioning for each event in the group
             for (index, &event_idx) in group.iter().enumerate() {
-                day_events[event_idx].width = format!("{:.2}%", event_width);
+                day_events[event_idx].width = format!("{event_width:.2}%");
                 day_events[event_idx].left = format!("{:.2}%", index as f64 * event_width);
             }
         }

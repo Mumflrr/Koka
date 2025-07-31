@@ -54,7 +54,7 @@ async fn startup_app(state: tauri::State<'_, AppState>) -> Result<(), String> {
     
     // Delegate to services module for Chrome/ChromeDriver setup
     setup_program(&state.db_pool, state.connect_info.clone()).await
-        .map_err(|e| format!("Error during program setup: {}", e))
+        .map_err(|e| format!("Error during program setup: {e}"))
 }
 
 /**
@@ -135,12 +135,12 @@ async fn delete_schedule(id: String, is_favorited: bool, state: tauri::State<'_,
     // Remove from favorites first if needed
     if is_favorited {
         FavoriteRepository::change_status(id.clone(), None, &state.db_pool).await
-            .map_err(|e| format!("Failed to remove from favorites: {}", e))?;
+            .map_err(|e| format!("Failed to remove from favorites: {e}"))?;
     }
     
     // Remove from main schedules table
     ScheduleRepository::delete(id, &state.db_pool).await
-        .map_err(|e| format!("Failed to delete from schedules: {}", e))
+        .map_err(|e| format!("Failed to delete from schedules: {e}"))
 }
 
 /**
@@ -163,7 +163,7 @@ async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<
     // Determine operation: None = remove from favorites, Some(schedule) = add to favorites
     let schedule_option = if is_favorited { None } else { Some(schedule) };
     FavoriteRepository::change_status(id, schedule_option, &state.db_pool).await
-        .map_err(|e| format!("Failed to change favorite status: {}", e))
+        .map_err(|e| format!("Failed to change favorite status: {e}"))
 }
 
 /**
@@ -177,7 +177,7 @@ async fn change_favorite_schedule(id: String, is_favorited: bool, schedule: Vec<
 #[tauri::command]
 async fn get_schedules(table: String, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
     ScheduleRepository::get_all(&table, &state.db_pool).await
-        .map_err(|e| format!("Failed to get schedules: {}", e))
+        .map_err(|e| format!("Failed to get schedules: {e}"))
 }
 
 /**
@@ -229,7 +229,7 @@ async fn set_display_schedule(id: Option<i16>, state: tauri::State<'_, AppState>
 #[tauri::command]
 async fn create_event(event_data: NewEvent, state: tauri::State<'_, AppState>) -> Result<Event, String> { 
     EventRepository::save("events", event_data, &state.db_pool).await
-        .map_err(|e| format!("Failed to save event: {}", e))
+        .map_err(|e| format!("Failed to save event: {e}"))
 }
 
 /**
@@ -249,7 +249,7 @@ async fn create_event(event_data: NewEvent, state: tauri::State<'_, AppState>) -
 async fn get_events(state: tauri::State<'_, AppState>) -> Result<ProcessedEventsResult, String> {
     // Load raw events from database
     let raw_events = EventRepository::load_all("events", &state.db_pool).await
-        .map_err(|e| format!("Failed to load events: {}", e))?;
+        .map_err(|e| format!("Failed to load events: {e}"))?;
     
     // Process events for calendar display (organize by day, calculate positions, etc.)
     let processed_events = EventProcessor::process_events(raw_events);
@@ -267,7 +267,7 @@ async fn get_events(state: tauri::State<'_, AppState>) -> Result<ProcessedEvents
 #[tauri::command]
 async fn delete_event(event_id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     EventRepository::delete("events", event_id, &state.db_pool).await
-        .map_err(|e| format!("Failed to delete event: {}", e))
+        .map_err(|e| format!("Failed to delete event: {e}"))
 }
 
 /**
@@ -281,7 +281,7 @@ async fn delete_event(event_id: String, state: tauri::State<'_, AppState>) -> Re
 #[tauri::command]
 async fn update_event(event: Event, state: tauri::State<'_, AppState>) -> Result<(), String> {
     EventRepository::update("events", event, &state.db_pool).await
-        .map_err(|e| format!("Failed to update event: {}", e))
+        .map_err(|e| format!("Failed to update event: {e}"))
 }
 
 // === CLASS PARAMETER MANAGEMENT COMMANDS ===
@@ -299,7 +299,7 @@ async fn update_event(event: Event, state: tauri::State<'_, AppState>) -> Result
 #[tauri::command]
 async fn get_classes(state: tauri::State<'_, AppState>) -> Result<Vec<ClassParam>, String> {
     ClassParamRepository::get_all(&state.db_pool).await
-        .map_err(|e| format!("Failed to get classes: {}", e))
+        .map_err(|e| format!("Failed to get classes: {e}"))
 }
 
 /**
@@ -313,7 +313,7 @@ async fn get_classes(state: tauri::State<'_, AppState>) -> Result<Vec<ClassParam
 #[tauri::command]
 async fn update_class(class: ClassParam, state: tauri::State<'_, AppState>) -> Result<(), String> {
     ClassParamRepository::update(class, &state.db_pool).await
-        .map_err(|e| format!("Failed to update classes: {}", e))
+        .map_err(|e| format!("Failed to update classes: {e}"))
 }
 
 /**
@@ -327,7 +327,7 @@ async fn update_class(class: ClassParam, state: tauri::State<'_, AppState>) -> R
 #[tauri::command]
 async fn remove_class(id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     ClassParamRepository::remove(id, &state.db_pool).await
-        .map_err(|e| format!("Failed to remove class: {}", e))
+        .map_err(|e| format!("Failed to remove class: {e}"))
 }
 
 // === MAIN APPLICATION ENTRY POINT ===

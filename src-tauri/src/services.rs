@@ -139,7 +139,7 @@ pub async fn setup_program(
 
     // 3. Fetch the latest version from the web.
     let latest_version = fetch_latest_chrome_version().await?;
-    println!("Latest Chrome version available: {}", latest_version);
+    println!("Latest Chrome version available: {latest_version}");
     println!("Stored Chrome version: {}", stored_info.version);
 
     // 4. Compare versions and decide if an update is needed.
@@ -187,7 +187,7 @@ pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver,
     Command::new(&driver_path)
         .args(["--port=9515", "--verbose", "--log-path=chromedriver.log"])
         .spawn()
-        .with_context(|| format!("Failed to start chromedriver from path: {:?}", driver_path))?;
+        .with_context(|| format!("Failed to start chromedriver from path: {driver_path:?}"))?;
     
     // Wait up to 5 seconds for ChromeDriver to start
     for _ in 0..10 {
