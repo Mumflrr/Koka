@@ -8,7 +8,6 @@ import { credentialsAPI } from "../../api";
  * A secure settings component that handles two states:
  * 1. Initial Setup: If no master password is set, it prompts the user to create one.
  * 2. Management: If a master password exists, it displays all management options.
- * It uses a `useEffect` hook to check the setup status on component mount.
  */
 function Settings() {
     // State to track if setup is complete: null = loading, false = needs setup, true = setup complete
@@ -56,10 +55,9 @@ function Settings() {
     const handleInitialSetup = async (e) => {
         e.preventDefault();
         clearMessages();
-        if (initialPassword.length < 8) {
-            setError("Password must be at least 8 characters long.");
-            return;
-        }
+        
+        // REMOVED: Password length check.
+
         if (initialPassword !== confirmPassword) {
             setError("Passwords do not match.");
             return;
@@ -78,10 +76,9 @@ function Settings() {
     const handleChangeMasterPassword = async (e) => {
         e.preventDefault();
         clearMessages();
-        if (newMasterPassword.length < 8) {
-            setError("New master password must be at least 8 characters long.");
-            return;
-        }
+
+        // REMOVED: New password length check.
+
         if (!oldMasterPassword) {
             setError("You must provide your current master password to change it.");
             return;
@@ -115,23 +112,6 @@ function Settings() {
             setAppPassword("");
         } catch (err) {
             setError(`Failed to store credentials: ${err}`);
-        }
-    };
-
-    const handleViewCredentials = async () => {
-        clearMessages();
-        try {
-            const masterPassword = await promptForMasterPassword();
-            if (masterPassword === null) {
-                setMessage("Operation cancelled.");
-                return;
-            }
-            const [retrievedUsername, retrievedPassword] = await credentialsAPI.getCredentials(masterPassword);
-            setMessage(`Success! Retrieved credentials for user: ${retrievedUsername}. Password is in memory and ready for use.`);
-            // SECURITY: In a real app, use `retrievedPassword` for a login flow, etc., then let it be garbage collected.
-            console.log("Retrieved Password (for dev use, do not log in prod):", retrievedPassword);
-        } catch(err) {
-            setError(`Error retrieving credentials: ${err}`);
         }
     };
 
@@ -182,11 +162,6 @@ function Settings() {
                     <input type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} placeholder="Enter Password" />
                     <button type="submit">Store Credentials</button>
                 </form>
-            </div>
-            <div className={ss.formSection}>
-                <h2>Test Credential Access</h2>
-                <p>Click to test the secure retrieval process.</p>
-                <button onClick={handleViewCredentials}>View Stored Credentials</button>
             </div>
         </>
     );

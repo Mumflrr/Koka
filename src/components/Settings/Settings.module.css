@@ -29,7 +29,7 @@
 .formSection h2 {
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-light);
     margin-top: 0;
     margin-bottom: var(--spacing-xs);
 }
