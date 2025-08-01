@@ -86,3 +86,34 @@ export const classParametersAPI = {
     return invokeWrapper('remove_class', { id: classId });
   }
 };
+
+export const credentialsAPI = {
+  /**
+   * Sets the master password for the application.
+   * @param {string} password - The user's chosen master password.
+   * @returns {Promise<void>}
+   */
+  setupMasterPassword(password) {
+    return invokeWrapper('setup_password', { password });
+  },
+
+  /**
+   * Securely stores a secret value, like an API key.
+   * @param {string} keyName - The name to identify the secret (e.g., 'google_calendar_api_key').
+   * @param {string} secretValue - The actual secret to store.
+   * @returns {Promise<void>}
+   */
+  storeSecret(keyName, secretValue) {
+    return invokeWrapper('store_secret', { keyName, secretValue });
+  },
+
+  /**
+   * Retrieves a secret after getting authorization via the master password.
+   * @param {string} keyName - The name of the secret to retrieve.
+   * @param {string} masterPassword - The master password for verification.
+   * @returns {Promise<string>} - A promise that resolves with the secret value.
+   */
+  getSecretWithAuthorization(keyName, masterPassword) {
+    return invokeWrapper('get_secret', { keyName, masterPassword });
+  }
+};
