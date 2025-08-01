@@ -87,33 +87,48 @@ export const classParametersAPI = {
   }
 };
 
+/**
+ * A wrapper for all credential-related API calls to the Rust backend.
+ */
 export const credentialsAPI = {
-  /**
-   * Sets the master password for the application.
-   * @param {string} password - The user's chosen master password.
-   * @returns {Promise<void>}
-   */
-  setupMasterPassword(password) {
-    return invokeWrapper('setup_password', { password });
-  },
+    /**
+     * Checks if a master password has been set.
+     * @returns {Promise<boolean>}
+     */
+    isMasterPasswordSet: () => invoke("is_master_password_set_cmd"),
 
-  /**
-   * Securely stores a secret value, like an API key.
-   * @param {string} keyName - The name to identify the secret (e.g., 'google_calendar_api_key').
-   * @param {string} secretValue - The actual secret to store.
-   * @returns {Promise<void>}
-   */
-  storeSecret(keyName, secretValue) {
-    return invokeWrapper('store_secret', { keyName, secretValue });
-  },
+    /**
+     * Sets the initial master password.
+     * @param {string} password - The master password to set.
+     * @returns {Promise<void>}
+     */
+    setupMasterPassword: (password) =>
+        invoke("setup_master_password_cmd", { password }),
 
-  /**
-   * Retrieves a secret after getting authorization via the master password.
-   * @param {string} keyName - The name of the secret to retrieve.
-   * @param {string} masterPassword - The master password for verification.
-   * @returns {Promise<string>} - A promise that resolves with the secret value.
-   */
-  getSecretWithAuthorization(keyName, masterPassword) {
-    return invokeWrapper('get_secret', { keyName, masterPassword });
-  }
+    /**
+     * Changes an existing master password.
+     * @param {string} oldPassword - The current master password.
+     * @param {string} newPassword - The new master password.
+     * @returns {Promise<void>}
+     */
+    changeMasterPassword: (oldPassword, newPassword) =>
+        invoke("change_master_password_cmd", { oldPassword, newPassword }),
+
+    /**
+     * Stores a username and application-specific password, authorized by the master password.
+     * @param {string} username - The username to store.
+     * @param {string} appPassword - The password to store.
+     * @param {string} masterPassword - The authorizing master password.
+     * @returns {Promise<void>}
+     */
+    storeCredentials: (username, appPassword, masterPassword) =>
+        invoke("store_credentials_cmd", { username, appPassword, masterPassword }),
+
+    /**
+     * Retrieves the stored username and password, authorized by the master password.
+     * @param {string} masterPassword - The authorizing master password.
+     * @returns {Promise<[string, string]>} A tuple of [username, password].
+     */
+    getCredentials: (masterPassword) =>
+        invoke("get_credentials_cmd", { masterPassword }),
 };

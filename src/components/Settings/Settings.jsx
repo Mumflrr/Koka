@@ -1,174 +1,212 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "../../App.css";
 import Sidebar from "../Sidebar/Sidebar";
-import ss from "./Settings.module.css"; // We will use this for our modal styles
-
-// Import our new API
+import ss from "./Settings.module.css";
 import { credentialsAPI } from "../../api";
 
+/**
+ * A secure settings component that handles two states:
+ * 1. Initial Setup: If no master password is set, it prompts the user to create one.
+ * 2. Management: If a master password exists, it displays all management options.
+ * It uses a `useEffect` hook to check the setup status on component mount.
+ */
 function Settings() {
-    // State for the forms
-    const [masterPassword, setMasterPassword] = useState("");
-    const [apiKey, setApiKey] = useState("");
-    
-    // State for user feedback
+    // State to track if setup is complete: null = loading, false = needs setup, true = setup complete
+    const [isSetupComplete, setIsSetupComplete] = useState(null);
+
+    // State for the initial setup form
+    const [initialPassword, setInitialPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+
+    // State for the management forms
+    const [oldMasterPassword, setOldMasterPassword] = useState("");
+    const [newMasterPassword, setNewMasterPassword] = useState("");
+    const [username, setUsername] = useState("");
+    const [appPassword, setAppPassword] = useState("");
+
+    // State for user feedback and the authorization modal
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
-
-    // State for the authorization modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalPassword, setModalPassword] = useState("");
     const [modalResolve, setModalResolve] = useState(null);
+
+    // Check setup status when the component mounts
+    useEffect(() => {
+        const checkSetup = async () => {
+            clearMessages();
+            try {
+                const isSet = await credentialsAPI.isMasterPasswordSet();
+                setIsSetupComplete(isSet);
+            } catch (err) {
+                setError(`Critical error checking security status: ${err}`);
+                setIsSetupComplete(false); // Default to setup mode on error
+            }
+        };
+        checkSetup();
+    }, []);
 
     const clearMessages = () => {
         setMessage("");
         setError("");
     };
 
-    const handleSetMasterPassword = async (e) => {
+    // --- Action Handlers ---
+
+    const handleInitialSetup = async (e) => {
         e.preventDefault();
         clearMessages();
-        if (masterPassword.length < 8) {
-            setError("Master password must be at least 8 characters long.");
+        if (initialPassword.length < 8) {
+            setError("Password must be at least 8 characters long.");
+            return;
+        }
+        if (initialPassword !== confirmPassword) {
+            setError("Passwords do not match.");
             return;
         }
         try {
-            await credentialsAPI.setupMasterPassword(masterPassword);
-            setMessage("Master password set successfully!");
-            setMasterPassword("");
+            await credentialsAPI.setupMasterPassword(initialPassword);
+            setMessage("Master password set successfully! You can now use the security features.");
+            setInitialPassword("");
+            setConfirmPassword("");
+            setIsSetupComplete(true); // Transition to the management view
         } catch (err) {
             setError(`Failed to set master password: ${err}`);
         }
     };
-    
-    const handleStoreApiKey = async (e) => {
+
+    const handleChangeMasterPassword = async (e) => {
         e.preventDefault();
         clearMessages();
-        if (!apiKey) {
-            setError("API Key field cannot be empty.");
+        if (newMasterPassword.length < 8) {
+            setError("New master password must be at least 8 characters long.");
+            return;
+        }
+        if (!oldMasterPassword) {
+            setError("You must provide your current master password to change it.");
             return;
         }
         try {
-            // We give our secret a name, e.g., 'user_api_key'
-            await credentialsAPI.storeSecret('user_api_key', apiKey);
-            setMessage("API Key stored securely!");
-            setApiKey("");
+            await credentialsAPI.changeMasterPassword(oldMasterPassword, newMasterPassword);
+            setMessage("Master password changed successfully!");
+            setOldMasterPassword("");
+            setNewMasterPassword("");
         } catch (err) {
-            setError(`Failed to store API Key: ${err}`);
+            setError(`Failed to change master password: ${err}`);
+        }
+    };
+    
+    const handleStoreCredentials = async (e) => {
+        e.preventDefault();
+        clearMessages();
+        if (!username || !appPassword) {
+            setError("Username and Password fields cannot be empty.");
+            return;
+        }
+        try {
+            const masterPassword = await promptForMasterPassword();
+            if (masterPassword === null) {
+                setMessage("Operation cancelled.");
+                return;
+            }
+            await credentialsAPI.storeCredentials(username, appPassword, masterPassword);
+            setMessage("Credentials stored securely!");
+            setUsername("");
+            setAppPassword("");
+        } catch (err) {
+            setError(`Failed to store credentials: ${err}`);
         }
     };
 
-    // This function shows the modal and returns a Promise
+    const handleViewCredentials = async () => {
+        clearMessages();
+        try {
+            const masterPassword = await promptForMasterPassword();
+            if (masterPassword === null) {
+                setMessage("Operation cancelled.");
+                return;
+            }
+            const [retrievedUsername, retrievedPassword] = await credentialsAPI.getCredentials(masterPassword);
+            setMessage(`Success! Retrieved credentials for user: ${retrievedUsername}. Password is in memory and ready for use.`);
+            // SECURITY: In a real app, use `retrievedPassword` for a login flow, etc., then let it be garbage collected.
+            console.log("Retrieved Password (for dev use, do not log in prod):", retrievedPassword);
+        } catch(err) {
+            setError(`Error retrieving credentials: ${err}`);
+        }
+    };
+
+    // --- Modal Logic ---
+
     const promptForMasterPassword = () => {
         return new Promise((resolve) => {
             setIsModalOpen(true);
-            setModalResolve(() => resolve); // Store the resolve function
+            setModalResolve(() => resolve);
         });
     };
+    const handleModalSubmit = () => { if (modalResolve) modalResolve(modalPassword); closeModal(); };
+    const handleModalCancel = () => { if (modalResolve) modalResolve(null); closeModal(); };
+    const closeModal = () => { setIsModalOpen(false); setModalPassword(""); setModalResolve(null); };
 
-    const handleModalSubmit = () => {
-        if (modalResolve) {
-            modalResolve(modalPassword); // Resolve the promise with the password
-        }
-        closeModal();
-    };
-    
-    const handleModalCancel = () => {
-        if (modalResolve) {
-            modalResolve(null); // Resolve with null to indicate cancellation
-        }
-        closeModal();
-    };
+    // --- Render Logic ---
 
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setModalPassword("");
-        setModalResolve(null);
-    };
+    const renderLoading = () => <p>Checking security status...</p>;
 
-    // This is the main function demonstrating the secure flow
-    const handleFetchAndUseKey = async () => {
-        clearMessages();
-        try {
-            // 1. Prompt the user for their master password using our modal
-            const enteredPassword = await promptForMasterPassword();
-            
-            if (enteredPassword === null) {
-                setMessage("Operation cancelled by user.");
-                return;
-            }
+    const renderInitialSetup = () => (
+        <div className={ss.formSection}>
+            <h2>Create Master Password</h2>
+            <p>Welcome! Please create a master password to secure your application data. This password cannot be recovered, so store it safely.</p>
+            <form onSubmit={handleInitialSetup}>
+                <input type="password" value={initialPassword} onChange={(e) => setInitialPassword(e.target.value)} placeholder="Enter Master Password" autoFocus />
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm Master Password" />
+                <button type="submit">Create Password</button>
+            </form>
+        </div>
+    );
 
-            // 2. Send the password to the backend to get the key
-            const retrievedApiKey = await credentialsAPI.getSecretWithAuthorization('user_api_key', enteredPassword);
-            
-            // 3. Use the key and show a success message
-            setMessage(`Success! Retrieved API Key: ${retrievedApiKey.substring(0, 8)}...`);
-
-            // In a real app, you would now use `retrievedApiKey` for a network request
-            // and then let it go out of scope. Do not store it in component state.
-            console.log("Retrieved Key:", retrievedApiKey);
-
-        } catch(err) {
-            setError(`Error: ${err}`);
-        }
-    };
+    const renderManagement = () => (
+        <>
+            <div className={ss.formSection}>
+                <h2>Change Master Password</h2>
+                <p>To change your master password, provide the current and new one.</p>
+                <form onSubmit={handleChangeMasterPassword}>
+                    <input type="password" value={oldMasterPassword} onChange={(e) => setOldMasterPassword(e.target.value)} placeholder="Current Master Password" />
+                    <input type="password" value={newMasterPassword} onChange={(e) => setNewMasterPassword(e.target.value)} placeholder="New Master Password" />
+                    <button type="submit">Change Password</button>
+                </form>
+            </div>
+            <div className={ss.formSection}>
+                <h2>Store Login Credentials</h2>
+                <p>Store a username and password. Requires master password authorization.</p>
+                <form onSubmit={handleStoreCredentials} className={ss.inputGroup}>
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter Username" />
+                    <input type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} placeholder="Enter Password" />
+                    <button type="submit">Store Credentials</button>
+                </form>
+            </div>
+            <div className={ss.formSection}>
+                <h2>Test Credential Access</h2>
+                <p>Click to test the secure retrieval process.</p>
+                <button onClick={handleViewCredentials}>View Stored Credentials</button>
+            </div>
+        </>
+    );
 
     return (
         <>
             <Sidebar />
-            <div className={ss.settingsContainer}>
+            <main className={ss.settingsContainer}>
                 <h1>Security Settings</h1>
-                
                 {message && <p className={ss.successMessage}>{message}</p>}
                 {error && <p className={ss.errorMessage}>{error}</p>}
                 
-                <div className={ss.formSection}>
-                    <h2>Master Password</h2>
-                    <p>This password protects your stored credentials. You'll need it to access them.</p>
-                    <form onSubmit={handleSetMasterPassword}>
-                        <input
-                            type="password"
-                            value={masterPassword}
-                            onChange={(e) => setMasterPassword(e.target.value)}
-                            placeholder="Enter new master password"
-                        />
-                        <button type="submit">Set Master Password</button>
-                    </form>
-                </div>
-
-                <div className={ss.formSection}>
-                    <h2>Store API Key</h2>
-                    <p>Enter an API key to be stored securely in your operating system's keychain.</p>
-                    <form onSubmit={handleStoreApiKey}>
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="Paste your API Key here"
-                        />
-                        <button type="submit">Store API Key</button>
-                    </form>
-                </div>
-
-                <div className={ss.formSection}>
-                    <h2>Test Credential Access</h2>
-                    <p>Click the button below to test the secure retrieval process.</p>
-                    <button onClick={handleFetchAndUseKey}>Fetch and Use API Key</button>
-                </div>
-            </div>
-
+                {isSetupComplete === null ? renderLoading() : !isSetupComplete ? renderInitialSetup() : renderManagement()}
+            </main>
             {isModalOpen && (
                 <div className={ss.modalOverlay}>
                     <div className={ss.modalContent}>
                         <h3>Authorization Required</h3>
                         <p>Enter your master password to continue.</p>
-                        <input
-                            type="password"
-                            value={modalPassword}
-                            onChange={(e) => setModalPassword(e.target.value)}
-                            onKeyUp={(e) => e.key === 'Enter' && handleModalSubmit()}
-                            autoFocus
-                        />
+                        <input type="password" value={modalPassword} onChange={(e) => setModalPassword(e.target.value)} onKeyUp={(e) => e.key === 'Enter' && handleModalSubmit()} autoFocus />
                         <div className={ss.modalActions}>
                             <button onClick={handleModalCancel}>Cancel</button>
                             <button onClick={handleModalSubmit} className={ss.primaryButton}>Unlock</button>

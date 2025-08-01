@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "keyring",
+ "lazy_static",
  "r2d2",
  "r2d2_sqlite",
  "rand 0.8.5",
@@ -20,7 +21,10 @@ dependencies = [
  "tauri-build",
  "thirtyfour",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "uuid",
+ "zeroize",
  "zip",
 ]
 
