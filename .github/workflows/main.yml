@@ -72,7 +72,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run ESLint
-        run: pnpm lint # Assumes you have a "lint" script in your package.json
+        run: pnpm lint
 
       - name: Run Clippy (Rust Linter)
         run: cargo clippy -- -D warnings
@@ -80,15 +80,12 @@ jobs:
 
       - name: Build Tauri App and Upload Artifacts
         uses: tauri-apps/tauri-action@v0
-
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # This new option tells the action to upload artifacts itself
           uploadArtifacts: true
-          # The artifact name will be "app-artifacts". You can change it.
-          # The final zip will contain all your platform-specific files.
           artifactName: "app-artifacts"
           args: ${{ matrix.args }}
-        # NOTE: We no longer need the separate 'actions/upload-artifact' step.
 
   # JOB 2: Create a formal GitHub Release (no changes here)
   release:
