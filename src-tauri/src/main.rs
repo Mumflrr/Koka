@@ -10,7 +10,7 @@
 
 // Production build check: This will cause a compilation error if you
 // accidentally try to build for production with debug assertions enabled.
-#[cfg(all(not(debug_assertions), tauri_build))]
+#[cfg(not(debug_assertions))]
 compile_error!("Production builds must be compiled in release mode.");
 
 // === MODULE IMPORTS ===

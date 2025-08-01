@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::{info, warn}; // For audit logging
-use zeroize::{Zeroize, Zeroizing}; // For securely erasing sensitive data from memory
+use zeroize::{Zeroizing}; // For securely erasing sensitive data from memory
 
 // === CONSTANTS ===
 const KEYRING_SERVICE: &str = "com.yourscheduler.credentials";
