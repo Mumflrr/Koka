@@ -9,7 +9,7 @@ use thirtyfour::prelude::*;
 use anyhow::anyhow;
 use tokio::time::{sleep, Instant};
 
-use crate::{database_functions::{ClassRepository, ScheduleRepository}, services::start_chromedriver, tauri_backend::class_combinations::generate_combinations, AppState, Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
+use crate::{credentials, database_functions::{ClassRepository, ScheduleRepository}, services::start_chromedriver, tauri_backend::class_combinations::generate_combinations, AppState, Class, ClassParam, EventParam, ScrapeClassesParameters, TimeBlock};
 
 /**
  * Main orchestrator function for the complete scraping and schedule generation workflow
@@ -31,7 +31,7 @@ use crate::{database_functions::{ClassRepository, ScheduleRepository}, services:
  * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} Generated schedule combinations or error
  * @throws {anyhow::Error} If no classes provided, web scraping fails, or database operations fail
  */
-pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
+pub async fn setup_scrape(toggle: i64, parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, anyhow::Error> {
     if parameters.classes.is_empty() {
         return Err(anyhow!("No classes set to scrape"));
     }
@@ -62,9 +62,13 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
         let mut scraped_results_map: HashMap<usize, Vec<Class>> = HashMap::new();
         if !classes_to_scrape_params.is_empty() {
             let connect_info = connect_info_mutex.lock().await.clone();
-            // Note: The check for Chrome updates is now handled at startup.
-            // It is not re-checked here to avoid unnecessary delays.
-            let driver = start_chromedriver(&connect_info).await?;
+
+            let driver = if toggle == 1 {
+                start_chromedriver(&connect_info, true).await?
+            } else {
+                start_chromedriver(&connect_info, false).await?
+            };
+
             
             let scrape_params_for_call = ScrapeClassesParameters {
                  params_checkbox: parameters.params_checkbox, 
@@ -72,7 +76,7 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
                  events: parameters.events.clone(),
             };
 
-            let scraped_data = perform_scrape(&scrape_params_for_call, driver).await?;
+            let scraped_data = perform_scrape(toggle, &scrape_params_for_call, driver).await?;
             
             if let Err(e) = ClassRepository::save_sections_batch(&scraped_data, &db_pool).await {
                  eprintln!("Warning: Failed to save scraped class sections: {e}");
@@ -125,7 +129,7 @@ pub async fn setup_scrape(parameters: ScrapeClassesParameters, state: tauri::Sta
  * @returns {Result<Vec<Vec<Class>>, anyhow::Error>} Scraped course data organized by course or error
  * @throws {anyhow::Error} If myPack access fails, authentication times out, or scraping encounters errors
  */
-async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
+async fn perform_scrape(toggle: i64, parameters: &ScrapeClassesParameters, driver: WebDriver) -> Result<Vec<Vec<Class>>, anyhow::Error> {    
     // Navigate to myPack
     driver.goto("https://portalsp.acs.ncsu.edu/psc/CS92PRD_newwin/EMPLOYEE/NCSIS/c/NC_WIZARD.NC_ENRL_WIZARD_FL.GBL?Page=NC_ENRL_WIZARD_FLPAGE=NC_ENRL_WIZARD_FL").await?;
     
@@ -138,8 +142,18 @@ async fn perform_scrape(parameters: &ScrapeClassesParameters, driver: WebDriver)
     // Find and click the button to input credentials
     button.find(By::Tag("a")).await?.click().await?;
     
-    // Wait for user to input credentials and duo auth
-    let timeout = Duration::from_secs(120);
+    // Implement credentials if toggle says so
+    if toggle == 1 {
+        let (username, password) = credentials::get_credentials_free().await?;
+        let username_input = driver.query(By::Id("username")).first().await?;
+        username_input.wait_until().displayed().await?;
+        username_input.send_keys(&username).await?;
+        let password_input = driver.find(By::Id("password")).await?;
+        password_input.send_keys(password.as_str()).await?;
+        driver.find(By::Id("formSubmit")).await?.click().await?;
+    }
+
+    let timeout = Duration::from_secs(80);
     let start = Instant::now();
     
     // Timeout

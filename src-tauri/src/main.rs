@@ -18,14 +18,12 @@ mod tauri_backend;
 mod database_functions;
 mod services;
 mod objects;
-mod credentials;
 
 use database_functions::*;
 use tauri::{Manager, Window};
-use tauri_backend::{scrape_classes::{setup_scrape}, event_processor::{EventProcessor, ProcessedEventsResult}};
+use tauri_backend::{credentials, scrape_classes::{setup_scrape}, event_processor::{EventProcessor, ProcessedEventsResult}};
 use services::*;
 use objects::*;
-use tauri_backend::credentials as cred_api; // aliased for clarity
 use zeroize::Zeroizing; // For securely wrapping passwords
 
 use std::{env};
@@ -60,7 +58,8 @@ fn show_splashscreen(window: Window) {
 // === SCHEDULE & EVENT MANAGEMENT (Existing Commands) ===
 #[tauri::command]
 async fn generate_schedules(parameters: ScrapeClassesParameters, state: tauri::State<'_, AppState>) -> Result<Vec<Vec<Class>>, String> {
-    setup_scrape(parameters, state).await.map_err(|err| err.to_string())
+    let toggle = SystemRepository::get_credential_toggle(&state.db_pool).await.map_err(|e| format!("Failed to update event: {e}"))?;
+    setup_scrape(toggle, parameters, state).await.map_err(|err| err.to_string())
 }
 #[tauri::command]
 async fn delete_schedule(id: String, is_favorited: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
@@ -114,35 +113,43 @@ async fn remove_class(id: String, state: tauri::State<'_, AppState>) -> Result<(
     ClassParamRepository::remove(id, &state.db_pool).await.map_err(|e| format!("Failed to remove class: {e}"))
 }
 
-// === NEW/UPDATED CREDENTIAL MANAGEMENT COMMANDS ===
+// === CREDENTIAL MANAGEMENT COMMANDS ===
 #[tauri::command]
 async fn setup_master_password_cmd(password: String) -> Result<(), String> {
-    cred_api::setup_master_password(Zeroizing::new(password))
+    credentials::setup_master_password(Zeroizing::new(password))
         .await
         .map_err(|e| e.to_string())
 }
 #[tauri::command]
 async fn change_master_password_cmd(old_password: String, new_password: String) -> Result<(), String> {
-    cred_api::change_master_password(Zeroizing::new(old_password), Zeroizing::new(new_password))
+    credentials::change_master_password(Zeroizing::new(old_password), Zeroizing::new(new_password))
         .await
         .map_err(|e| e.to_string())
 }
 #[tauri::command]
 async fn store_credentials_cmd(username: String, app_password: String, master_password: String) -> Result<(), String> {
-    cred_api::store_credentials(username, Zeroizing::new(app_password), Zeroizing::new(master_password))
+    credentials::store_credentials(username, Zeroizing::new(app_password), Zeroizing::new(master_password))
     .await
     .map_err(|e| e.to_string())
 }
 #[tauri::command]
 async fn get_credentials_cmd(master_password: String) -> Result<(String, String), String> {
-    let (username, password) = cred_api::get_credentials(Zeroizing::new(master_password))
+    let (username, password) = credentials::get_credentials(Zeroizing::new(master_password))
         .await
         .map_err(|e| e.to_string())?;
     Ok((username, password.to_string()))
 }
 #[tauri::command]
 async fn is_master_password_set_cmd() -> Result<bool, String> {
-    cred_api::is_master_password_set().await.map_err(|e| e.to_string())
+    credentials::is_master_password_set().await.map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn get_credential_toggle_cmd(state: tauri::State<'_, AppState>) -> Result<i64, String> {
+    SystemRepository::get_credential_toggle(&state.db_pool).await.map_err(|e| format!("Failed to update event: {e}"))
+}
+#[tauri::command]
+async fn set_credential_toggle_cmd(status: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    SystemRepository::update_credential_toggle(status as i64, &state.db_pool).await.map_err(|e| format!("Failed to update event: {e}"))
 }
 
 // === MAIN APPLICATION ENTRY POINT ===
@@ -196,7 +203,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             change_master_password_cmd,
             store_credentials_cmd,
             get_credentials_cmd,
-            is_master_password_set_cmd
+            is_master_password_set_cmd,
+            get_credential_toggle_cmd,
+            set_credential_toggle_cmd
         ])
         .run(tauri::generate_context!())?;
     Ok(())

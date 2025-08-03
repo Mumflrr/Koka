@@ -12,6 +12,7 @@ import { credentialsAPI } from "../../api";
 function Settings() {
     // State to track if setup is complete: null = loading, false = needs setup, true = setup complete
     const [isSetupComplete, setIsSetupComplete] = useState(null);
+    const [autoLoginEnabled, setAutoLoginEnabled] = useState(false);
 
     // State for the initial setup form
     const [initialPassword, setInitialPassword] = useState("");
@@ -37,6 +38,11 @@ function Settings() {
             try {
                 const isSet = await credentialsAPI.isMasterPasswordSet();
                 setIsSetupComplete(isSet);
+                // If setup is complete, also fetch the auto-login toggle status
+                if (isSet) {
+                    const toggleStatus = await credentialsAPI.getAutoToggle();
+                    setAutoLoginEnabled(toggleStatus);
+                }
             } catch (err) {
                 setError(`Critical error checking security status: ${err}`);
                 setIsSetupComplete(false); // Default to setup mode on error
@@ -115,6 +121,20 @@ function Settings() {
         }
     };
 
+    const handleToggleAutoLogin = async () => {
+        const newStatus = !autoLoginEnabled;
+        setAutoLoginEnabled(newStatus); // Optimistic UI update
+        clearMessages();
+
+        try {
+            await credentialsAPI.setAutoToggle(newStatus);
+            setMessage(`Automatic login has been ${newStatus ? 'enabled' : 'disabled'}.`);
+        } catch (err) {
+            setError(`Failed to update setting: ${err}`);
+            setAutoLoginEnabled(!newStatus); // Revert UI on error
+        }
+    };
+
     // --- Modal Logic ---
 
     const promptForMasterPassword = () => {
@@ -162,6 +182,21 @@ function Settings() {
                     <input type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} placeholder="Enter Password" />
                     <button type="submit">Store Credentials</button>
                 </form>
+            </div>
+            <div className={ss.formSection}>
+                <h2>Automatic Login</h2>
+                <p>Enable this to automatically use your stored credentials when the application starts. A restart may be required for changes to take effect.</p>
+                <div className={ss.toggleContainer}>
+                    <label className={ss.switch}>
+                        <input
+                            id="autoLoginToggle"
+                            type="checkbox"
+                            checked={autoLoginEnabled}
+                            onChange={handleToggleAutoLogin}
+                        />
+                        <span className={`${ss.slider} ${ss.round}`}></span>
+                    </label>
+                </div>
             </div>
         </>
     );

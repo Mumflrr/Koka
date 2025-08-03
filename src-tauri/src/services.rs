@@ -177,12 +177,29 @@ pub async fn setup_program(
  * @returns {Result<WebDriver, anyhow::Error>} WebDriver instance or error
  * @throws {anyhow::Error} If ChromeDriver fails to start or become available
  */
-pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver, anyhow::Error> {
+pub async fn start_chromedriver(connect_info: &ConnectInfo, headless: bool) -> Result<WebDriver, anyhow::Error> {
     quit_chromedriver()?;
-    let mut caps = DesiredCapabilities::chrome();
-    let binary_path = get_chromebinary_path(connect_info);
-    caps.set_binary(&binary_path.to_string_lossy()).context("Unable to set binary path")?;
 
+    // 1. Start with the standard DesiredCapabilities for Chrome.
+    let mut caps = DesiredCapabilities::chrome();
+
+    // 2. Conditionally add Chrome-specific arguments using the correct method.
+    if headless {
+        println!("Configuring Chrome to run in HEADLESS mode.");
+        caps.add_arg("--headless")
+            .context("Failed to add --headless arg")?;
+        caps.add_arg("--disable-gpu")
+            .context("Failed to add --disable-gpu arg")?;
+        caps.add_arg("--window-size=1920,1080")
+            .context("Failed to add --window-size arg")?;
+    }
+
+    // 3. Set the binary path on the capabilities object.
+    let binary_path = get_chromebinary_path(connect_info);
+    caps.set_binary(&binary_path.to_string_lossy())
+        .context("Unable to set binary path")?;
+
+    // --- The rest of your proven logic remains unchanged ---
     let driver_path = get_chromedriver_path(connect_info);
     Command::new(&driver_path)
         .args(["--port=9515", "--verbose", "--log-path=chromedriver.log"])
@@ -192,8 +209,12 @@ pub async fn start_chromedriver(connect_info: &ConnectInfo) -> Result<WebDriver,
     // Wait up to 5 seconds for ChromeDriver to start
     for _ in 0..10 {
         if TcpStream::connect("localhost:9515").is_ok() {
-            println!("ChromeDriver is running on port 9515.");
-            return WebDriver::new("http://localhost:9515", caps).await.map_err(Into::into);
+            println!("ChromeDriver is running on port 9515. Creating session...");
+            // Create the WebDriver and map the WebDriverError to an anyhow::Error.
+            // This correctly handles the function's return type.
+            return WebDriver::new("http://localhost:9515", caps)
+                .await
+                .map_err(Into::into);
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }

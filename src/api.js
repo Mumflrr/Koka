@@ -131,4 +131,10 @@ export const credentialsAPI = {
      */
     getCredentials: (masterPassword) =>
         invoke("get_credentials_cmd", { masterPassword }),
+
+    getAutoToggle: () =>
+        invoke("get_credential_toggle_cmd"),
+
+    setAutoToggle: (status) =>
+        invoke("set_credential_toggle_cmd", {status}),
 };

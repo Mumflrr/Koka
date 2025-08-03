@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use zeroize::Zeroize;
 use std::{fmt};
 use std::sync::atomic::{AtomicBool};
 use std::sync::Arc;
@@ -10,6 +11,12 @@ pub struct AppState {
     pub db_pool: DbPool,
     pub connect_info: Arc<Mutex<ConnectInfo>>,
     pub startup_complete: AtomicBool,
+}
+
+#[derive(Serialize, Deserialize, Zeroize, zeroize::ZeroizeOnDrop)]
+pub struct StoredCredentials {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

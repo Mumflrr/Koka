@@ -568,6 +568,28 @@ impl SystemRepository {
             Ok(())
         }).await?
     }
+
+    pub async fn get_credential_toggle(pool: &DbPool) -> Result<i64, anyhow::Error> {
+        let pool = pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<i64, anyhow::Error> {
+            let conn = pool.get()?;
+            let status: i64 = conn.query_row(
+                "SELECT auto_credential FROM data WHERE id = ?1",
+                params![DATA_TABLE_ID],
+                |row| row.get(0)
+            )?;
+            Ok(status)
+        }).await?
+    }
+
+    pub async fn update_credential_toggle(set_to: i64, pool: &DbPool) -> Result<(), anyhow::Error> {
+        let pool = pool.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+            let conn = pool.get()?;
+            conn.execute("UPDATE data SET auto_credential = ?1 WHERE id = ?2", params![set_to, DATA_TABLE_ID])?;
+            Ok(())
+        }).await?
+    }
 }
 
 // === DATABASE INITIALIZATION ===
@@ -597,7 +619,8 @@ pub fn initialize_database(pool: &DbPool) -> Result<(), anyhow::Error> {
             id SMALLINT PRIMARY KEY, 
             version TEXT, 
             os TEXT, 
-            schedule SMALLINT
+            schedule SMALLINT,
+            auto_credential SMALLINT
         );
         CREATE TABLE IF NOT EXISTS events (
             id TEXT PRIMARY KEY, 
@@ -629,6 +652,7 @@ pub fn initialize_database(pool: &DbPool) -> Result<(), anyhow::Error> {
         CREATE INDEX IF NOT EXISTS idx_events_day ON events(day);
         COMMIT;"
     )?;
+
     Ok(())
 }
 
@@ -669,7 +693,7 @@ pub fn load_connect_info(pool: &DbPool, os: String) -> Result<ConnectInfo, anyho
         None => {
             println!("No connect info in DB. Inserting initial data for os: {os}");
             conn.execute(
-                "INSERT INTO data (id, os, version, schedule) VALUES (?1, ?2, '', NULL)", 
+                "INSERT INTO data (id, os, version, schedule, auto_credential) VALUES (?1, ?2, '', NULL, 0)", 
                 params![DATA_TABLE_ID, &os]
             )?;
             Ok(ConnectInfo { os, version: String::new() })
