@@ -6,7 +6,8 @@ A little project of mine for learning Rust, React, database management, and web 
 
 ## Future plans:
 - Handle no wifi situations (version getting, scraping, setting up, etc)
-- Security if I want to implement way to store credentials
+- Find highest rated professor (if possible)
+- Create schedule based on requirements, time constraints, and professor ratings
 - Implementing pre req checks (theoretically possible but loads of works)
 - Improve splashscreen opening/closing timings
 
